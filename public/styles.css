@@ -1,0 +1,2703 @@
+:root {
+  --bg: #0a0b0f;
+  --bg-1: #101218;
+  --bg-2: #161923;
+  --bg-3: #1d212d;
+  --line: #262b39;
+  --text: #e7e9ee;
+  --dim: #8b93a7;
+  --dimmer: #5d657a;
+  /* Knochenweiss statt Solana-Gruen. Der Grund ist nicht Geschmack: Die
+     Namensfarben sind blau, violett, rose und sand, und ein gesaettigter
+     Akzent kommt einer davon immer zu nahe – Stahlblau war sogar exakt die
+     Farbe von .h.t0. Ein neutraler Akzent kollidiert per Definition mit keiner
+     Identitaetsfarbe und hat mit 16,3:1 auf dem Knopf den hoechsten Kontrast
+     aller geprueften Toene (Gruen: 12,6:1).
+
+     Damit hat jede Farbe hier genau eine Aufgabe: neutral ist Handlung, Gold
+     ist Ansem, Rot ist ein Problem, die vier gedaempften Toene sind Personen. */
+  --accent: #eceff5;
+  /* Derselbe Ton noch einmal als reine Zahlenfolge. Grund: rgba() kann keine
+     Farbvariable aufnehmen, nur Kanaele. Ohne das muesste jede halbdurch-
+     sichtige Stelle den Farbwert ausschreiben – und genau so war es: An sechs
+     Stellen stand "20, 241, 149" fest im Blatt, und ein Umfaerben der Seite
+     haette sie alle uebersehen. Wer --accent aendert, aendert das hier mit. */
+  --accent-rgb: 236, 239, 245;
+  /* Dieselbe Farbe, gedaempft – fuer gefuellte Flaechen statt fuer Striche:
+     den Knopf "Send"/"Start poll" und die eigene Sprechblase in einer DM.
+     Volles Knochenweiss war dort zu grell, nicht wegen des Farbtons, sondern
+     wegen der Flaeche. Ein duenner Strich in 86 % Helligkeit ist ein Akzent,
+     ein handtellergrosser Block darin ist eine Lampe.
+
+     Hier standen lange ZWEI Werte: 60 % fuer den Knopf, 44 % fuer die Blase,
+     mit der Begruendung, eine Blase sei groesser und stehe in Ketten
+     untereinander. Die Richtung stimmte, der Knopf ist inzwischen aber selbst
+     auf 44 % heruntergegangen – womit die Unterscheidung keine mehr war. Zwei
+     Namen fuer denselben Wert sind schlimmer als einer: Der zweite wirkt wie
+     eine Absicht, die es nicht gibt.
+
+     Warum der Knopf nachgezogen ist: Der Seitengrund hat seinen Lichtschein
+     verloren. Vorher hellte ein sehr schwacher Verlauf die Umgebung des
+     Knopfes auf; auf reinem --bg steht dieselbe Flaeche in mehr Dunkelheit.
+     Der Knopf ist nicht heller geworden, seine Umgebung dunkler.
+
+     9,2:1 fuer die dunkle Schrift darauf – weit ueber den 4,5:1, ab denen ein
+     Bedienelement lesbar heisst. */
+  --accent-fill: #aab2c2;
+  /* Die Betraege. Ein eigener Ton, weil keiner der vorhandenen passt:
+     --dim (6,4:1) war zu leise – der Betrag ist der Kern dieser Seite und war
+     damit das Blasseste in der Zeile. --text (16,2:1) ist zu laut, und zwar
+     nicht wegen des Wertes, sondern wegen der Menge: Im Posteingang stehen
+     zwanzig Betraege untereinander in einer Spalte, alle fett und in
+     Monoschrift. Was bei einer Zahl richtig aussieht, ist bei zwanzig eine
+     Leuchtspur am rechten Rand.
+
+     10,8:1 liegt dazwischen – klar heller als der Nachrichtentext, merklich
+     unter Weiss. Es waere verlockend gewesen, --accent-fill zu nehmen, das
+     nah dran liegt; der Ton gehoert aber den gefuellten Flaechen.
+     Wer den Knopf umfaerbt, soll nicht aus Versehen die Betraege mitfaerben. */
+  --worth: #b9c0d0;
+  /* Der Rahmen des Feldes, in dem gerade getippt wird.
+
+     Der Wert teilt sich seinen Zahlenwert mit --dim, ist aber ausdruecklich
+     ein eigener Name: Das eine ist die Farbe von Nebentext, das andere eine
+     Zustandsanzeige. Wer eines von beiden verschiebt, soll das andere nicht
+     mitnehmen. (Anders als bei --accent-fill weiter oben, wo zwei Namen fuer
+     dieselbe AUFGABE standen – das war eine Dopplung, das hier ist keine.)
+
+     Warum nicht --accent, was die Felder ganz frueher benutzten: Volles
+     Knochenweiss macht den Rahmen zum hellsten Ding im Kasten, heller als die
+     Schrift darin. Er soll aber nur sagen "hier tippst du gerade".
+
+     Und warum nicht mehr 10,8:1, was hier eine Weile stand: Der Wert war
+     richtig, seine Umgebung hat sich danach dreimal nach unten bewegt. Der
+     Grund verlor seinen Lichtschein, der helle Knopf ging von 12,2:1 auf
+     9,2:1 herunter, und die Seite steht in Mono, die feiner baut als die
+     Grotesk. Der Rahmen war damit ohne eigenes Zutun heller als der Knopf
+     daneben – ein Feld, in dem man tippt, soll nicht lauter sein als der
+     Knopf, der die Sache abschickt.
+
+     6,4:1 liegt deutlich unter dem Knopf und weit ueber den 3:1, ab denen ein
+     Rahmen als Zustandsanzeige zuverlaessig erkennbar ist. Der Ruhezustand
+     liegt bei 1,4:1 – der Sprung bleibt in jedem Fall gross. */
+  --fokus: #8b93a7;
+
+  /* Hier stand --anteil, die Farbe der kleinen Zeile unter dem Betrag: erst
+     eine Stimmenzahl, spaeter ein Prozentsatz. Beide sind wieder weg, und mit
+     ihnen der Farbwert. Wer eine zweite Zeile zurueckholt, braucht ihn wieder:
+     Bei der fuehrenden Antwort liegt sie auf der blauen Fuellung, und dort
+     kommt --dimmer auf 1,25:1 und --dim auf 2,37:1 – beides unlesbar. #c8ced9
+     kam auf 4,60:1. Was NICHT zurueckkommen darf, ist die Stimmenzahl: siehe
+     .opt-num weiter unten. */
+
+  /* Die Fuellung der Antwortbalken – von X abgemessen, Wert fuer Wert.
+     ------------------------------------------------------------------------
+     Aus einem Bildschirmfoto einer X-Umfrage, Medianwert der Flaeche:
+
+       fuehrende Antwort   #2b5988
+       alle anderen        #343639
+       Text darauf         #e8e9ea   → --text, 1,00:1 entfernt
+
+     Zwei Dinge, die man wissen sollte, bevor man daran dreht:
+
+     1. #343639 ist ein FUENFTER Grauton neben --bg .. --line, und er ist
+        neutral, waehrend die Palette blaustichig ist. Das ist hier nicht
+        Nachlaessigkeit, sondern der Punkt: --bg-3 kaeme auf dem Seitengrund
+        auf 1,22:1 und waere als Balken kaum zu sehen; Xs Grau steht auf
+        1,62:1. Der Unterschied zwischen den beiden ist 1,33:1 – gross genug,
+        dass ein vorhandener Ton hier nicht dasselbe leistet.
+
+     2. Es ist NICHT dasselbe Blau wie in den DMs. X selbst benutzt zwei:
+        #4b9aea in der Sprechblase, #2b5988 im Umfragebalken, 2,46:1
+        auseinander. Eine Sprechblase ist klein und soll leuchten, ein Balken
+        ist gross und liegt unter Text. Wer beide auf einen Wert zieht,
+        bekommt entweder eine matte Blase oder einen Balken, der die Zeile
+        ueberstrahlt.
+
+     Was darauf liegt, gemessen: --text 6,0:1 und --accent 6,3:1 auf dem
+     Blau; 10,0 und 10,5:1 auf dem Grau. Die Kante, an der die
+     Fuellung endet, steht auf 1,62:1 gegen den Seitengrund – schwaecher als
+     die 1,95:1 der alten durchscheinenden Fuellung. Das ist der Preis fuer
+     "genau wie X" und bewusst bezahlt: X selbst kommt auf 1,73:1, und der
+     Rest fehlt nur, weil unser Grund #0a0b0f ist und nicht reines Schwarz. */
+  --fuellung: #343639;
+  --fuellung-spitze: #2b5988;
+
+  /* Die Sprechblasen in den DMs – ein eigener kleiner Satz Farben.
+     ------------------------------------------------------------------------
+     Sie stehen hier zusammen und nicht verstreut bei den Regeln, weil sie eine
+     Gruppe sind: Sie sind aus einem Bildschirmfoto von X abgemessen und sollen
+     zusammen bleiben oder zusammen gehen.
+
+       eigene Blase   #4b9aea   Text darauf  #ffffff
+       eingehende     #212327   Text darauf  #e7e9ea
+       Zitat          #212327   Text darauf  #72757a
+
+     Warum ueberhaupt eine Farbe, wo die Seite sonst keine hat: Die Palette
+     liegt insgesamt innerhalb von 1,4:1 (--bg gegen --line). Zwei Grautoene so
+     dicht beieinander liest niemand als Absicht – die beiden Blasen waren
+     deshalb in jeder Grau-Fassung entweder zu aehnlich oder eine von beiden zu
+     dunkel. Eine Farbe braucht diesen Helligkeitsabstand nicht: Blau gegen
+     Grau sind 5,3:1, also das Vierfache dessen, was die Grautoene hergeben.
+
+     WELCHES Blau, das ist einmal gewechselt. Hier stand Xs DM-Blau #4b9aea,
+     und mit ihm der Satz: Weiss darauf sind 2,95:1, X liefert das so aus, fuer
+     15px-Schrift waeren 4,5:1 noetig – die knappste Stelle der ganzen Seite.
+
+     Seit die Poll-Balken Xs Farben tragen, hatte die Seite zwei Blautoene
+     (2,46:1 auseinander). Die Blase nimmt jetzt das der Balken, per Verweis und
+     nicht als zweite Kopie desselben Werts – wer --fuellung-spitze aendert,
+     aendert beide, und genau das war der Wunsch dahinter.
+
+     Es ist ein TAUSCH und war es beim Entscheiden auch:
+
+       Weiss auf der Blase   2,95 → 7,27:1   die knappe Stelle ist weg
+       Uhrzeit darauf        2,24 → 4,66:1   war noch knapper und faellt mit
+       Blasen zueinander     5,44 → 2,21:1   das ist der Preis
+
+     Die Blasen trennen sich also kaum noch ueber die Helligkeit, sondern fast
+     nur noch ueber den Farbton – dafuer ist keine Schrift mehr unter der
+     Richtlinie. Wer den Absatz darueber liest ("Blau gegen Grau sind 5,3:1"):
+     dieses Argument ist damit schwaecher geworden, nicht falsch. 2,21:1 ist
+     immer noch deutlich mehr, als zwei benachbarte Grautoene der Palette
+     hergeben (1,05 bis 1,14:1).
+
+     Und der Grund ist hier #0a0b0f statt des reinen Schwarz von X, das Blau
+     steht also einen Hauch weniger hart.
+
+     Von den fuenf abgemessenen Werten sind nur noch ZWEI eigene. Die anderen
+     drei waren neue Grautoene neben einer Palette, die schon vier hat – und
+     nachgerechnet lagen sie so dicht an vorhandenen, dass sie nichts Neues
+     sagten:
+
+       X-Grau  #212327  gegen --bg-3  1,02:1   → --bg-3
+       X-Text  #e7e9ea  gegen --text  1,00:1   → --text
+
+     Beim Zitattext geht die Rechnung nicht auf: X benutzt #72757a, und das
+     liegt zwischen --dim (1,50:1 entfernt) und --dimmer (1,26:1). Naeher waere
+     --dimmer, aber das kaeme auf der Blase auf 2,76:1 und damit unter das,
+     was man noch bequem liest. Deshalb --dim: heller als bei X, dafuer ohne
+     einen fuenften Grauton. Die Zitatblase ist ohnehin durch ihre Groesse und
+     ihre Lage als Zitat erkennbar, nicht nur durch die Helligkeit.
+
+     Weiss bleibt dagegen Weiss – aber der Grund dafuer ist nicht mehr
+     derselbe. Auf dem alten Blau war es Notwehr: --text kam dort auf 2,43
+     statt 2,95:1, und das war die einzige Stelle der Seite, an der das
+     Fast-Weiss der Palette nicht reichte. Auf dem dunkleren Blau reicht es
+     (5,99:1), Weiss ist also keine Pflicht mehr, sondern eine Entscheidung.
+     Sie ist so geblieben, weil X es so setzt und weil der Abstand zur
+     eingehenden Blase seit dem Wechsel ohnehin kleiner ist – die hellere
+     Schrift traegt jetzt einen Teil davon mit. Wer die einzige reine
+     255-255-255 der Seite loswerden will, kann hier auf --text gehen; es
+     kostet Kontrast, aber keine Lesbarkeit. */
+  --dm-eigen: var(--fuellung-spitze);
+  --dm-eigen-text: #ffffff;
+  --dm-fremd: var(--bg-3);
+  --dm-fremd-text: var(--text);
+  --dm-zitat-text: var(--dim);
+  --accent-2: #9945ff;
+  --accent-2-rgb: 153, 69, 255;
+  /* Der Punkt neben dem Betrag, wenn ein Gespraech ungelesen ist.
+     Xs DM-Blau, weiter oben bei --dm-eigen schon abgemessen und seit dem
+     Wechsel der Sprechblase auf --fuellung-spitze ohne Aufgabe. Es ist heller
+     und gesaettigter als beides, was hier sonst blau ist, und genau das soll
+     es: 6,34:1 auf dem Listengrund, waehrend --fuellung-spitze dort auf 2,57:1
+     kaeme – als 6-px-Punkt praktisch unsichtbar. */
+  --ungelesen: #4b9aea;
+  --warn: #ff6b6b;
+  --gold: #ffcc4d;
+  /* Die Textspalte im Posteingang – so weit reicht jede Vorschau, und dort
+     endet sie auch. Siehe .thread-prev. */
+  --vorschau: 20ch;
+  /* "You:" – vier Zellen, und der Abstand dahinter. Beides als Variable, weil
+     die Breite der Vorschau daneben davon abgezogen wird: Aendert jemand das
+     Wort oder den Abstand und nicht die Rechnung, franst die Kante wieder aus. */
+  --du-breit: 4ch;
+  --du-abstand: -.3rem;
+  --radius: 12px;
+  /* Die einzige Schrift der Seite – und seit die Abstimmungskarte mitgezogen
+     ist, auch die einzige der Bilder. Siehe die Begruendung bei font-family
+     unten. */
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  background: var(--bg); color: var(--text);
+  /* Die ganze Seite steht in der Schreibmaschinenschrift, nicht nur die
+     Zahlen. Der Grund ist der Gegenstand: Hier haengt an jedem Namen ein
+     Betrag, und Mono ist die Schrift, in der Zahlen untereinander stehen.
+     Eine Seite, die zur Haelfte Grotesk und zur Haelfte Mono ist, hat zwei
+     Stimmen; diese hier hat eine.
+
+     --sans ist deshalb ersatzlos entfernt. Sie hat eine Weile ueberlebt, weil
+     die Abstimmungskarte fuer X sie ueber cssWert('--sans') von hier holte und
+     Frage und Antworten damit auf die Leinwand schrieb – die Karte war die
+     letzte Flaeche in Grotesk. Seit sie mitgezogen ist, benutzt sie niemand
+     mehr, und eine Variable, die nur noch fuer den Rueckweg dastuende, waere
+     genau die Art toter Eintrag, die spaeter jemand fuer eine Absicht haelt.
+
+     Wer zurueck will, aendert diese Zeile hier und die Schriftzeile in
+     zeichnePoll() in app.js – und muss dann KARTEN_VERSION in app.js UND in
+     supabase/functions/og/index.ts hochzaehlen, sonst behalten alle bereits
+     erzeugten Karten ihr altes Aussehen.
+
+     Die Groessen bleiben, wie sie sind, und das ist gemessen und nicht
+     geschaetzt. Mono baut rund 19 % breiter als die Grotesk, ist aber exakt
+     gleich HOCH – die x-Hoehe beider Schriften liegt bei 15 px Grundgroesse
+     bei denselben 7 px. Lesbarkeit haengt an der Hoehe, nicht an der Breite.
+     Wer die Groesse "zum Ausgleich" heruntersetzt, macht den Text also
+     tatsaechlich kleiner und gleicht dabei etwas aus, das gar nicht stoert.
+     Die Zeilen brechen jetzt frueher um, mehr passiert nicht. */
+  font-family: var(--mono); font-size: 15px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Auf dem Handy ist 100 % bzw. 100vh die falsche Höhe: Die Adressleiste des
+   Browsers fährt beim Scrollen ein und aus, und die Seite bleibt trotzdem auf
+   der alten Höhe stehen. Das Eingabefeld rutscht dann unter den Bildschirmrand.
+   dvh folgt der tatsächlich sichtbaren Höhe; die 100 % davor sind der
+   Rückfall für ältere Browser. */
+/* --sicht setzt app.js, und nur solange die Tastatur oben ist.
+   ---------------------------------------------------------------------------
+   Der Befund vom Geraet: Tippt man auf dem Handy eine DM, schiebt iOS die
+   GANZE Ansicht nach oben, um Platz fuer die Tastatur zu machen – Kopfzeile,
+   Reiter und der obere Rand des Gespraechsrahmens wandern mit aus dem Bild.
+
+   Der Grund ist, dass 100dvh von der Tastatur nichts weiss. dvh folgt den
+   Leisten des Browsers, nicht der Tastatur; die Seite bleibt also so hoch wie
+   der ganze Bildschirm, waehrend unten die Haelfte davon verdeckt ist. Weil
+   das Eingabefeld dann unter der Tastatur laege, schiebt iOS von sich aus
+   alles hoch. Es korrigiert damit einen Fehler, den es selbst sieht – nur an
+   der falschen Stelle.
+
+   Die richtige Stelle ist die Hoehe. Ist die Seite genau so hoch wie das, was
+   sichtbar ist, hat iOS nichts mehr zu schieben. Und weil .app ein Flex-Stapel
+   ist, in dem nur die Liste flex: 1 hat, wird die Verkleinerung genau dort
+   aufgefangen: Kopfzeile, Reiter und Rahmen bleiben, wo sie sind, und das
+   Gespraech wird kuerzer. Genau das war verlangt.
+
+   Steht --sicht nicht (Tastatur unten, oder kein visualViewport im Browser),
+   gilt der Rueckfall dahinter – also alles wie vorher. */
+html, body { height: var(--sicht, 100%); }
+@supports (height: 100dvh) {
+  html, body { height: var(--sicht, 100dvh); }
+}
+
+/* Die Seite selbst rollt NICHT – gerollt wird nur in den Listen darin.
+   ---------------------------------------------------------------------------
+   Hier stand overflow-x: hidden mit overscroll-behavior-y: none. Das verhindert
+   das Nachziehen der Seite an ihrem eigenen Ende, aber nicht den Fall, um den
+   es geht: Wer im DM-Fenster oder in den Abstimmungen bis ans Ende wischt,
+   dessen Wisch wird ab dort an die SEITE weitergereicht – und die ganze
+   Ansicht rutscht nach oben oder unten weg. Auf dem Startbildschirm sieht das
+   aus, als loese sich die App vom Rand.
+
+   Zwei Zeilen dagegen, und beide werden gebraucht: overflow: hidden nimmt der
+   Seite die Faehigkeit ueberhaupt zu rollen, overscroll-behavior: contain an
+   den Listen (weiter unten bei .scroll) unterbindet das Weiterreichen. Die
+   erste allein hilft nicht, weil das Weiterreichen auch dann noch am Rand
+   zieht; die zweite allein nicht, weil eine zu hohe Seite weiter rollt.
+
+   Ehrlich dazugesagt: overscroll-behavior: none an dieser Stelle ist von hier
+   aus NICHT nachweisbar. Es richtet sich gegen das Gummiband von Safari auf
+   dem iPhone – die ganze Seite laesst sich am Rand ein Stueck wegziehen und
+   schnappt zurueck –, und das zeigt das Chromium der Tests nicht. Eine
+   Gegenprobe (Zeile raus, Test laufen lassen) reisst deshalb nichts. Sie
+   bleibt trotzdem stehen: Sie ist der dokumentierte Weg gegen genau den
+   Fehler, der auf dem Geraet zu sehen war, und sie kostet nichts.
+   Nachweisen laesst sie sich nur auf einem echten iPhone. */
+html, body { overflow: hidden; overscroll-behavior: none; }
+
+/* Der graue Aufblitz-Kasten beim Antippen wirkt auf dunklem Grund wie ein
+   Fehler. Die sichtbare Rückmeldung kommt stattdessen aus :active. */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Kein Farbverlauf im Hintergrund mehr. Hier lagen zwei weiche Lichter –
+   violett oben rechts, knochenweiss unten links.
+
+   Zwei Gruende. Das Violett war der letzte Rest Solana-Lila auf der Seite; aus
+   den Abstimmungskarten ist es laengst raus, und ein einzelner Rest einer
+   abgelegten Farbe ist keine Entscheidung, sondern ein Ueberbleibsel.
+
+   Und es war ohnehin fast nie zu sehen: Die Flaechen der Seite sind 1180 px
+   breit und decken am Rechner genau die Stelle ab, an der die Lichter liegen.
+   Nachgemessen im Vergleichsbild – zwischen "mit" und "ohne" war der
+   Unterschied kaum zu finden. Was man nicht sieht, muss nicht geladen und
+   nicht gepflegt werden.
+
+   Der Grund ist jetzt das, was in --bg steht, und sonst nichts. */
+
+button, input { font: inherit; color: inherit; }
+code { font-family: var(--mono); }
+
+/* ---------------- Fokus ----------------
+   Der Ring, den der Browser von sich aus malt, ist blau – und zwar nicht als
+   Entscheidung von irgendwem, sondern weil Chrome die Akzentfarbe des
+   Betriebssystems nimmt. Unter macOS ist das standardmäßig Blau, unter Windows
+   etwas anderes, und der Nutzer kann sie umstellen. Eine Seite, die diese
+   Stelle nicht selbst besetzt, hat dort also eine Farbe, die niemand gewählt
+   hat und die sich von Rechner zu Rechner ändert. Auf diesem fast schwarzen
+   Grund war sie außerdem der lauteste Punkt der ganzen Seite.
+
+   Deshalb --fokus, derselbe Ton, mit dem ein Textfeld beim Tippen seinen
+   Rahmen aufhellt. Ein Knopf hat keinen Rahmen, den man aufhellen könnte –
+   hier muss der Umriss also bleiben, aber wenigstens in derselben Sprache.
+
+   :focus-visible statt :focus ist der ganze Trick: Der Browser zeigt den Ring
+   dann nur, wenn er über die Tastatur angesteuert wurde. Wer klickt, weiß
+   ohnehin, wohin er geklickt hat, und bekommt keinen Ring – wer mit der
+   Tabulatortaste durch die Seite geht, sieht dagegen jederzeit, wo er steht.
+
+   Das ist keine Kosmetik: "outline: none" ohne sichtbaren Ersatz macht eine
+   Seite mit der Tastatur unbedienbar. Textfelder haben ihren eigenen Ersatz –
+   sie färben beim Tabben ihren Rahmen um – und sind hier deshalb ausgenommen,
+   sonst lägen Rahmenwechsel und Ring übereinander.
+
+   Bei den Feldern reicht :focus-visible dafür allerdings NICHT. Der Browser
+   zählt ein Textfeld immer als sichtbar fokussiert, auch nach einem Mausklick
+   – gemessen in Chromium: Knopf nach Klick nein, Textfeld nach Klick ja. Die
+   Unterscheidung kommt dort deshalb aus app.js, das bei der Tabulatortaste
+   data-tastatur an <html> setzt und es beim nächsten Mausklick wieder
+   entfernt. Wer diese paar Zeilen entfernt, nimmt der Seite ihren
+   Tastaturhinweis in allen Feldern auf einmal.
+
+   Kein border-radius hier: Der Umriss folgt von sich aus der Rundung des
+   Elements, und ein fester Wert würde runde Knöpfe im Fokus eckig machen. */
+:focus-visible:not(input):not(textarea) {
+  outline: 2px solid var(--fokus);
+  outline-offset: 2px;
+}
+.dim { color: var(--dim); font-weight: 400; }
+
+/* ---------------- Buttons ---------------- */
+.btn {
+  border: 1px solid transparent; border-radius: 10px;
+  padding: .6rem 1rem; cursor: pointer; background: var(--bg-3);
+  transition: filter .15s, border-color .15s, background .15s;
+  text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+}
+.btn:hover { filter: brightness(1.18); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Der Ladekreis IM Knopf.
+   ---------------------------------------------------------------------------
+   Zwischen "Continue" und dem Betrag liegt ein Aufruf an die Function, der
+   ueber ein Handynetz gut eine Sekunde dauern kann. Bisher wurde der Knopf
+   dabei nur blass – das sieht aus wie kaputt und nicht wie beschaeftigt, und
+   wer nichts passieren sieht, tippt noch einmal.
+
+   Die Beschriftung bleibt im Knopf stehen und wird nur unsichtbar geschaltet:
+   So behaelt er GENAU seine Breite, und nichts springt beim Umschalten. */
+.btn.laedt { position: relative; color: transparent; pointer-events: none; }
+.btn.laedt > * { visibility: hidden; }
+.btn.laedt::after {
+  content: ''; position: absolute; width: 1.05em; height: 1.05em;
+  border: 2px solid currentColor; border-top-color: transparent;
+  border-radius: 50%; animation: kreisel .7s linear infinite;
+  /* currentColor ist auf dem Knopf transparent geschaltet – der Ring holt
+     seine Farbe deshalb aus der Randfarbe, die davon unberuehrt bleibt. */
+  border-color: var(--bg); border-top-color: transparent;
+}
+.btn-ghost.laedt::after, .btn:not(.btn-primary).laedt::after {
+  border-color: var(--text); border-top-color: transparent;
+}
+@keyframes kreisel { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn.laedt::after { animation-duration: 2.4s; }
+}
+
+/* Die Schrift auf dem hellen Knopf ist der Seitengrund selbst, kein eigener
+   Ton – vorher war es ein sehr dunkles Gruen, das neben Knochenweiss einen
+   Stich bekaeme. */
+/* Kein Aufhellen unter dem Zeiger. Der Knopf ist die hellste Flaeche der
+   Seite, und beim Schreiben steht der Zeiger fast immer genau darauf – das
+   Aufhellen war damit kein gelegentlicher Effekt, sondern der Normalzustand.
+   Die uebrigen Knoepfe behalten es: Sie sind dunkel, dort hellt es etwas auf,
+   das vorher kaum zu sehen war.
+
+   Der Knopf hat damit auf dem Rechner keine eigene Rueckmeldung mehr beim
+   Ueberfahren – nur den Mauszeiger. Beim Druecken meldet er sich weiter
+   (.btn:active), und auf dem Handy, wo es kein Ueberfahren gibt, aendert sich
+   ohnehin nichts. */
+.btn-primary { background: var(--accent-fill); color: var(--bg); font-weight: 650; }
+.btn-primary:hover { filter: none; }
+.btn-outline { background: transparent; border-color: var(--line); color: var(--text); }
+.btn-ghost { background: transparent; color: var(--dim); border-color: transparent; padding: .45rem .7rem; }
+.btn-ghost:hover { color: var(--text); background: var(--bg-2); }
+.icon-btn {
+  background: transparent; border: 1px solid var(--line); color: var(--dim);
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer; line-height: 1;
+}
+.icon-btn:hover:not(:disabled) { color: var(--text); border-color: var(--dim); }
+/* Gesperrt heißt sichtbar gesperrt – ohne diesen Unterschied sähe ein Knopf
+   aus wie immer und man drückte ins Leere.
+   Die Regel begründete sich früher über den Auffrischknopf; den gibt es nicht
+   mehr. Sie bleibt, weil sie für alle .icon-btn gilt: Der Löschknopf einer
+   Abstimmung und der Teilen-Knopf sperren sich ebenfalls kurz. */
+.icon-btn:disabled { opacity: .45; cursor: default; }
+
+/* Die Marke in der Kopfzeile ist der Verweis auf den offiziellen X-Account.
+   Kein eigenes Symbol daneben: Zwei Ziele nebeneinander, die dasselbe tun,
+   sind auf dem Handy nur zwei Chancen danebenzutippen. Deshalb auch keine
+   Unterstreichung – sie soll wie die Marke aussehen, nicht wie ein Link, und
+   der Zeiger allein sagt genug. */
+.brand.brand-link {
+  display: inline-flex; align-items: center; gap: .35rem;
+  color: inherit; text-decoration: none; flex: none;
+  padding: .25rem var(--marke-luft); margin-left: calc(-1 * var(--marke-luft));
+  border-radius: 8px;
+  transition: background .15s;
+}
+.brand.brand-link:hover { background: var(--bg-2); }
+
+/* ---------------- Login ---------------- */
+/* Auch hier die sichere Zone – aus demselben Grund wie bei .topbar.
+   Vom Startbildschirm aus stiess die Anmeldekarte sonst oben an die Uhr. */
+/* Seit html/body nicht mehr rollen, muss dieser Bildschirm es selbst koennen.
+   Sonst waere auf einem kurzen Geraet – oder quer gehalten – der untere Teil
+   der Karte samt Knopf schlicht nicht erreichbar.
+   Mittig bleibt es trotzdem – aber ueber margin-block: auto an der Karte und
+   NICHT ueber justify-content: center.
+   ---------------------------------------------------------------------------
+   Der Unterschied ist der Fall, in dem die Karte hoeher ist als der Bildschirm
+   (kurzes Geraet, oder quer gehalten): justify-content: center schiebt den
+   Anfang dann NACH OBEN AUS dem rollbaren Bereich heraus – der obere Teil der
+   Karte ist damit unerreichbar, und zwar endgueltig, weil man nicht ins
+   Negative rollen kann.
+
+   Ein automatischer Rand kann das nicht: Ist Platz da, verteilt er ihn und die
+   Karte steht mittig; ist keiner da, wird er null. Gemessen auf 375x320
+   (Karte 331 px, passt also nicht): oben nichts abgeschnitten, unten alles
+   erreichbar.
+
+   Nebenbei probiert und wieder verworfen: justify-content: safe center. Es
+   loest dasselbe Problem, verhaelt sich in Chromium aber auch dann wie
+   flex-start, wenn Platz genug da ist – die Karte klebte damit auf jedem
+   Geraet oben. */
+.login {
+  min-height: 100%; height: 100%; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-start; gap: 1.2rem;
+  padding: calc(2rem + env(safe-area-inset-top, 0px))
+           calc(1rem + env(safe-area-inset-right, 0px))
+           calc(2rem + env(safe-area-inset-bottom, 0px))
+           calc(1rem + env(safe-area-inset-left, 0px));
+}
+/* ---------------- Noch zu ----------------
+   Der Bildschirm vor dem Start. Er benutzt .login und .login-card mit, statt
+   eigene Masse zu bekommen: Es ist derselbe Aufbau – eine Karte, mittig, mit
+   der Marke oben –, und ein Satz rechtfertigt kein zweites Regelwerk.
+
+   Unter "Launching soon." stand eine Zeile, was SIZED ist. Sie ist raus: Wer
+   die Seite vor dem Start aufruft, weiss es entweder schon oder soll es hier
+   nicht erfahren. */
+/* Der Knopf steht UNTER der Karte und sieht nicht aus wie ein Knopf.
+   ---------------------------------------------------------------------------
+   Er ist keine Einladung an den Besucher, sondern eine Abkuerzung fuer die
+   paar Leute, die die Seite gerade bauen. Ein Knopf in Knopfform waere die
+   auffaelligste Stelle des Bildschirms und die einzige, die zum Draufdruecken
+   auffordert – ausgerechnet die, die niemanden angeht.
+
+   Daumentauglich bleibt er trotzdem (44 px), sonst waere er auf dem Handy
+   nicht zu treffen. */
+.soon-link {
+  appearance: none; background: none; border: 0;
+  color: var(--dimmer); font: inherit; font-size: .82rem;
+  letter-spacing: .04em; cursor: pointer;
+  min-height: 44px; padding: 0 .8rem; border-radius: 8px;
+}
+.soon-link:hover, .soon-link:focus-visible { color: var(--dim); }
+
+.login-card {
+  /* Zentriert die Karte, ohne sie bei Platzmangel abzuschneiden – siehe die
+     Begruendung bei .login darueber. */
+  margin-block: auto;
+  width: min(520px, 100%); background: rgba(16, 18, 24, .82);
+  border: 1px solid var(--line); border-radius: 18px; padding: 2rem;
+  backdrop-filter: blur(12px);
+}
+/* Marke: Zeichen und Wort in einer Reihe. Als Flex und nicht im Textfluss,
+   weil das Zeichen jetzt ein SVG ist – eine Grafik sitzt auf der Grundlinie
+   immer eine Spur zu tief, und mit align-items steht sie ohne Nachjustieren
+   auf der Hoehe der Grossbuchstaben. */
+.brand {
+  display: flex; align-items: center; gap: .42em;
+  font-size: 1.5rem; font-weight: 700; letter-spacing: .16em; margin-bottom: 1.4rem;
+}
+.brand.small { font-size: .95rem; margin: 0; letter-spacing: .14em; white-space: nowrap; }
+.brand.brand-link { gap: .42em; }
+/* Das Zeichen skaliert mit der Schrift: 1em heisst, es ist immer so hoch wie
+   ein Grossbuchstabe daneben – in der Kopfzeile wie auf dem Anmeldeschirm,
+   ohne zwei Groessen zu pflegen.
+   fill="currentColor" im SVG heisst: Die Farbe kommt von hier, und ein
+   Wechsel der Akzentfarbe erreicht das Zeichen mit. */
+.brand-mark {
+  display: block; height: 1.05em; flex: none;
+  color: var(--accent);
+}
+/* Hoehe vorgeben, Breite folgen lassen: Das Zeichen ist hochkant (42 zu 64),
+   und ein quadratisches Feld haette es an den Seiten eingerahmt statt es
+   fuellen zu lassen. 1,05em statt 1em, weil ein Grossbuchstabe niedriger ist
+   als die Zeile – so stehen Zeichen und Schrift optisch gleich hoch. */
+.brand-mark svg { display: block; height: 100%; width: auto; }
+.brand-dim { color: var(--dimmer); }
+.lede { color: var(--dim); margin: 0 0 1.3rem; font-size: .93rem; }
+.field { display: block; margin-bottom: 1rem; }
+.field span { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dimmer); margin-bottom: .4rem; }
+.field input {
+  width: 100%; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--line); font-family: var(--mono); font-size: .9rem;
+}
+.field input:focus { outline: none; }
+:root[data-tastatur] .field input:focus { border-color: var(--fokus); }
+
+/* ---------------- Ausgefüllt vom Browser ----------------
+   Wer ein Feld schon einmal abgeschickt hat, bekommt beim naechsten Mal einen
+   Vorschlag darunter. Tippt man ihn an, faerbt Chrome das Feld hellblau ein –
+   auf einer durchgehend dunklen Seite ein weisser Kasten mitten im Formular.
+
+   Das laesst sich NICHT mit background-color zuruecknehmen: Chrome setzt den
+   Grund ueber eine interne Regel, an die eine Seite nicht herankommt. Was
+   herankommt, ist ein Schlagschatten nach innen – der liegt UEBER dem Grund
+   und deckt ihn zu. Deshalb der absurde Wert von 100 px: Er muss das ganze
+   Feld ausfuellen, egal wie hoch es ist.
+
+   Dieselbe Sperre gilt fuer die Schriftfarbe, deshalb -webkit-text-fill-color
+   statt color, und fuer die Schreibmarke, deshalb caret-color.
+
+   Beide Schreibweisen des Schattens stehen da. Die praefixierte ist die, die
+   ueberall abgeschrieben wird; die andere ist die richtige. Welche greift,
+   haengt an der Chrome-Version, und sie kosten sich nicht gegenseitig etwas.
+
+   Ausdruecklich fuer jedes Feld der Seite einzeln, weil die Gruende
+   verschieden sind: Login und Abstimmungsfelder liegen auf --bg, die
+   Nachrichtenzeile und Ansems Schwelle auf --bg-1. Ein gemeinsamer Wert waere
+   an der Haelfte der Stellen der falsche.
+
+   ACHTUNG beim Aendern: Dieser Zustand laesst sich im Test nicht herstellen –
+   Autofill braucht ein echtes Browserprofil mit gespeicherten Werten. Was
+   test-fokus.mjs prueft, ist deshalb nur, dass es zu JEDEM Feldgrund einen
+   passenden Eintrag hier gibt. Ob es im Betrieb wirkt, sieht man nur im
+   Betrieb. */
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus,
+.poll-admin input:-webkit-autofill,
+.poll-admin input:-webkit-autofill:hover,
+.poll-admin input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  -webkit-box-shadow: 0 0 0 100px var(--bg) inset;
+  box-shadow: 0 0 0 100px var(--bg) inset;
+}
+.composer input:-webkit-autofill,
+.composer input:-webkit-autofill:hover,
+.composer input:-webkit-autofill:focus,
+.filter-group input:-webkit-autofill,
+.filter-group input:-webkit-autofill:hover,
+.filter-group input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  -webkit-box-shadow: 0 0 0 100px var(--bg-1) inset;
+  box-shadow: 0 0 0 100px var(--bg-1) inset;
+}
+.login .btn-primary, .login .btn-outline { width: 100%; margin-bottom: .5rem; }
+.error { color: var(--warn); font-size: .85rem; margin: .6rem 0 0; }
+/* Der Hinweis steht unter der Karte und soll auch so aussehen: gleiche Breite,
+   mittig gesetzt. Vorher war er nur ein Absatz, der sich seine Breite aus dem
+   Text nahm – bei diesem Satz sind das 588 px gegen 520 px Karte, er ragte also
+   auf beiden Seiten darüber hinaus. Rechnerisch war er mittig, optisch stand er
+   quer zum Fenster darüber.
+
+   text-align hier und nicht nur auf dem Handy: Sobald der Satz umbricht, säße
+   die zweite Zeile sonst links – und genau dann sieht es verschoben aus. */
+/* Eine Zeile, mittig, und wenn sie über die Karte hinausragt, dann links und
+   rechts gleich weit. Keine feste Breite: Die zwang den Satz in zwei Zeilen.
+
+   text-align bleibt trotzdem stehen – es kostet nichts, solange der Satz in
+   eine Zeile passt, und rettet den Fall, in dem er es nicht tut. Ohne das säße
+   eine umgebrochene zweite Zeile links, und genau so sah es verschoben aus. */
+.foot-note {
+  color: var(--dimmer); font-size: .78rem;
+  max-width: 100%; text-align: center; margin-top: 0;
+}
+
+/* Auf dem Startbildschirm-Schritt gehört der Zahlungshinweis nicht hin.
+ *
+ * Dort geht es um das Ablegen auf dem Startbildschirm; von einer Zahlung ist
+ * noch gar keine Rede. Der Satz kommt einen Schritt später, wo die Adresse
+ * eingegeben wird – dann steht er in dem Moment da, in dem er zählt.
+ *
+ * Über :has() und nicht über JavaScript, und das mit Absicht: Der Wechsel
+ * zwischen den Schritten passiert an fünf verschiedenen Stellen in app.js.
+ * Eine Zeile, die an vier davon steht und an der fünften fehlt, fällt
+ * niemandem auf. Diese Regel hängt am Zustand selbst und kann nicht vergessen
+ * werden. Kennt ein Browser :has() nicht, bleibt der Satz stehen – das ist der
+ * harmlose Ausgang. */
+.login:has(#step-install:not([hidden])) .foot-note { display: none; }
+
+.field textarea {
+  width: 100%; padding: .7rem .9rem; border-radius: 10px; resize: vertical;
+  background: var(--bg); border: 1px solid var(--line);
+  font-family: var(--mono); font-size: .82rem; overflow-wrap: anywhere;
+}
+.field textarea:focus { outline: none; }
+:root[data-tastatur] .field textarea:focus { border-color: var(--fokus); }
+
+.sign-block {
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: .6rem .8rem; margin-bottom: .9rem;
+}
+.sign-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .35rem; }
+.sign-message {
+  display: block; font-size: .76rem; line-height: 1.55;
+  overflow-wrap: anywhere; color: var(--accent);
+}
+
+.how { margin-bottom: 1rem; border-top: 1px solid var(--line); padding-top: .8rem; }
+.how summary { cursor: pointer; color: var(--dim); font-size: .86rem; list-style: none; }
+.how summary::before { content: '▸ '; color: var(--dimmer); }
+.how[open] summary::before { content: '▾ '; }
+.how summary:hover { color: var(--text); }
+.how p { font-size: .84rem; color: var(--dim); margin: .8rem 0 .5rem; }
+.how code { font-size: .8rem; color: var(--text); }
+.how .sign-message { color: var(--accent); }
+
+/* Die ganze Zeile ist der Kopierknopf – deshalb ein <button> und kein <div>.
+   Ein kleines "Copy" neben einer 44 Zeichen langen Adresse ist auf dem Handy
+   ein Fehlgriff-Magnet, und hier hängt eine Zahlung dran. */
+.pay-row {
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  gap: .25rem .6rem; width: 100%; text-align: left;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  padding: .7rem .8rem; margin-bottom: .6rem; cursor: pointer;
+  font: inherit; color: inherit;
+  transition: border-color .15s, background .15s;
+}
+.pay-row:hover { border-color: var(--dim); }
+/* Kopiert: nur der Umriss, kurz, und nicht grell.
+   ---------------------------------------------------------------------------
+   Hier stand border-color: var(--accent) plus ein gefuellter Grund. Zwei
+   Signale fuer eine Handlung, und die Akzentfarbe ist die hellste der Seite –
+   auf dem Handy blitzte die ganze Zeile auf. Das Wort dafuer war "grell".
+
+   Jetzt ein durchscheinendes Weiss auf dem Umriss und sonst nichts. Es ist
+   heller als --line, also deutlich als Antwort erkennbar, aber es leuchtet
+   nicht: Der Grund bleibt, wie er ist, und die Zeile behaelt ihre Form.
+
+   Wie kurz, steht in app.js (KOPIERT_MS). */
+.pay-row.is-copied { border-color: rgba(255, 255, 255, .45); }
+/* In der Kopierzeile wird nichts markiert.
+   ----------------------------------------------------------------------------
+   Die ganze Zeile ist ein Knopf: Antippen kopiert. Eine blaue Markierung ist
+   daneben keine Hilfe, sondern eine zweite Antwort auf dieselbe Handlung –
+   man tippt einmal und bekommt "Copied" UND einen blauen Block.
+   Hier stand vorher user-select: all auf dem Wert. Der Gedanke war, dass ein
+   Klick den ganzen Wert fasst, damit niemand eine 44 Zeichen lange Adresse
+   von Hand einrahmen muss. Nur ist das ueberfluessig, seit die Zeile selbst
+   kopiert – geblieben war davon allein der blaue Block. */
+.pay-row { -webkit-user-select: none; user-select: none; }
+
+/* Die eine Ausnahme, und sie ist wichtig: Schlaegt das Kopieren fehl – kein
+   HTTPS, ein eingebetteter Browser ohne Zwischenablage –, markiert app.js den
+   Wert selbst, damit man ihn von Hand nehmen kann. Dafuer muss er in genau
+   diesem Moment markierbar sein, sonst zeigt die Meldung "the text is
+   selected for you" auf nichts.
+   Deshalb setzt der Fehlerfall die Klasse; ohne sie bliebe die Notloesung
+   eine Behauptung. */
+.pay-row.zum-markieren .pay-value {
+  -webkit-user-select: all; user-select: all;
+}
+
+.pay-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dimmer); }
+.copy-hint {
+  grid-row: 1; grid-column: 2; justify-self: end;
+  font-size: .72rem; color: var(--dimmer); white-space: nowrap;
+}
+/* Der Hinweis wechselt den Text ("Copied ✓") und braucht dafuer keine Farbe
+   obendrauf – ein zweites Signal in der hellsten Farbe der Seite war genau
+   das, was das Aufblitzen ausgemacht hat. */
+.pay-row.is-copied .copy-hint { color: var(--dim); }
+.pay-value { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.pay-value.big { font-size: 1.3rem; color: var(--accent); font-weight: 600; letter-spacing: .01em; }
+.mono-sm { font-size: .88rem; color: var(--text); line-height: 1.6; letter-spacing: .02em; }
+
+/* ---------------- Startbildschirm-Schritt ---------------- */
+.why {
+  background: var(--bg); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px; padding: .75rem .9rem; margin-bottom: 1rem;
+}
+.why p { margin: 0; font-size: .88rem; color: var(--dim); }
+.why strong { color: var(--text); }
+
+/* Die Anleitung zum Startbildschirm – als Zeilenliste, nicht als Aufzählung.
+ *
+ * Vorher war es eine gewöhnliche <ol> mit hängenden Ziffern. Bei 375 px
+ * brachen zwei der drei Schritte um ("Add to Home / Screen"), und die zweite
+ * Zeile rutschte dann nach links unter die Nummer. Ergebnis: drei verschieden
+ * hohe Zeilen und ein fransiger linker Rand – auf dem ersten Bildschirm, den
+ * ein Handynutzer überhaupt zu sehen bekommt.
+ *
+ * Jetzt bekommt jeder Schritt seinen eigenen Streifen mit fester Einrückung,
+ * wie eine Einstellungsliste auf dem Telefon. Ein Umbruch fällt dadurch nicht
+ * mehr auf: Die Nummer steht in ihrer eigenen Spalte, der Text beginnt bei
+ * allen dreien an derselben Kante und bleibt dort auch in der zweiten Zeile.
+ */
+.steps {
+  list-style: none; margin: 0 0 1rem; padding: 0; counter-reset: schritt;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-1); overflow: hidden;
+  color: var(--dim); font-size: .92rem; text-align: left;
+}
+.steps li {
+  counter-increment: schritt;
+  display: flex; align-items: flex-start; gap: .7rem;
+  padding: .7rem .85rem; border-bottom: 1px solid var(--line);
+}
+.steps li:last-child { border-bottom: 0; }
+.steps li::before {
+  content: counter(schritt);
+  flex: none; width: .9rem;
+  font-family: var(--mono); font-size: .78rem; line-height: 1.55;
+  color: var(--dimmer);
+}
+.steps strong { color: var(--text); }
+.glyph {
+  display: inline-flex; vertical-align: -.2em; color: var(--accent);
+  background: var(--bg-3); border: 1px solid var(--line);
+  border-radius: 6px; padding: .1rem .25rem; margin: 0 .1rem;
+}
+
+.waiting { display: flex; align-items: center; gap: .55rem; margin: 1.1rem 0 .8rem; font-size: .88rem; color: var(--dim); }
+/* Hier sass ein pulsierender Punkt in der Akzentfarbe neben "Waiting for
+   payment". Er ist raus, auf Wunsch, und die Begruendung traegt auch
+   ohne den Wunsch: Der Satz sagt bereits, dass gewartet wird. Der Punkt sagte
+   dasselbe noch einmal, nur blinkend – und die Akzentfarbe ist die auffaelligste
+   der Seite. Ein blinkender heller Punkt liest sich als Warnung, nicht als
+   Ruhe, ausgerechnet an der Stelle, an der jemand gerade Geld verschickt hat
+   und ohnehin nervoes ist. */
+
+/* ---------------- App shell ---------------- */
+/* --versatz setzt app.js, und nur solange die Tastatur oben ist.
+   ---------------------------------------------------------------------------
+   Die Hoehe (--sicht) allein hat den Fehler nicht behoben, und der Grund ist,
+   dass iOS ZWEI Dinge tut: Es verkleinert den sichtbaren Ausschnitt, und es
+   schiebt ihn ueber die stillstehende Seite nach oben. Gegen das Zweite hilft
+   keine Hoehe – die Ansicht muss um denselben Betrag mitwandern.
+
+   Genau das ist --versatz: visualViewport.offsetTop, unveraendert.
+
+   Nebenwirkung, die hier erwuenscht ist: transform macht .app zum Bezugspunkt
+   fuer alles darin, was position: fixed ist – die Meldung unten (.toast) und
+   der Vorschau-Hinweis. Beide sitzen damit ueber der Tastatur statt darunter.
+
+   Das DM-Menue steht ausserhalb von .app und ist davon nicht betroffen; es
+   rechnet seine Stelle ohnehin bei jedem Oeffnen neu aus. */
+.app {
+  height: 100%; display: flex; flex-direction: column;
+  max-width: 1180px; margin: 0 auto;
+  transform: translateY(var(--versatz, 0px));
+}
+/* Drei Spalten und nicht ein Flex-Streifen – damit die Reiter WIRKLICH mittig
+   stehen.
+   ---------------------------------------------------------------------------
+   Vorher war das eine Flex-Zeile und .tabs hatte margin-inline: auto. Das
+   zentriert einen Flex-Eintrag aber nicht im Kasten, sondern im RESTPLATZ
+   zwischen seinen Nachbarn: Der freie Raum wird links und rechts von ihm
+   gleich aufgeteilt. Die Reiter sassen damit auf der Mitte zwischen der Marke
+   und dem Block rechts – und die wandert, sobald einer der beiden breiter
+   wird.
+
+   Sichtbar war das beim Wechsel zwischen Ansem und einem normalen Nutzer: Er
+   hat ein Profilbild und "$12.4M", ein Nutzer drei Zeichen und "$153". Zwei
+   verschiedene Breiten rechts, zwei verschiedene Positionen der Reiter.
+
+   Es betrifft aber nicht nur ihn, und das ist der eigentliche Grund für den
+   Umbau: Der Betrag rechts wird jede Minute nachgezogen. Aus "$153" wird
+   "$1.2K", und die Reiter rutschen mit – ohne dass jemand etwas angefasst
+   hätte.
+
+   1fr auto 1fr gibt den beiden Aussenspalten dieselbe Breite. Die mittlere
+   sitzt damit auf der Mitte der Kopfzeile, egal was links oder rechts steht.
+
+   Auf dem Handy gilt das nicht: Dort bricht die Kopfzeile in zwei Zeilen um,
+   die Reiter liegen als eigene Zeile darunter und nehmen die volle Breite.
+   Das Raster wird deshalb im Handy-Block wieder auf Flex zurückgestellt. */
+/* Die sichere Zone.
+   ---------------------------------------------------------------------------
+   index.html setzt viewport-fit=cover und black-translucent. Beides zusammen
+   heisst: Vom Startbildschirm aus beginnt die Seite GANZ OBEN, unter der Uhr,
+   dem Empfangsbalken und dem Akkustand. Ohne Ausgleich lag "SIZED" und der
+   Bestand daneben genau darunter.
+
+   env(safe-area-inset-top) ist im Browser-Tab 0 und nur im Startbildschirm-
+   Betrieb gross – dieselbe Regel taugt also fuer beide, ohne Abfrage.
+
+   Links und rechts ebenfalls: Quer gehalten schiebt die Kameraaussparung den
+   Inhalt zur Seite, und ohne das stuende die Marke halb darunter. */
+.topbar {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 1rem;
+  padding: calc(.7rem + env(safe-area-inset-top, 0px)) calc(1rem + env(safe-area-inset-right, 0px)) .7rem calc(1rem + env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line); background: rgba(10, 11, 15, .85);
+  backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 5;
+}
+/* Ohne das zöge der Rasterplatz die Marke auf die ganze Spaltenbreite – ein
+   Link, dessen Klickfläche quer durch leeren Raum läuft. */
+.topbar > .brand-link { justify-self: start; }
+.topbar > .me { justify-self: end; }
+
+/* --nah: der enge Abstand rechts, zwischen Betrag und Abmeldeknopf.
+   Er stand hier einmal auch links, als neben der Marke ein Schild mit Ansems
+   Bild sass. Das ist wieder raus; der Wert bleibt als eigener Name stehen,
+   weil "eng" an mehr als einer Stelle gemeint sein wird. */
+:root { --nah: .5rem; --marke-luft: .35rem; }
+
+.tabs { display: flex; gap: .25rem; }
+.tab {
+  background: transparent; border: 1px solid transparent; border-radius: 9px;
+  padding: .45rem .95rem; color: var(--dim); cursor: pointer; position: relative;
+}
+/* Das "s" in "DMs". Bei allen ausser Ansem faellt es WEG, samt seinem Platz.
+   ---------------------------------------------------------------------------
+   Hier stand visibility: hidden – unsichtbar, aber der Platz blieb stehen. Der
+   Grund war: Sonst waere der Reiter ein Zeichen schmaler, und Polls daneben
+   laege bei Ansem und einem Nutzer an verschiedenen Stellen.
+
+   Das hat einen sichtbaren Fehler erzeugt, und zwar genau dort, wo der Reiter
+   am meisten hermacht: Ist er ausgewaehlt, traegt er einen Rahmen und eine
+   Flaeche. Die waren fuer "DMs" bemessen, die Schrift darin hiess aber "DM" –
+   also 4,5 px Luft rechts und keine links. Ein Kasten, dessen Inhalt nicht in
+   seiner Mitte steht.
+
+   Die beiden Fehler sind nicht gleich viel wert, und das ist der ganze Punkt:
+
+     Der unsymmetrische Kasten steht bei JEDEM Nutzer in JEDEM Moment da, in
+     dem der Reiter ausgewaehlt ist.
+
+     Den Versatz sieht niemand, weil niemand beide Rollen zugleich sieht. Man
+     muesste zwei Bildschirme nebeneinander legen.
+
+   Und der Versatz ist ausserdem harmloser, als er beim Aufschreiben der alten
+   Regel war: Seit die Kopfzeile ein Raster ist (1fr auto 1fr), stehen die
+   Reiter mittig in der KOPFZEILE und nicht mehr im Restplatz zwischen ihren
+   Nachbarn. Die Gruppe wird also nur schmaler, statt zu wandern – die MITTE
+   bleibt, wo sie ist. Gemessen: 137 px gegen 128 px, also 9 px schmaler und
+   4,5 px je Seite. (Der alte Kommentar sprach von 4,5 px Gruppenbreite; das
+   war die halbe Wahrheit – eine Zelle der Schreibmaschinenschrift ist bei
+   15 px rund 9 px breit.) */
+.dm-s { display: none; }
+.tab.zeigt-s .dm-s { display: inline; }
+.tab:hover { color: var(--text); }
+.tab.is-active { color: var(--text); background: var(--bg-2); border-color: var(--line); }
+.me { display: flex; align-items: center; gap: var(--nah); }
+/* Wie ueberall sonst: nur der farbige Name, kein Kasten drumherum. */
+.handle { font-family: var(--mono); font-weight: 700; }
+/* .handle.adresse stand hier: die gekuerzte Adresse oben rechts, in der Farbe
+   des Betrags daneben. Beides ist zurueckgedreht – dort stehen wieder die drei
+   Zeichen in der eigenen Farbe (.h.t0-.t3), also genau dieselbe Kennung wie in
+   den DMs und im Posteingang. Wer sich oben rechts unter einem anderen Namen
+   sieht als neben seinen eigenen Nachrichten, sieht sich unter zwei Namen. */
+
+/* ---------------- Der Hinweis neben dem Profilbild ----------------
+   Ansem sieht oben rechts sein Bild und keine Adresse. Ein Tipp darauf sagt
+   ihm, mit welchem Konto er hier ist – die Auskunft, die alle anderen
+   ablesen koennen, ohne etwas zu druecken.
+
+   Der Bezugspunkt ist .me-ich und nicht .me: Der Hinweis soll links neben dem
+   BILD aufgehen, nicht links neben der ganzen Gruppe aus Bild, Betrag und
+   Abmeldeknopf. */
+.me-ich { position: relative; display: inline-flex; align-items: center; }
+.me-info {
+  display: none;
+  position: absolute; right: calc(100% + .55rem); top: 50%;
+  transform: translateY(-50%);
+  z-index: 30; white-space: nowrap;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: 9px;
+  padding: .45rem .7rem;
+  font-size: .8rem; color: var(--dim);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .55);
+}
+/* Er kommt, solange der Zeiger auf dem Bild steht, und geht, sobald er
+   herunterfaehrt. Eine Regel, kein Zustand – hier stand eine Runde lang eine
+   Klasse, die ein Klick setzte, dazu ein Aussenklick-Handler und die
+   Escape-Taste. Alles fuer einen Kasten, der sich von selbst zeigt.
+
+   Nur wo es einen Zeiger GIBT: Auf einem Telefon bleibt :hover in manchen
+   Browsern nach einer Beruehrung haengen, und der Kasten stuende dann bis zur
+   naechsten Beruehrung irgendwo anders. Ohne Zeiger gibt es ihn also gar
+   nicht – die Vorlesestimme bekommt den Satz trotzdem, ueber aria-describedby
+   am Bild.
+
+   Am BILD und nicht am Kasten drumherum, und das ist kein Feinschliff: Den
+   Kasten gibt es fuer alle, .admin-name nur fuer Ansem. Haengt die Regel am
+   Kasten, faehrt ein normaler Nutzer ueber seine eigene Adresse und liest
+   "You are logged in as Ansem". Der Nachbarwaehler bindet sie an das Element,
+   das nur bei ihm dort steht. */
+@media (hover: hover) {
+  #me-handle.admin-name:hover + .me-info { display: block; }
+}
+/* Der eigene Bestand daneben. Kein Umriss und dieselbe Größe wie das Kürzel –
+   die beiden gehören zusammen und lesen sich als ein Stück: wer, und wieviel.
+
+   Hier stand lange die Begründung, Größe und Form kämen vollständig aus
+   .worth, damit die Kopfzeile denselben Betrag zeige wie die Liste darunter
+   und nicht eine zweite Fassung davon. Der Satz war richtig gemeint und
+   trotzdem falsch herum: In einer Liste steht der Betrag in einer eigenen
+   Spalte neben zwanzig anderen und richtet sich nach denen. In der Kopfzeile
+   steht er allein neben genau einem Kürzel und richtet sich nach dem. Zwei
+   verschiedene Nachbarn, zwei verschiedene Maße – das ist keine zweite
+   Fassung, sondern dieselbe Sache an einem anderen Ort.
+
+   Geblieben ist, was wirklich gemeinsam gilt: Schreibmaschinenschrift und die
+   Farbe der Beträge. Das ist die Klammer, nicht die Größe.
+
+   Gewicht 600 statt der 700 des Kürzels: Bei gleicher Größe UND gleichem
+   Gewicht verschmelzen Name und Zahl zu einem Wort. */
+.holdings {
+  font-size: 1rem; font-weight: 600; color: var(--worth);
+  background: none; border: 0; border-radius: 0;
+  height: auto; line-height: inherit; padding: 0;
+}
+
+/* Oben derselbe Abstand wie unten und an den Seiten. Vorher stand hier eine
+   Null, und eine Flaeche stiess damit direkt an die Linie unter der Kopfzeile
+   – die beiden Raender lagen aufeinander und schnitten sich an den gerundeten
+   Ecken. Polls und DMs hatten ihren Abstand jeweils selbst mitgebracht; jetzt
+   kommt er fuer beide von hier. */
+.pane { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 1rem; }
+/* Die Rollleiste ist ein Hinweis, kein Bedienelement: Gerollt wird mit Rad
+   oder Finger, gezogen wird sie praktisch nie. Sie sagt nur, wo man im Stapel
+   steht – und dafuer reicht ein Strich. Acht Pixel standen hier, in einer
+   290 px schmalen Spalte waren das drei Prozent der Breite fuer eine Auskunft,
+   die man nur nebenbei liest. */
+/* overscroll-behavior: contain – der Wisch endet hier.
+   Ohne das gibt eine Liste am oberen oder unteren Ende den Rest der Bewegung
+   an die Seite weiter, und die ganze Ansicht wandert mit. */
+.scroll { overflow-y: auto; overscroll-behavior: contain;
+          scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent; }
+/* Keine Rollleiste – weder im Gespraech noch bei den Abstimmungen.
+   ---------------------------------------------------------------------------
+   Im Gespraech sagt der Strich nichts: Unten ist das Neueste, und dort ist man
+   fast immer. Er laege dafuer neben jeder Blase.
+
+   Bei den Abstimmungen war er als Auskunft gedacht ("wo stehe ich im
+   Stapel"). Er sollte trotzdem weg, und der Grund traegt: Auf dem
+   Handy ist die Liste die ganze Ansicht, gerollt wird mit dem Finger, und ein
+   grauer Strich am Rand ist dann kein Hinweis mehr, sondern ein Rest von
+   Fenster in einer Ansicht, die keines sein will.
+
+   Beide Wege, denn welcher gilt, entscheidet Chrome selbst: Seit Version 121
+   gewinnt scrollbar-width ueber die alten ::-webkit-Regeln, in aelteren
+   Browsern ist es umgekehrt. */
+.chat-list, .poll-list { scrollbar-width: none; }
+.chat-list::-webkit-scrollbar,
+.poll-list::-webkit-scrollbar { width: 0; height: 0; }
+
+.scroll::-webkit-scrollbar { width: 5px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 3px; }
+/* Und im Posteingang gar keine Rollleiste des Browsers, sondern ein eigener
+   Strich daneben.
+   ----------------------------------------------------------------------------
+   Warum selbst gebaut
+
+   Die Leiste des Browsers hat keine frei waehlbare Laenge: Sie ist der Anteil
+   des Sichtbaren am Ganzen. Bei drei Gespraechen fuellt sie fast die ganze
+   Bahn, und "klein" ist sie dann nirgends. Genau das war hier gewuenscht –
+   eine kleine Marke, die zeigt, wo man steht, und nicht, wie viel es ist.
+
+   Dazu kam ein zweiter Grund, und der wiegt schwerer: Chrome entscheidet
+   selbst, ob eine Leiste ueberlagert gezeichnet wird oder Breite wegnimmt,
+   und seit Version 121 gewinnt scrollbar-width ueber die alten
+   ::-webkit-Regeln. Was davon wo ankommt, war von hier aus nicht messbar –
+   das Chromium der Tests zeichnet nur ueberlagerte Leisten. Ein eigenes
+   Kaestchen laesst sich dagegen ausmessen wie jedes andere Element, und es
+   sieht ueberall gleich aus.
+
+   Die Leiste des Browsers ist deshalb ganz abgeschaltet – beide Wege, denn es
+   ist nicht vorhersagbar, welcher gilt. */
+#thread-items { scrollbar-width: none; }
+#thread-items::-webkit-scrollbar { width: 0; height: 0; }
+
+.thread-roll { position: relative; flex: 1; min-height: 0; display: flex; }
+.thread-roll > #thread-items { flex: 1; min-height: 0; }
+
+/* Vier Pixel breit und abgerundet. Die HOEHE setzt app.js: Sie folgt dem
+   Anteil des Sichtbaren am Ganzen, gedeckelt bei 64 px und mit 24 px als
+   Boden (STRICH_MAX / STRICH_MIN). Der Wert hier ist nur der Anfangszustand,
+   bevor zum ersten Mal gerollt wurde.
+
+   Die Farbe ist 70 % --dimmer: --bg-3 liegt auf --bg-1 bei 1,17:1 – als
+   breite Flaeche gerade noch etwas, als schmale Marke nichts mehr. So sind es
+   2,19:1: leise, aber vorhanden. */
+#thread-strich {
+  /* -1px: Die Marke liegt AUF dem Rahmen, nicht daneben – fuer ihre Laenge
+     ist sie der Rahmen. Innen liegend sah sie aus wie etwas, das in der
+     Spalte schwimmt; so gehoert sie zur Kante. */
+  position: absolute; right: -1px; top: 0;
+  width: 4px; height: 40px; border-radius: 2px;
+  background: color-mix(in srgb, var(--dimmer) 70%, var(--bg-1));
+  pointer-events: none;
+  opacity: 0; transition: opacity .35s ease;
+}
+/* Sichtbar nur beim Rollen. Die Klasse setzt app.js und nimmt sie nach der
+   letzten Bewegung zurueck; beim Erscheinen ohne Uebergang, damit die Marke
+   sofort da ist, und beim Gehen mit. */
+#thread-items.rollt + #thread-strich { opacity: 1; transition: none; }
+
+/* ---------------- Nutzernamen ----------------
+   Fünf Töne, bewusst nicht mehr: Eine Liste mit zehn Farben liest sich wie
+   eine Warnleuchte. Die Akzentfarbe ist für Ansem reserviert und darf hier
+   nicht vorkommen – sonst sähe ein beliebiger Nutzer aus wie er.
+
+   Gedämpfte Fassung: näher am Grau, damit die Namen die Nachrichten nicht
+   überstrahlen. Kontrast auf dem dunklen Grund mindestens 7,7:1 – von allen
+   geprüften Sätzen der beste –, Abstand untereinander mindestens ΔE 27.
+
+   Bekannte Grenze: Blau und Violett fallen bei Rot-Grün-Blindheit fast
+   zusammen (ΔE 5). Das betrifft nur den Fall, dass zwei verschiedene Wallets
+   dieselben drei Zeichen haben – nur dort ist die Farbe das einzige
+   Unterscheidungsmerkmal. Bei 58³ = 195.112 möglichen Kürzeln passiert das
+   erst bei einigen tausend Nutzern nennenswert oft, und die vollständige
+   Adresse steht im Tooltip der Nachricht. */
+.h.t0 { color: #8ab2dc; }   /* Blau    */
+.h.t1 { color: #ad96dc; }   /* Violett */
+.h.t2 { color: #dc94ad; }   /* Rosé    */
+.h.t3 { color: #dcc088; }   /* Sand    */
+
+/* Ansem zeigt dieselben drei Zeichen wie alle anderen – aber immer in dieser
+   einen Farbe, dem Akzent. Sie ist die hellste der Seite und gehoert sonst der
+   Marke selbst; das liest sich als "hier spricht das Haus".
+
+   Sie ist bewusst KEINE der vier Toenungen .h.t0-.t3. Die werden aus der
+   Adresse errechnet, jeder kann zufaellig jede bekommen. Diese hier ist fest
+   an eine einzige Adresse gebunden und damit nicht nachzubauen: Wer sich als
+   Ansem ausgeben will, muesste dessen Wallet besitzen.
+
+   Die Farbe ist im Zitat und im Posteingang zu sehen, wo Ansem sein Kuerzel
+   behaelt. In der Kopfzeile steht bei ihm sein Profilbild – siehe .admin-name
+   weiter unten. Fuer sich selbst braucht er die Farbe dort ohnehin nicht;
+   sie sagt den ANDEREN, wer geschrieben hat.
+
+   Sonst gilt fuer ihn nichts Besonderes mehr. Kein ausgeschriebener Name, der
+   in die Kuerzelspalte gestaucht werden muss, keine leere Betragsspalte – sein
+   Bestand steht neben seinen Nachrichten wie bei jedem anderen. */
+.admin-name { color: var(--accent); }
+
+/* ---------------- Zahlenfeld mit Einheit ----------------
+   Gebaut wurde das hier fuer die Filterleiste des Chats. Der Chat ist raus,
+   die Bausteine sind geblieben: Ansems DM-Schwelle benutzt sie, und die
+   Laufzeit einer Abstimmung war einmal derselben Form nachgebaut; sie ist
+   inzwischen ein eigener Block aus drei Auswahlfeldern (siehe .lz-block).
+   Die Voreinstellungs-Knoepfe (.presets/.chip) sind mit dem Chat verschwunden –
+   sie hatten dort feste Betraege, und die gibt es sonst nirgends. */
+.filters {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  padding: .7rem 0; border-bottom: 1px solid var(--line); font-size: .82rem; color: var(--dim);
+}
+.filters-label { color: var(--dimmer); }
+
+/* Keine Auf-/Ab-Pfeile an Zahlenfeldern. Sie sind winzig, auf dem Handy nicht
+   zu treffen und laden dazu ein, sich in Hunderterschritten hochzuklicken. */
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.filter-group {
+  display: flex; align-items: center; gap: .3rem;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px; padding: .2rem .5rem;
+}
+.filter-group input { width: 86px; background: transparent; border: 0; outline: none; font-family: var(--mono); font-size: .82rem; }
+/* Und der Ersatz fuer dieses outline: none – er hat lange gefehlt.
+   ---------------------------------------------------------------------------
+   Das Feld hat keinen eigenen Rahmen; der Rahmen gehoert der Gruppe drumherum.
+   Mit outline: none am Feld und keiner Regel an der Gruppe zeigte ein Sprung
+   mit der Tabulatortaste GAR NICHTS – nachgemessen: Rahmen unveraendert,
+   Umriss none, kein Schein. Wer sich mit der Tastatur durch den Posteingang
+   bewegt, verliert dort die Spur.
+
+   Genau der Fall, vor dem der Kommentar bei :focus-visible weiter oben warnt.
+   Aufgefallen ist er erst, als eine andere Pruefung die Feldregeln der Seite
+   auszaehlte – nicht durch Hinsehen.
+
+   focus-within und nicht focus: Der Fokus liegt am FELD, faerben soll sich die
+   Gruppe. */
+:root[data-tastatur] .filter-group:focus-within { border-color: var(--fokus); }
+.unit { color: var(--dimmer); font-size: .74rem; }
+.unit-token { white-space: nowrap; padding-left: .1rem; }
+
+/* ---------------- Nachrichtenverlauf ----------------
+   .chat-list heisst weiter so, obwohl es nur noch die Blasenverlaeufe der DMs
+   traegt: Der Name steht an drei Stellen im Blatt und einer im HTML, und ein
+   Umbenennen waere eine Aenderung an vier Stellen fuer null Gewinn.
+
+   Luft oben und unten, Abstand zwischen den Nachrichten. Ohne ihn stiess die
+   letzte Blase im offenen Gespraech genau auf die Linie der Antwortleiste und
+   sah aus, als schnitten sie sich. */
+.chat-list { flex: 1; padding: .9rem 0; display: flex; flex-direction: column; gap: .5rem; }
+/* Nachrichten unten andocken, solange der Verlauf kürzer ist als das Fenster.
+   Über margin-top statt justify-content, sonst bricht das Scrollen nach oben. */
+.chat-list > *:first-child { margin-top: auto; }
+
+/* Was von der Chatzeile uebrig ist.
+   ---------------------------------------------------------------------------
+   Hier stand ein Raster aus vier Spalten – Kuerzel, Text, Betrag, Uhrzeit –
+   mit Trennlinie, Zeigerflaeche und einer eigenen Zeile fuer das Zitat. Es ist
+   mit dem Chat verschwunden.
+
+   .msg tragen jetzt nur noch die Sprechblasen der DMs, und die bringen ihr
+   eigenes Raster mit (.msg.dm). Geblieben ist genau das, was beide Formen
+   teilten: der weiche Uebergang fuer .flash und die Zuordnung der beiden
+   Rasterfelder, die .msg.dm belegt. Wer hier etwas ergaenzt, aendert damit die
+   Blasen – es gibt keinen zweiten Ort mehr, an dem .msg vorkommt. */
+.msg { transition: background .3s; }
+.msg .body { grid-area: body; }
+.msg .meta { grid-area: meta; display: inline-flex; align-items: baseline; gap: .3rem; }
+/* Kurzes Aufleuchten, wenn man über ein Zitat zur Ursprungsnachricht springt. */
+.msg.flash { background: rgba(var(--accent-rgb), .12); }
+
+/* ---------------- Zitat und Antworten ---------------- */
+/* Kein Kasten mehr, nur der Strich.
+   Vorher lag hier eine getoente Flaeche mit gerundeten Ecken, .85rem, in
+   --dim. Das war einmal richtig: Damals stand der Nachrichtentext auf .78rem
+   und blass, das Zitat war die kleinere Auskunft. Seit der Text auf .86rem und
+   heller steht, war das Zitat unbemerkt zum lautesten Teil der Antwort
+   geworden – und gemessen machte der Kasten eine Antwort 83 % hoeher als eine
+   normale Zeile.
+
+   Zitiert wird etwas, das schon einmal dastand; die Antwort ist das Neue. Der
+   Vorspann darf nicht so laut sein wie die Sache selbst.
+
+   Der Strich links bleibt: Er ist es, der "das gehoert zusammen" sagt, und er
+   kostet keine Hoehe. Die Flaeche sagte dasselbe noch einmal, nur lauter.
+
+   Die ganze Zeile bleibt anklickbar und springt zur zitierten Nachricht –
+   deshalb steht hier weiter ein <button> und kein <span>. */
+.quote {
+  display: flex; align-items: baseline; gap: .4rem; width: 100%;
+  font: inherit; text-align: left; cursor: pointer; overflow: hidden;
+  background: none;
+  border: 0; border-left: 2px solid var(--line); border-radius: 0;
+  padding: .1rem 0 .1rem .5rem; margin-bottom: .15rem;
+  color: var(--dimmer); font-size: .78rem;
+  transition: color .15s, border-color .15s;
+}
+/* Ohne Flaeche muss der Zeigerhinweis aus der Schrift kommen. */
+.quote:hover { color: var(--dim); border-left-color: var(--dim); }
+.quote .h { font-family: var(--mono); font-weight: 700; font-size: .78rem; flex: none; }
+.quote-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quote.is-gone {
+  width: auto; cursor: default; font-style: italic;
+  color: var(--dimmer); border-left-color: var(--bg-3); background: none;
+}
+
+/* Der Antwortpfeil steht direkt hinter dem letzten Wort der Nachricht und
+   läuft im Textfluss mit – er sitzt deshalb IM .body, nicht in einer eigenen
+   Rasterzelle.
+   Unsichtbar heißt hier auch unantastbar (pointer-events), sonst würde man ihn
+   beim Markieren von Text versehentlich treffen. */
+.reply-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: .3rem; vertical-align: -.15em;
+  background: none; border: 0; color: var(--dimmer); cursor: pointer;
+  font-size: .95rem; line-height: 1; padding: .1rem .3rem; border-radius: 6px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .12s, color .12s, background .12s;
+}
+/* Zeiger und Antippen stehen bei den DMs (.dm-row:hover / .dm-row.is-active);
+   die Regeln fuer die Chatzeile sind mit ihr weg. Der Tastaturfokus bleibt
+   hier: Er gilt fuer jeden Antwortpfeil, egal wo einer steht. */
+.reply-btn:focus-visible { opacity: 1; pointer-events: auto; }
+/* Ein Hauch Weiss statt --bg-2: Der Knopf liegt auf verschieden hellen
+   Gruenden. --bg-2 ist dunkler als --line – auf der helleren Flaeche waere der
+   Knopf damit ein dunkles Loch statt einer Hervorhebung. Ein durchscheinendes
+   Weiss ist auf jedem Grund eine Stufe heller als das, worauf es liegt. */
+.reply-btn:hover { color: var(--accent); background: rgba(255, 255, 255, .08); }
+/* Wer nicht schreiben darf, braucht auch keinen Antwort-Knopf. */
+.no-write .reply-btn { display: none; }
+/* Solange die Datenbank die Antwort-Spalte nicht kennt, gibt es auch keinen
+   Knopf dafür – sonst führt er ins Leere. */
+.no-replies .reply-btn { display: none; }
+
+/* ---------------- Am Finger: halten und wischen ----------------
+   Auf dem Handy gab es fuer eine Antwort nur einen Weg: die Nachricht
+   antippen, damit der Pfeil erscheint, dann den Pfeil treffen. Zwei Tipper auf
+   ein Ziel von 44 px, und dazwischen markierte das lange Draufhalten den Text
+   und schob iOS' eigenes Menue ins Bild ("Kopieren / Nachschlagen / Teilen") –
+   das mit unserem nichts zu tun hat.
+
+   Jetzt wie in den DMs bei X: nach rechts wischen antwortet direkt.
+
+   Ein kleines Fenster beim langen Draufhalten ("Reply / Copy") gab es hier
+   eine Runde lang und ist auf Wunsch wieder weg. */
+
+/* Kein Markieren in einer Nachricht – ueberall, nicht nur am Finger.
+   ---------------------------------------------------------------------------
+   Hier stand eine @media-(hover: none)-Abfrage darum, mit der Begruendung,
+   am Rechner sei Markieren normal und man nehme es niemandem weg. Es sollte
+   trotzdem ganz raus, und die Abfrage ist deshalb gefallen.
+
+   Was das kostet, steht der Vollstaendigkeit halber hier: Seit auch "Copy" aus
+   dem Fenster weg ist, gibt es damit KEINEN Weg mehr, den Text einer Nachricht
+   zu kopieren – weder am Finger noch mit der Maus. Wer das zurueckdreht,
+   dreht diese Zeile zurueck.
+
+   -webkit-touch-callout unterdrueckt zusaetzlich das Systemmenue von iOS
+   ("Kopieren / Nachschlagen / Teilen"), das beim langen Draufhalten sonst
+   ueber der Seite liegt. */
+/* Die ganze ZEILE, nicht nur die Blase.
+   ---------------------------------------------------------------------------
+   Hier stand .msg.dm, also nur der Text der Nachricht. Der Antwortpfeil
+   daneben blieb damit markierbar: Wer ihn auf dem Handy lange hielt, bekam
+   ihn markiert und ein Kopieren-Menue fuer ein einzelnes Zeichen. Am Geraet
+   gefunden, nicht hier.
+
+   .dm-row deckt Blase, Zeitstempel, Zitat und Pfeil in einem ab – und ist
+   damit auch die Regel, die stehen bleibt, wenn jemand der Zeile spaeter noch
+   etwas hinzufuegt. */
+.dm-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* Die Blase folgt dem Finger.
+   Die Ueberblendung gilt fuers Zurueckschnappen; waehrend des Ziehens ist sie
+   abgeschaltet (.wischt), sonst liefe die Blase dem Finger hinterher. */
+.dm-block { transition: transform .18s ease; }
+.dm-row.wischt .dm-block { transition: none; }
+/* Waehrend des Wischens ist der Pfeil sichtbar – wie weit, setzt app.js am
+   Element, damit er mit dem Finger auftaucht und nicht auf einen Schlag. */
+.dm-row.wischt .reply-btn { pointer-events: none; }
+
+
+
+/* Die Leiste legt sich um die zitierte Nachricht, statt die ganze Breite zu
+   nehmen. Vorher lief sie bis zum Rand, der Text endete nach einem Drittel und
+   das Schließkreuz stand einsam ganz rechts – dazwischen eine leere Fläche, die
+   aussah, als fehlte dort etwas.
+
+   max-width hält die Grenze: Ein langes Zitat wächst bis zum Rand und kürzt
+   sich dann mit Auslassungspunkten, wie vorher auch. Dieselbe Regel wie beim
+   Zitat über einer Nachricht – zwei Anzeigen derselben Sache sollen sich auch
+   gleich verhalten. */
+.reply-bar {
+  display: flex; align-items: center; gap: .5rem;
+  width: fit-content; max-width: 100%;
+  padding: .5rem .7rem; margin-top: .7rem;
+  background: var(--bg-1); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent); border-radius: 10px;
+  font-size: .86rem; color: var(--dim); min-width: 0;
+}
+.reply-bar-mark { color: var(--accent); flex: none; }
+.reply-bar-inner { display: flex; align-items: baseline; gap: .45rem; min-width: 0; }
+.reply-bar-inner .h { font-family: var(--mono); font-weight: 700; flex: none; }
+.reply-bar-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reply-bar .icon-btn { margin-left: auto; flex: none; }
+/* ---------------- Ansems Profilbild ----------------
+   Statt der drei Zeichen, an der einen Stelle, an der sein Name als IDENTITÄT
+   steht: oben rechts, wenn er selbst angemeldet ist. Im Zitat, im Posteingang
+   und in der Antwortleiste bleiben die Zeichen – dort steht der Name als
+   Verweis auf eine Nachricht, nicht als Absender, und ein Kreis mitten in
+   einer Zitatzeile macht sie höher, ohne etwas hinzuzufügen.
+
+   Die zweite Stelle war seine Chatzeile, mit einem 20-px-Bild, das genau in
+   die 26 px breite Kürzelspalte passte. Sie ist mit dem Chat weg; 22 px
+   richten sich nach dem Bestand daneben.
+
+   Die Stelle steht ausdrücklich EINZELN da und nicht als "überall, ausser
+   hier und hier". Dieselbe Klasse hängt auch am Zitat, im Posteingang und in
+   der Antwortleiste; eine Ausnahmeliste wäre die Sorte Regel, die beim
+   nächsten neuen Ort still das Falsche tut. */
+.me .handle.admin-name {
+  --bild: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.me .handle.admin-name::before {
+  content: ''; flex: none;
+  width: var(--bild); height: var(--bild); border-radius: 50%;
+  background: url('ansem.jpg') center/cover no-repeat;
+}
+/* Es richtet sich nach dem Bestand daneben, mit dem es in einer Zeile steht. */
+.me .handle.admin-name { --bild: 22px; }
+/* Der eigene Bestand oben rechts – seit dem Entfernen des Chats der einzige
+   Ort, der .worth noch traegt. Groesse, Gewicht und Ausrichtung setzt die
+   Kopfzeile selbst (siehe .holdings): Sie richten sich nach dem Kuerzel
+   daneben.
+
+   Hier stand einmal eine vollständige Pille – Umriss, Füllung, feste Höhe,
+   ein eigener Innenabstand gegen das Dollarzeichen – und darunter eine zweite
+   Regel, die im Chat jede einzelne dieser Eigenschaften wieder zurücknahm.
+   Beide sind weg. */
+.worth { font-family: var(--mono); white-space: nowrap; flex: none; }
+
+.msg .body { overflow-wrap: anywhere; }
+/* Anklickbare Links im Nachrichtentext.
+   Unterstrichen, nicht nur eingefaerbt: Auf einer Seite, die fast nur aus
+   Graustufen besteht, traegt Farbe allein die Aussage "das ist anklickbar"
+   nicht – und wer Farben schlecht unterscheidet, saehe gar nichts.
+
+   Die Adresse steht immer im Klartext da, weil der Text keine Formatierung
+   kennt: Es gibt keine Moeglichkeit, "sized.gg" zu schreiben und woanders
+   hinzufuehren. Das ist in einem Raum, in dem Betrugsversuche zu erwarten
+   sind, mehr wert als jede Warnung, die man dazuschreiben koennte.
+
+   overflow-wrap steht schon auf .body – eine lange Adresse sprengt die Zeile
+   also nicht. */
+.msg .body a {
+  color: var(--worth); text-decoration: underline;
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+}
+.msg .body a:hover { color: var(--text); }
+/* Fuer die eigene Blase stand hier eine Ausnahme: Sie war hell und trug dunkle
+   Schrift, also nahm der Link den Seitengrund. Seit beide Blasen dunkel sind,
+   gilt fuer sie dieselbe Regel wie ueberall – eine Ausnahme weniger. */
+.msg .time { font-size: .7rem; color: var(--dimmer); flex: none; }
+
+.composer { display: flex; gap: .5rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+.composer input {
+  flex: 1; padding: .7rem .9rem; border-radius: 10px;
+  background: var(--bg-1); border: 1px solid var(--line);
+}
+.composer input:focus { outline: none; }
+:root[data-tastatur] .composer input:focus { border-color: var(--fokus); }
+
+.empty { color: var(--dimmer); text-align: center; padding: 2.5rem 1rem; font-size: .9rem; }
+
+/* Zu wenig gehalten: Statt eines Eingabefelds, das beim Absenden mit einer
+   Fehlermeldung antwortet, steht hier vorher, woran es liegt. */
+.composer.locked { display: none; }
+.gate {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .8rem .9rem; margin-top: .7rem;
+  border: 1px solid var(--line); border-top-color: var(--line);
+  border-radius: 10px; background: var(--bg-1);
+  font-size: .9rem; color: var(--dim);
+}
+.gate .lock { color: var(--dimmer); flex: none; display: inline-flex; }
+/* Hier stand der ruhige Hinweis ueber der Eingabe (.gate.hint) – "No links
+   allowed here", die Taktgrenze. Er gehoerte dem Chat und ist mit ihm weg.
+
+   Was er geloest hatte, gehoert dazugesagt, falls er je wiederkommt: Als
+   normales Element in der Spalte nahm er beim Auftauchen Hoehe weg, die Liste
+   darueber ist flex: 1, und der ganze Verlauf sprang nach oben – genau in dem
+   Moment, in dem man die Nachricht lesen will, auf die sich der Hinweis
+   bezieht. Die Loesung war position: absolute in der Eingabezeile, bottom:
+   100%. In den DMs meldet sich eine abgelehnte Nachricht bis heute ueber den
+   roten Toast; das ist die Stelle, an der ein solcher Kasten als Naechstes
+   gebraucht wuerde. */
+/* Der Betrag steht schon fett da – ihn zusätzlich aufzuhellen macht aus einem
+   Satz zwei Ebenen, obwohl er in einem Zug gelesen werden soll. */
+.gate strong { color: inherit; font-weight: 650; }
+
+/* ---------------- Polls ---------------- */
+/* Ohne eigene Flaeche wie die Abstimmungen darunter – siehe .poll. */
+.poll-admin {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  /* Oben kein eigener Abstand: Den bringt .pane mit, und beides zusammen
+     ergab das Doppelte – der Kasten hing weiter von der Linie der Kopfzeile
+     weg als die Flächen in den DMs. Unten bleibt er, er trennt den
+     Kasten von der Liste darunter. */
+  /* 1.1rem und nicht 1rem: derselbe Innenabstand wie .poll darunter. Damit
+     beginnt "NEW POLL" auf derselben senkrechten Linie wie die Fragen der
+     Abstimmungen in der Liste. */
+  padding: 1.1rem; margin: 0 0 1rem; display: flex; flex-direction: column; gap: .5rem;
+}
+.poll-admin h3 { margin: 0 0 .3rem; font-size: .82rem; text-transform: uppercase; letter-spacing: .09em; color: var(--dimmer); }
+
+/* ---- Der Kasten ist zu, solange niemand ihn braucht ----------------------
+   Zugeklappt bleibt eine einzige Zeile stehen, und der Rahmen ist unsichtbar:
+   Ein Rahmen um einen einzelnen Knopf herum waere ein Kasten, der behauptet,
+   etwas zu enthalten.
+
+   Unsichtbar heisst hier ausdruecklich "durchsichtig" und nicht "weg", und der
+   Innenabstand bleibt ebenfalls stehen. Der Grund ist die Bewegung beim
+   Aufklappen: Nimmt man Rahmen und Abstand heraus, springt "NEW POLL" beim
+   Oeffnen um 1,1rem nach rechts und nach unten – das Ding, auf das man gerade
+   getippt hat, laeuft unter dem Finger weg. So bleibt es auf den Pixel stehen,
+   wo es war, und unter ihm klappt nur der Inhalt auf.
+
+   Einzige Ausnahme ist der Abstand nach UNTEN: Der bewegt die Zeile nicht, er
+   waere nur Leerraum unter einer einzelnen Ueberschrift. */
+.poll-admin:not(.offen) { border-color: transparent; padding-bottom: 0; }
+/* Hier stand eine Regel, die die Laufzeit im zugeklappten Zustand unsichtbar
+   machte, ohne ihr den Platz zu nehmen – sonst rutschte "NEW POLL" beim
+   Aufklappen um 12 px nach unten. Seit die Laufzeit unten im Kasten steht,
+   enthaelt die Kopfzeile nur noch den Knopf, und die Frage stellt sich nicht
+   mehr. */
+.poll-admin:not(.offen) h3 { margin: 0; }
+
+/* Der Schalter traegt das Aussehen der Ueberschrift weiter, in der er steht:
+   dieselbe Groesse, dieselben Sperrungen. Er ist heller als sie (--dim statt
+   --dimmer), weil er im Gegensatz zu einer Ueberschrift etwas tut. */
+.poll-neu {
+  font: inherit; font-size: inherit; letter-spacing: inherit; text-transform: inherit;
+  color: var(--dim); background: none; border: 0; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: baseline; gap: .4rem;
+  transition: color .15s;
+}
+.poll-neu:hover { color: var(--text); }
+/* Daumentauglich, ohne die Ueberschrift anzufassen.
+   ---------------------------------------------------------------------------
+   Gemessen waren 84 x 18 px. Das ist der Schalter, mit dem Ansem ueberhaupt
+   erst an das Formular kommt – auf dem Handy ein Ziel, das man dreimal
+   antippt, bis es sitzt. 18 px sind weniger als die Haelfte der 44, die eine
+   Fingerkuppe braucht.
+
+   Erster Versuch war min-height: 44px. Das machte den Knopf wirklich groesser
+   und riss dabei zwei Zusagen, die dieser Tab schon hatte: Die Beschriftung
+   steht auf einer Linie mit den Fragen in der Liste darunter, und der Kasten
+   darf beim Aufklappen nicht springen. Gemessen: 7,5 px aus der Linie, 17 px
+   Sprung. Beides ohne dass man den Knopf haette wachsen sehen – die Zeile
+   drumherum wuchs mit.
+
+   Also waechst nur die TREFFERFLAECHE und nicht der Kasten. Ein absolut
+   gesetztes ::before liegt ausserhalb des Textflusses: Es verschiebt nichts,
+   nimmt keinen Platz und faengt trotzdem den Finger. 13 px oben und unten
+   machen aus 18 px genau 44. */
+.poll-neu { position: relative; }
+.poll-neu::before {
+  /* -15px, nicht -13px: 18 + 2 x 13 sind genau 44, und genau ist hier zu
+     knapp. Der Knopf steht auf einer gebrochenen Pixelzeile, also rundet der
+     Browser die Flaeche je nach Bildschirm auf 43 ab – gemessen im
+     Handy-Durchlauf, nicht vermutet. Zwei Pixel Luft kosten nichts, weil die
+     Flaeche unsichtbar ist und das Layout nicht anfasst. */
+  content: ''; position: absolute; inset: -15px -10px;
+}
+
+/* Das Zeichen dreht sich zum Minus, statt ausgetauscht zu werden: Ein Zeichen,
+   das sich bewegt, sagt "dasselbe Ding, anderer Zustand". Zwei verschiedene
+   Zeichen saehen aus wie zwei verschiedene Knoepfe an derselben Stelle. */
+.poll-neu .zeichen {
+  display: inline-block; font-size: 1.15em; line-height: 1;
+  transition: transform .18s ease;
+}
+.poll-admin.offen .poll-neu .zeichen { transform: rotate(45deg); }
+@media (prefers-reduced-motion: reduce) {
+  .poll-neu .zeichen { transition: none; }
+}
+
+/* Solange das Formular offen ist, rollt der ganze Bereich.
+   ---------------------------------------------------------------------------
+   Der Befund, gemessen auf einem iPhone mit fuenf Antworten und offener
+   Tastatur: Sichtbar sind 508 px, das Formular endet bei 604 – "Start poll"
+   steht damit 95 px unter dem Rand, und es gibt keinen Weg dorthin. .pane ist
+   ein Flex-Stapel ohne eigenes Rollen, und die Liste darunter (#poll-list)
+   rollt zwar, aber sie ist nicht das, was ueberlaeuft.
+
+   Also rollt der Bereich selbst – aber nur, solange das Formular offen ist:
+
+     :has(#poll-admin-felder:not([hidden]))
+
+   Zwei Rollflaechen ineinander sind sonst eine Falle. Wer die Liste durchgeht
+   und den Finger auf einer Abstimmung hat, rollt die Liste; wer daneben
+   greift, rollt den Bereich. Solange Ansem nichts anlegt, gibt es weiterhin
+   genau eine.
+
+   Und #poll-list gibt sein eigenes Rollen in dieser Zeit ab: Sonst waere die
+   Liste in einem Kasten fester Hoehe gefangen, waehrend darueber gerollt
+   wird. */
+.pane:has(#poll-admin-felder:not([hidden])) {
+  overflow-y: auto; overscroll-behavior: contain;
+}
+.pane:has(#poll-admin-felder:not([hidden])) #poll-list {
+  /* flex: 1 0 auto und nicht flex: none.
+     -------------------------------------------------------------------------
+     Mit "none" schrumpft die Liste auf ihren Inhalt, sobald das Formular
+     aufgeht – und der Hinweis "noch keine Abstimmung", der darin mittig
+     steht, springt dabei neun Pixel. Gemessen von test-polls-tab.mjs, das
+     genau diese Zusage schon hatte: Beim Aufklappen bleibt er liegen.
+
+     1 0 auto heisst: Ist Platz uebrig, fuellt die Liste ihn (der Hinweis
+     bleibt in der Mitte); ist der Inhalt groesser, waechst sie darueber
+     hinaus und der Bereich rollt. Genau beides wird gebraucht. */
+  overflow: visible; flex: 1 0 auto;
+}
+
+#poll-admin-felder { display: flex; flex-direction: column; gap: .5rem; }
+.poll-admin input {
+  padding: .6rem .8rem; border-radius: 9px; background: var(--bg); border: 1px solid var(--line);
+  transition: border-color .15s;
+}
+/* Diese drei Felder waren die einzigen der Seite ohne eigene Fokusregel – und
+   damit die einzigen, die noch den blauen Systemring des Browsers zeigten.
+   Login und beide DM-Felder hatten ihre Stelle längst besetzt.
+
+   Nichts kommt um das Feld herum dazu: kein Ring, kein Schein. Ein zweiter
+   Umriss neben dem Rahmen, den das Feld ohnehin hat, sind zwei Linien für eine
+   Auskunft. Der Rahmen selbst wird heller – mehr braucht es nicht, und alles
+   andere zieht mehr Aufmerksamkeit auf sich, als die Auskunft wert ist. */
+.poll-admin input:focus { outline: none; }
+:root[data-tastatur] .poll-admin input:focus { border-color: var(--fokus); }
+#poll-options { display: flex; flex-direction: column; gap: .4rem; }
+
+/* ---------------------------------------------------------------------------
+   Der Zeichenzaehler im Feld
+
+   Wie bei X: eine kleine "12 / 60" rechts im Feld, nicht darunter. Unter dem
+   Feld waere sie eine eigene Zeile pro Antwort – bei zehn Antworten zehn
+   Zeilen fuer eine Zahl, die meistens niemanden interessiert.
+
+   Das label ist der Bezugspunkt; es umschliesst Feld und Zahl, damit die Zahl
+   absolut darin sitzen kann. Als label und nicht als div, weil ein Klick auf
+   die Zahl dann im Feld landet statt ins Leere zu gehen.
+
+   Wann sie zu sehen ist:
+     * waehrend man in dem Feld ist (:focus-within)
+     * und ausserdem, sobald es knapp wird – die letzten zehn Zeichen.
+   Der zweite Fall ist der wichtigere. Wer einen langen Text hineinkopiert und
+   wegklickt, soll sehen, dass er an der Grenze steht, ohne noch einmal
+   hineinzuklicken. Immer sichtbar waere sie dagegen zehnmal Zahlensalat neben
+   zehn leeren Feldern.
+
+   visibility statt display: none, damit die Zahl beim Betreten des Feldes
+   nichts umbaut – dasselbe Muster wie beim .dm-s.
+
+   Die Farbe ist --dim und nicht --dimmer, obwohl --dimmer sonst die Farbe fuer
+   Nebensaechliches ist: gemessen 3,38:1 auf --bg. Fuer 10,8-px-Schrift ist das
+   unter jeder Grenze, und diese Zahl steht ausgerechnet dann da, wenn sie
+   jemand lesen soll. --dim sind 6,40:1, --warn im vollen Zustand 7,09:1.
+   --------------------------------------------------------------------------- */
+.zaehl-feld { position: relative; display: block; }
+.zaehl-feld > input { width: 100%; }
+.zaehler {
+  position: absolute; right: .7rem; top: 50%; transform: translateY(-50%);
+  font-size: .72rem; font-variant-numeric: tabular-nums;
+  color: var(--dim); pointer-events: none;
+  visibility: hidden;
+}
+.zaehl-feld:focus-within .zaehler,
+.zaehl-feld.ist-knapp .zaehler { visibility: visible; }
+.zaehl-feld.ist-voll .zaehler { color: var(--warn); }
+
+/* "+ Option" links, "Start poll" rechts.
+   Das "Start poll" haengt an margin-left: auto und nicht an space-between, und
+   das ist der ganze Unterschied: Bei der letzten erlaubten Antwort verschwindet
+   das Plus (display: none), und mit space-between waere "Start poll" dann das
+   einzige Kind – also linksbuendig. Der Knopf waere beim Anlegen der vierten
+   Antwort quer durch die Zeile gesprungen, genau in dem Moment, in dem man ihn
+   als Naechstes drueckt. Mit margin-left: auto bleibt er, wo er steht. */
+.row { display: flex; gap: .5rem; }
+.row #btn-create-poll { margin-left: auto; }
+
+/* Ueberschrift links, Laufzeit rechts.
+   umbrechend, weil auf dem Handy "NEW POLL" und fuenf Stufen nicht in eine
+   Zeile passen. Beim Umbruch rutscht die Gruppe unter die Ueberschrift und
+   bleibt dort rechtsbuendig – margin-left: auto wirkt in beiden Faellen. */
+.poll-admin-kopf {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: .5rem .8rem; margin-bottom: .3rem;
+}
+.poll-admin-kopf h3 { margin: 0; }
+
+/* Die Laufzeit: Tage, Stunden, Minuten.
+   ---------------------------------------------------------------------------
+   Hier stand ein einziger Wert in Stunden, eingefasst wie Ansems
+   Schwellenfeld, mit einem Plus und einem Minus links und rechts davon. Er
+   sass in der Kopfzeile des Anlegekastens, neben "+ New poll".
+
+   Drei Kaesten passen dort nicht mehr hin – am Rechner knapp, auf 390 px gar
+   nicht –, also ist der Block nach unten in den Kasten gewandert, wie bei X.
+
+   Der Aufbau eines Feldes: Beschriftung klein darueber, Wert gross darunter,
+   Pfeil rechts. Das ist die einzige Stelle der Seite mit einem Auswahlfeld,
+   und deshalb steht die Beschriftung IM Kasten statt daneben: Ein
+   Auswahlfeld, das nur eine Zahl zeigt, sagt nicht, wovon. */
+.lz-block { display: flex; flex-direction: column; gap: .35rem; }
+/* Dieselbe Groesse wie "Runs for" vorher, aus demselben Grund: Sie beschriftet
+   den Block und ist keine Fussnote an ihm. */
+.lz-titel { font-size: .82rem; color: var(--dimmer); }
+.lz-reihe { display: flex; gap: .5rem; }
+/* Gleich breit und mitwachsend. Feste Breiten waeren hier verlockend – die
+   laengste Beschriftung ist "Minutes" –, gingen auf 390 px aber nicht auf. */
+.lz-feld {
+  flex: 1; min-width: 0; position: relative;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  transition: border-color .15s;
+}
+.lz-name { display: block; font-size: .72rem; color: var(--dimmer); }
+.lz-zahl { display: block; }
+/* Der Knopf ist der ganze Kasten, Beschriftung inbegriffen.
+   ---------------------------------------------------------------------------
+   Ein <button> und kein <select>, und das ist der Kern dieser Runde: Ein
+   <select> gilt nach einem Mausklick als :focus-visible, ein Knopf nicht –
+   damit greift der Fokusring der Seite dort nicht mehr.
+
+   Dass der Knopf den ganzen Kasten fuellt und nicht nur die Zahl, ist der
+   zweite Teil davon: Sonst waere das antippbare Ziel auf dem Handy 24 px hoch,
+   in einem Kasten, der 44 aussieht.
+
+   padding-right laesst dem Pfeil Platz: Ohne das laeuft eine zweistellige Zahl
+   darunter. */
+.lz-wahl {
+  appearance: none; background: none; border: 0;
+  padding: .35rem 1.5rem .35rem .6rem;
+  font: inherit; font-family: var(--mono); font-size: .95rem; color: var(--text);
+  cursor: pointer; text-align: left; width: 100%; display: block;
+  line-height: 1.35;
+}
+/* Der Pfeil ist gezeichnet und kein Schriftzeichen: Ein "v" aus der Mono steht
+   zu hoch, ist zu breit und traegt die Serifen der Schrift mit. Zwei Kanten
+   eines gedrehten Quadrats sind an jeder Groesse dasselbe Bild. */
+.lz-feld::after {
+  content: ''; position: absolute; right: .6rem; top: 50%;
+  width: 7px; height: 7px; margin-top: -5px;
+  border-right: 1.6px solid var(--dimmer); border-bottom: 1.6px solid var(--dimmer);
+  transform: rotate(45deg); pointer-events: none;
+  transition: transform .12s;
+}
+/* Offen zeigt er nach oben. Dieselbe Bewegung wie beim Plus an "New poll" –
+   das Zeichen dreht sich, statt ausgetauscht zu werden. */
+.lz-feld:has([aria-expanded="true"])::after {
+  transform: rotate(-135deg); margin-top: -2px;
+}
+
+/* Die Klappe.
+   ---------------------------------------------------------------------------
+   Sie ist der zweite Grund, warum hier kein <select> steht: Dessen Klappe
+   zeichnet das Betriebssystem, und ihre Hoehe folgt der Anzahl der Eintraege.
+   Acht bei Days, vierundzwanzig bei Hours, sechzig bei Minutes – drei
+   verschieden hohe Klappen unter drei gleich aussehenden Kaesten.
+
+   Hier ist die Hoehe FEST und fuer alle drei dieselbe. Sie ist so gewaehlt,
+   dass auch die kuerzeste Liste (Days, acht Eintraege) ueberlaeuft – sonst
+   waere Days wieder die Ausnahme. Alles darueber rollt.
+
+   Ueber dem Rest der Seite (z-index) und mit einer Flaeche, die deckt: Sie
+   legt sich ueber die Abstimmungsliste darunter. */
+.lz-liste {
+  position: absolute; top: calc(100% + .25rem); left: 0; right: 0; z-index: 20;
+  /* 11.5rem waren vier Eintraege, seit diese 44 px hoch sind – bei sechzig
+     Minuten sehr viel Rollen fuer eine einzige Zahl. 14rem sind fuenf und
+     lassen unten noch Luft: Die Liste klappt nach UNTEN auf, und bei 17rem
+     stand ihr Rand zehn Pixel ueber der Bildschirmkante. */
+  max-height: 14rem; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px;
+  padding: .25rem; box-shadow: 0 12px 28px rgba(0, 0, 0, .55);
+  scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent;
+}
+.lz-liste::-webkit-scrollbar { width: 8px; }
+.lz-liste::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+/* Ueber die ganze Breite und daumenhoch.
+   ---------------------------------------------------------------------------
+   Gemessen waren 27 x 32 px – ein Ziel von der Groesse einer Erbse, und davon
+   sechzig untereinander, wenn man Minuten waehlt. Die Breite kam daher, dass
+   der Eintrag nur so breit war wie seine Ziffer; getroffen hat man ihn also
+   nur, wenn man genau auf die Zahl tippte, nicht auf die Zeile.
+
+   display: block nimmt die volle Breite, min-height die Hoehe. Am Rechner
+   aendert das nichts Sichtbares ausser einer groesseren Trefferflaeche. */
+.lz-eintrag {
+  display: block; width: 100%; text-align: left;
+  min-height: 44px; padding: .28rem .6rem; border-radius: 5px; cursor: pointer;
+  font-family: var(--mono); font-size: .88rem; color: var(--dim);
+}
+/* Die Marke ist das, worauf die Pfeiltasten zeigen – nicht die Auswahl. Sie
+   folgt auch dem Mauszeiger, damit Maus und Tastatur nicht zwei verschiedene
+   "hier bin ich" zeigen. */
+.lz-eintrag.ist-marke { background: var(--bg-2); color: var(--text); }
+/* Der gewaehlte Wert steht heller da, auch wenn die Marke woanders liegt. */
+.lz-eintrag[aria-selected="true"] { color: var(--text); font-weight: 650; }
+/* Abgeschaltet heisst: Dieser Wert kaeme zusammen mit den anderen beiden ueber
+   eine Woche. Er steht trotzdem da – so ist zu sehen, dass die Grenze eine
+   Grenze ist und nicht ein Loch in der Liste. */
+.lz-eintrag[aria-disabled="true"] {
+  color: var(--line); cursor: default; background: none; font-weight: 400;
+}
+
+.lz-hinweis { margin: 0; font-size: .74rem; color: var(--dimmer); }
+
+/* Die Abstimmungen stehen ohne Kasten auf dem Seitengrund.
+   ---------------------------------------------------------------------------
+   Hier lag eine Runde lang ein Rahmen um den ganzen Reiter, wie im DM-Tab. Er
+   ist wieder raus. Was aus der Runde BLEIBT, weil es unabhaengig davon
+   richtig ist: der Rahmen als gemeinsame Klasse (.rahmen) fuer die drei
+   Flaechen im DM-Tab, und die Zentrierung des leeren Hinweises weiter unten. */
+.poll-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 1rem; padding-bottom: 1rem; }
+/* Der Hinweis auf die leere Liste steht mittig – und zwar in der SEITE, nicht
+   in der Liste.
+   ---------------------------------------------------------------------------
+   Der Unterschied faellt nur bei Ansem auf, dafuer dort staendig: Klappt er
+   den Anlegekasten auf, waechst der um gut 200 px, die Liste darunter wird
+   entsprechend kuerzer, und ihre Mitte wandert um die Haelfte davon nach
+   unten. Gemessen sind das 107 px – der Satz rutscht beim Aufklappen sichtbar
+   weg, obwohl sich an ihm nichts geaendert hat.
+
+   Gerechnet wird deshalb von der Mitte der Liste aus die halbe Hoehe des
+   Kastens darueber zurueck; --poll-kopf traegt sie und wird in app.js
+   gepflegt (siehe beobachteKopfHoehe). Ohne die Variable – also bei einem
+   Nutzer, der den Kasten gar nicht hat – bleibt es die Mitte der Liste, und
+   die IST dort die Mitte der Seite.
+
+   Das max() ist die Sperre nach oben: Auf einem kurzen Bildschirm laege die
+   Mitte der Seite sonst mitten im Formular, und der Satz stuende im
+   Eingabefeld. Dann gewinnt der Abstand von oben, und er rutscht eben doch –
+   lieber verschoben als ueberlappt.
+
+   Hier stand eine Runde lang eine Fassung mit "safe center" und einem
+   Innenabstand nach unten. Sie kam mit dem Rahmen, der eine Runde lang um den
+   ganzen Reiter lag: Der kostete oben und unten je .9rem, und damit reichte
+   der Platz fuer diese Rechnung nicht mehr – der Satz stand mit seiner halben
+   Hoehe im Formular. Ohne den Rahmen ist der Platz zurueck, und mit ihm die
+   Fassung, die hier laenger gemessen ist.
+
+   Ausdruecklich nur hier und nicht an .empty selbst: In einem leeren Gespraech
+   haengt der Satz absichtlich unten, wo auch die Blasen haengen (siehe
+   .chat-list > *:first-child). Eine gemeinsame Regel wuerde ihn dort nach oben
+   ziehen – eine Aenderung an einer anderen Stelle, die niemand bestellt hat. */
+.poll-list { position: relative; }
+.poll-list > .empty {
+  position: absolute; left: 0; right: 0; margin: 0;
+  top: max(2.2rem, calc(50% - var(--poll-kopf, 0px) / 2));
+  transform: translateY(-50%);
+}
+
+/* Die Karte hat eine Flaeche – dieselbe wie das Bild zum Herunterladen.
+   ---------------------------------------------------------------------------
+   Vorgeschichte, damit niemand den alten Fehler zurueckbaut: Der Tab hatte
+   einmal VIER Flaechen uebereinander – Seitengrund, Karte, Antwortzeile,
+   Rand – mit Schritten von 1,05 / 1,09 / 1,14:1. Jeder einzelne liegt unter
+   dem, was das Auge als Absicht liest. Das Ergebnis waren "viele Grautoene",
+   von denen keiner etwas sagte, und deshalb flog damals alles heraus.
+
+   Zurueck kommt jetzt genau EINE davon, und zwar die, die auch das Bild traegt:
+   --bg-1 unter der Karte. Die Antwortzeile bleibt ohne eigene Flaeche, der
+   Anlegekasten auch. Damit stehen Seite, Karte und Fuellung untereinander –
+   drei Ebenen, nicht vier, und die Zeile innerhalb der Karte holt ihre Form
+   weiterhin vom Rand.
+
+   Der eigentliche Gewinn ist nicht die Flaeche selbst, sondern dass Seite und
+   Bild ab jetzt DASSELBE zeigen. Vorher war die Karte auf der Seite randlos
+   und im Download gefuellt; wer ein Bild geteilt und danach die Seite geoeffnet
+   hat, sah zwei verschiedene Dinge.
+
+   Der Preis, gemessen: Die Kante der Balkenfuellung steht auf der Karte bei
+   1,54:1 statt 1,62:1 auf dem Seitengrund – die Karte ist heller, der
+   Unterschied zur Fuellung damit kleiner. Es ist genau der Wert, den das
+   Download-Bild schon immer hatte.
+
+   --bg-3 lebt im Tab ausserdem in zwei kleinen Marken weiter: dem gewaehlten
+   Laufzeit-Knopf und dem CLOSED-Abzeichen. Das ist Absicht – das sind Marken,
+   keine Ebenen des Aufbaus, und dort traegt die Flaeche die Aussage. */
+.poll {
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem;
+  background: var(--bg-1);
+}
+/* Frage links, die beiden Knoepfe rechts. align-items: flex-start, damit sie
+   bei einer zweizeiligen Frage oben stehen bleiben statt in die Mitte zu
+   rutschen – oben rechts heisst oben rechts. */
+.poll-head { display: flex; align-items: flex-start; gap: .8rem; margin-bottom: .2rem; }
+.poll h4 { margin: 0; font-size: 1.05rem; min-width: 0; }
+.poll-tools { flex: none; margin-left: auto; display: flex; gap: .15rem; }
+/* Der Rahmen der Knoepfe ist im Ruhezustand unsichtbar: Neben einer
+   Ueberschrift waeren zwei weitere Kaesten zu viel Gewicht. Beim Ueberfahren
+   kommt er zurueck, damit man sieht, dass es Knoepfe sind und keine Bildchen. */
+.poll-tools .icon-btn { border-color: transparent; }
+.poll-tools .icon-btn:hover:not(:disabled) { border-color: var(--line); }
+.poll-tools .icon-btn.is-copied { color: var(--accent); border-color: var(--accent); }
+
+/* Der Löschknopf sieht aus wie seine Nachbarn – keine Warnfarbe, weder im
+   Ruhezustand noch nach dem ersten Tipper. Die Rückfrage steckt im Symbol: Aus
+   dem Papierkorb wird ein Häkchen, und erst der Tipper darauf löscht.
+
+   Keine eigene Regel nötig: Das Häkchen kommt aus dem Markup, und die
+   Zustände darüber (Umriss beim Überfahren) gelten für alle drei Knöpfe
+   gleich.
+
+   Am Knopf steht in diesem Zustand die Klasse knopf-aktiv. Sie ist ABSICHTLICH
+   ungestylt: Sie merkt sich nur, welches Symbol gerade drinsteht, damit
+   knoepfeMalen() beim Neubau der Liste nicht jedes Mal innerHTML überschreibt.
+   Wer ihr hier eine Farbe gibt, macht aus einer Notiz ein Signal – und dann
+   sieht der Löschknopf nach dem ersten Tipper doch nach Gefahr aus. Das
+   sichtbare Signal für "kopiert" ist is-copied darüber. */
+
+/* Der kurze Hinweis nach einem geteilten Link: Wer ihn anklickt, landet in
+   einer Liste und soll sofort sehen, welche der Karten gemeint war. Nach zwei
+   Sekunden ist die Frage beantwortet, dann verschwindet die Markierung wieder
+   – eine dauerhafte wäre ab da nur noch Dekoration. */
+.poll.is-linked { animation: poll-linked 2.4s ease-out 1; }
+@keyframes poll-linked {
+  0%, 55% { border-color: var(--accent); background: rgba(var(--accent-rgb), .05); }
+  /* Wieder --bg-1 und nicht transparent: Das Schlussbild einer Animation muss
+     dort landen, wo die Karte im Ruhezustand steht. Hier stand eine Weile
+     transparent – richtig, solange die Karte keine eigene Flaeche hatte, und
+     falsch in dem Moment, in dem sie eine bekommt. Sonst blitzt die Karte am
+     Ende der zwei Sekunden kurz auf den Seitengrund durch. */
+  100%    { border-color: var(--line);   background: var(--bg-1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .poll.is-linked { animation: none; border-color: var(--accent); }
+}
+.poll-meta { font-size: .76rem; color: var(--dimmer); margin-bottom: .9rem; display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+.poll-meta .btn { margin-left: auto; font-size: .76rem; }
+.opt { position: relative; margin-bottom: .5rem; cursor: pointer; }
+.opt.locked { cursor: default; }
+/* min-height statt height: Bei langen Antworten oder großen Zahlen brach der
+   Text sonst aus dem Balken heraus – auf dem Handy war jede zweite Zeile
+   abgeschnitten. */
+/* Ebenfalls ohne eigene Flaeche – siehe die Begruendung bei .poll.
+   Ein Nebeneffekt, der die Sache besser macht statt schlechter: Die Fuellung
+   liegt jetzt auf dem Seitengrund statt auf --bg-3 und ist damit dunkler
+   gemischt. Die Stimmenzahl darauf steht dadurch nicht schlechter, sondern
+   besser da. test-polls-tab.mjs rechnet es bei jedem Lauf nach. */
+.opt-bar {
+  position: relative; border: 1px solid var(--line);
+  border-radius: 9px; overflow: hidden; min-height: 44px; display: flex; align-items: center;
+  transition: background .15s;
+}
+/* Unter dem Zeiger wird die FLÄCHE heller, nicht der Rand.
+   ---------------------------------------------------------------------------
+   Hier stand border-color: var(--dim) – ein hell aufleuchtender Umriss um die
+   ganze Zeile. Der Rand hat auf dieser Seite aber schon eine Aufgabe: Er
+   zeichnet die Form. Ihn zusätzlich blinken zu lassen heisst, dasselbe Zeichen
+   für zwei Dinge zu benutzen.
+
+   Heller wird deshalb der Grund der Zeile – und zwar NUR der leere Teil.
+   Die Füllung bleibt, wie sie ist. Der Grund dafuer war urspruenglich die
+   Stimmenzahl, die auf der Fuellung lag: Ein filter: brightness(1.14) drueckte
+   sie von 4,6:1 auf 3,8:1. Die Zahl gibt es nicht mehr, das Argument also auch
+   nicht – geblieben ist das schwaechere, aber ausreichende: Eine Fuellung, die
+   beim Ueberfahren mit aufhellt, sieht aus, als aendere sich der Wert.
+
+   Die Folge, die man kennen sollte: Eine Antwort bei 100 % hat keinen leeren
+   Teil und reagiert deshalb nicht sichtbar auf den Zeiger. Das ist der Fall,
+   in dem ohnehin nichts mehr zu entscheiden ist. */
+.opt:hover:not(.locked) .opt-bar { background: var(--bg-3); }
+
+/* Einfarbig und mit harter Kante – wie im Bild, das der Ladeknopf erzeugt.
+   Vorher lief hier ein Verlauf ins Violett, der nach 20 px weich auslief.
+
+   Die weiche Kante hatte einen Grund: Der Antworttext liegt über dem Balken,
+   und eine senkrechte Linie quer durch ein Wort sah nach Darstellungsfehler
+   aus. Bei 24 % Deckkraft ist der Text auf beiden Seiten der Kante gleich gut
+   lesbar, also trägt der Einwand nicht mehr – und die Kante sagt jetzt etwas,
+   was der Verlauf verschluckt hat: genau hier endet der Anteil.
+
+   Seit dem Wechsel auf Xs Farben ist die Füllung DECKEND statt durchscheinend.
+   Der Einwand von damals kommt damit ein Stück zurück, aber gemessen hält er
+   nicht: Der Antworttext steht auf der Füllung bei 10,0:1 (Grau) und 6,0:1
+   (Blau) und daneben auf dem leeren Teil bei 16,2:1 – auf beiden Seiten der
+   Kante gut lesbar, nur unterschiedlich hell. Die Werte selbst stehen oben
+   bei --fuellung. */
+.opt-fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--fuellung);
+  transition: width .5s cubic-bezier(.2,.8,.2,1);
+}
+/* Die GEWINNENDE Antwort ist blau – bei X das einzige Farbsignal in einer
+   Umfrage.
+
+   Blau gibt es erst, wenn die Abstimmung zu ist. Vorher sagen die
+   Balkenlängen schon, wo es steht; eine Farbe darüber macht daraus eine
+   Ansage, und eine Ansage über einen Zwischenstand ist eine Aufforderung. Wer
+   die Klasse hier vergibt und wann, steht in app.js bei fuehrenderAnteil() –
+   das Blatt entscheidet es nicht.
+
+   Es kollidiert nicht mit dem Haken, der "so hast du gestimmt" sagt. Der ist
+   ein Zeichen IM Text, das Blau eine Fläche darunter; beides an derselben
+   Zeile heißt "du hast für die gewinnende gestimmt", und das ist lesbar, weil
+   die zwei Zeichen verschiedener Art sind.
+   Hier stand einmal ein weisser Rahmen für dieselbe Aussage. Der ist weg: Ein
+   Rahmen, der mal Form und mal Zustand bedeutet, sagt am Ende beides nicht. */
+.opt.leads .opt-fill { background: var(--fuellung-spitze); }
+/* align-items: flex-start und nicht center.
+   Solange die Antwort in eine Zeile passt, ist beides gleich. Bricht sie um –
+   auf dem Handy der Normalfall –, sitzt der Betrag bei center auf halber Höhe
+   irgendwo neben der zweiten Zeile. Oben ausgerichtet steht er dort, wo die
+   Antwort anfängt, und alle Beträge einer Abstimmung stehen auf einer Linie. */
+.opt-text { position: relative; display: flex; width: 100%; align-items: flex-start; gap: .8rem; padding: .5rem .8rem; }
+.opt-label { font-weight: 500; }
+/* Der Haken an der eigenen Stimme. Er nimmt seine Farbe vom Text darüber –
+   damit steht er auf jeder Füllung so gut da wie die Antwort selbst und
+   braucht keinen eigenen Wert. Die -.18em heben ihn auf die Mitte der
+   Kleinbuchstaben; auf der Grundlinie sässe er sichtbar zu tief. */
+.opt-haken { margin-left: .4em; vertical-align: -.18em; }
+/* Nur für die Vorlesestimme, für das Auge nicht da. Nicht display: none –
+   das würde auch von der Vorlesestimme übersprungen. */
+.nur-vorlesen,
+/* Die drei Zeichen unter Ansems Profilbild. Sie stehen weiter im Dokument,
+   damit eine Vorlesestimme sagen kann, wer da steht – ein Bild ohne Text sagt
+   ihr nichts. Nur dort, wo das Bild wirklich steht: in der Kopfzeile. Im Zitat
+   und im Posteingang bleiben die Zeichen sichtbar. */
+.me .handle.admin-name .kuerzel {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+/* ACHTUNG, und zwar bei JEDEM neuen Ort für .nur-vorlesen: Das Elternelement
+   muss positioniert sein.
+   ---------------------------------------------------------------------------
+   position: absolute sucht sich den nächsten positionierten Vorfahren. Findet
+   es keinen, ist der Bezug das ganze Dokument – und dann steht das Element
+   nicht "1 px in der Liste", sondern 1 px an der Stelle, an der es im UNGESCROLLTEN
+   Verlauf läge. Bei vierzig Nachrichten sind das schnell 1500 px unterhalb des
+   Fensters, und das Dokument wächst genau so weit mit.
+
+   Sichtbar war das als: Die Seite ließ sich plötzlich scrollen. Man scrollte
+   im Verlauf, das Rad rutschte am Ende der Liste auf das Dokument durch, und
+   die ganze App fuhr nach oben aus dem Bild. Gemessen: 1493 px Dokument in
+   einem 738 px hohen Fenster – 755 px, die aus zwei Dutzend 1-px-Spans kamen,
+   von denen keiner zu sehen ist. Damals lag das an Ansems Kuerzeln im Chat;
+   in einer langen Abstimmungsliste (.opt-label) waere es dasselbe.
+
+   overflow: hidden und clip-path helfen dagegen nichts. Beide verstecken den
+   INHALT; die Fläche, die der Kasten im Dokument belegt, bleibt, wo sie ist.
+   Deshalb steht der Bezugspunkt hier ausdrücklich als eigene Regel und nicht
+   nebenbei in einer anderen. test-seite-hoehe.mjs rechnet es bei jedem Lauf
+   nach. */
+.me .handle.admin-name,
+.opt-label { position: relative; }
+/* Die gewinnende Antwort steht fetter da – bei X genauso. Kein zweiter
+   Rahmen: Der bedeutet hier schon "so hast du gestimmt", und zwei Dinge mit
+   demselben Zeichen zu meinen ist schlimmer, als eines davon gar nicht zu
+   zeigen.
+   Das Fettere ist seit dem Blau nicht mehr das einzige Zeichen, aber es bleibt
+   – es ist das einzige, das auch ohne Farbe ankommt.
+   Es hängt an derselben Klasse und kommt damit auch erst nach dem Schliessen.
+   Das ist Absicht: Eine laufende Abstimmung soll gar keinen Anwärter haben,
+   auch keinen leisen. */
+.opt.leads .opt-label { font-weight: 650; }
+
+/* Rechts steht der Betrag, und sonst nichts.
+   Hier standen nacheinander eine Stimmenzahl und ein Prozentsatz. Der
+   Prozentsatz ist eine Geschmacksfrage und flog wieder heraus – er sagte
+   dasselbe wie die Balkenlänge daneben.
+
+   Die Stimmenzahl ist keine Geschmacksfrage und darf nicht zurück: Wer 100k
+   auf zehn Wallets verteilt, ändert am Betrag nichts, macht aus einer Stimme
+   aber zehn. Der Betrag lässt sich so nicht aufblasen, denn in dieser Runde
+   wiegt eine Stimme so viel wie der Bestand dahinter. */
+/* Hier stand kurzzeitig zusaetzlich flex: none, damit der Betrag keine Breite
+   abgibt. Es liess sich durch keinen Fall belegen: weder mit einer 60 Zeichen
+   langen Antwort noch mit einem einzelnen langen Wort ohne Trennstelle wurde
+   die Zahl gequetscht oder umgebrochen. Also raus – eine Zeile, von der
+   behauptet wird, sie halte etwas, ohne dass sie es je tut, ist genau die,
+   die beim naechsten Mal niemand anzufassen wagt.
+   Die beiden Pruefungen dafuer stehen in scripts/test-polls-tab.mjs und
+   bleiben stehen: Taucht der Fall doch auf, faellt er dort auf. */
+.opt-num { margin-left: auto; font-family: var(--mono); text-align: right; line-height: 1.25; }
+.opt-num .held { display: block; color: var(--text); font-size: .95rem; font-weight: 650; }
+.opt.leads .opt-num .held { color: var(--accent); }
+.closed-tag { font-size: .68rem; background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; }
+
+/* Die verbleibende Zeit in der Kopfzeile einer Abstimmung.
+   Heller als der Rest der Zeile (--dim statt --dimmer): Was daneben steht,
+   ist eine Auskunft, "closes in 3h" ist der Grund, jetzt zu tippen statt
+   spaeter. */
+.frist-rest { color: var(--dim); }
+/* Unter einer Stunde. Der erste Einsatz von --gold auf der Seite – bewusst
+   eine Farbe, die sonst nirgends vorkommt, damit sie nicht mit etwas
+   verwechselt wird. Kein Blinken, keine Bewegung: Die Zeile steht ueber einer
+   Liste, die man liest, und etwas Zuckendes darin liest niemand mehr. */
+.frist-rest.is-bald { color: var(--gold); }
+
+/* ---------------- DMs ---------------- */
+
+/* Der Rahmen, den alle Bereiche teilen: Ansems Posteingang, sein geöffnetes
+   Gespräch, das Fenster eines normalen Nutzers – und die Abstimmungsliste.
+   ---------------------------------------------------------------------------
+   Vorher hatte nur Ansem einen Kasten. Ein Nutzer sah dieselben Sprechblasen
+   frei auf dem Seitengrund schweben, und das las sich wie zwei verschiedene
+   Programme: bei ihm ein Fenster, beim anderen eine Seite.
+
+   Linie und Radius stehen deshalb an EINER Stelle. Wer den Rahmen ändert,
+   ändert alle – sonst fällt genau der auf, den man vergisst, und zwar erst,
+   wenn zwei davon nebeneinander im Bild sind.
+
+   Die FÜLLUNG ist ausdrücklich nicht dabei, sondern hängt an .gefuellt:
+   ---------------------------------------------------------------------------
+   Bei den DMs liegt der Inhalt direkt im Kasten – Sprechblasen und Zeilen
+   brauchen eine Fläche unter sich. Die Abstimmungsliste enthält dagegen
+   KARTEN, und jede trägt schon dieselbe Füllung. Beides zusammen hiesse
+   --bg-1 auf --bg-1: Kästen in Kästen, ohne Unterschied dazwischen. Dort
+   bleibt der Kasten deshalb ein blosser Umriss, und die Karten darin heben
+   sich weiter ab. */
+.rahmen {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.rahmen.gefuellt { background: var(--bg-1); }
+
+/* .dm-user trägt den Rahmen und muss deshalb auch den Innenabstand tragen,
+   den bei Ansem .thread-view hat – sonst klebten Sprechblasen und Eingabe am
+   Rand. Oben ohne: Dort beginnt die Liste, und die bringt ihren eigenen
+   Abstand mit. */
+.dm-user {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  padding: 0 .9rem .9rem;
+}
+.dm-admin { flex: 1; min-height: 0; display: grid; grid-template-columns: 290px 1fr; gap: 1rem; }
+
+/* Der Posteingang rollt NICHT als Ganzes – nur die Zeilen darin.
+   Sonst laeuft die Leiste rechts ueber die volle Hoehe der Spalte, also auch
+   neben Kopfzeile, Schwelle und der Verborgen-Zeile: drei Dinge, die
+   feststehen, mit einem Schieber daneben, der ihnen nichts sagt.
+   Abgeschnitten wird NICHT hier, sondern in den beiden Teilen darunter –
+   jeder mit den Ecken, die zu seiner Seite gehoeren. Ein overflow: hidden auf
+   der Spalte waere einfacher, wuerde aber genau das verhindern, worum es
+   rechts geht: Die Marke liegt AUF dem Rahmen und damit einen Pixel
+   ausserhalb dieses Kastens. */
+.thread-list { display: flex; flex-direction: column; min-height: 0; }
+#thread-items {
+  flex: 1; min-height: 0;
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+}
+
+/* Der ganze Block bleibt beim Blättern stehen, nicht nur die Überschrift.
+   Bei fünfzig Gesprächen ist die Liste mehrere Bildschirme lang; ohne das wäre
+   die Schwelle nach zwei Handbewegungen weg – und mit ihr der Hinweis, dass
+   der Posteingang überhaupt gefiltert ist. Genau der darf nicht verschwinden:
+   Wer ihn nicht sieht, hält eine gefilterte Liste für die ganze.
+
+   Er steht dafür nicht mehr klebend im rollenden Kasten, sondern daneben:
+   Das ist dieselbe Wirkung ohne position: sticky – und es ist der Grund,
+   warum die Leiste jetzt erst unter ihm anfängt. */
+.thread-top-bar {
+  flex: none;
+  background: var(--bg-1); border-bottom: 1px solid var(--line);
+  /* Die eigenen oberen Ecken, seit die Spalte nicht mehr abschneidet.
+     Minus die Rahmenstaerke, sonst steht die Rundung einen Pixel zu weit
+     aussen und der Rahmen blitzt an der Ecke durch. */
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+}
+.thread-head {
+  padding: .7rem .8rem; border-bottom: 1px solid var(--line);
+  font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dimmer);
+  display: flex; justify-content: space-between; gap: .4rem;
+}
+.thread-head .dim { text-transform: none; letter-spacing: 0; font-size: .7rem; }
+
+/* Ansems Schwelle benutzt die Bausteine .filters und .filter-group und
+   braucht deshalb fast keine eigene Gestaltung. Nur die Spalte ist hier schmal
+   statt bildschirmbreit: Das Eingabefeld nimmt die volle Breite. */
+#dm-min-box {
+  padding: .7rem .8rem;
+  flex-direction: column; align-items: stretch; gap: .5rem;
+}
+#dm-min-box .filter-group { width: 100%; }
+#dm-min-box .filter-group input { width: 100%; min-width: 0; }
+
+
+/* Die Zeile fuer die von Hand verborgenen: Zahl links, Schalter rechts.
+   Sie sitzt in der Kopfleiste unter dem Regler und bleibt damit beim Blaettern
+   stehen. Der Trennstrich oben setzt sie vom Regler ab.
+
+   Hier stand ueber ihr noch eine zweite Zeile derselben Bauart – der Zaehler
+   fuer die Schwelle. Sie ist raus, samt ihrer Klasse .thread-hidden: Der
+   Regler steht direkt darueber und sagt dasselbe. */
+.thread-versteckt {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  margin: 0; padding: .5rem .8rem;
+  border-top: 1px solid var(--line);
+  font-size: .74rem; color: var(--dimmer);
+}
+.btn-mini {
+  font-size: .72rem; padding: .18rem .45rem; border-radius: 6px;
+  min-height: 0; flex: none;
+}
+/* Hier stand eine Daempfung fuer verborgene Zeilen: Sie standen gemischt
+   zwischen den anderen und mussten sich unterscheiden. Der Schalter zeigt sie
+   inzwischen ANSTATT der anderen – in dieser Liste sind dann alle verborgen,
+   und alles zu daempfen faerbt nur den Bildschirm blasser, ohne etwas zu
+   sagen. Welche Liste man sieht, steht in der Zeile darueber. */
+
+/* Titelzeile und Verbergen-Knopf. Die Zeile traegt den Trennstrich, damit er
+   ueber die volle Breite laeuft – laege er weiter an .thread-title, endete er
+   vor dem Knopf. */
+.thread-kopf {
+  display: flex; align-items: center; gap: .6rem;
+  border-bottom: 1px solid var(--line);
+}
+.thread-kopf > .thread-title { flex: 1 1 auto; min-width: 0; border-bottom: 0; }
+.thread-hide { flex: none; }
+
+/* Eine Zeile pro Gespräch: Kürzel, Vorschau, Betrag – in dieser Reihenfolge,
+   weil man von links nach rechts liest und der Betrag die Sortierung ist, die
+   man nur überprüft, nicht sucht.
+
+   Kein farbiger Strich für das offene Gespräch und keine rote Blase für
+   Ungelesenes. Beide behaupteten etwas, was nicht stimmt: Eine Auswahl ist
+   nicht wichtig, sie ist nur ausgewählt, und eine ungelesene Nachricht ist
+   nicht dringend. */
+.thread {
+  display: flex; align-items: baseline; gap: .45rem;
+  padding: .5rem .8rem; border-bottom: 1px solid var(--line);
+  cursor: pointer; width: 100%; background: transparent; text-align: left;
+  font: inherit; color: inherit; border-inline: 0; border-top: 0;
+}
+
+/* Ungeöffnet: schwach blaue Fläche, Vorschau eine Stufe heller.
+   Zwei Anzeichen, beide leise.
+
+   Die Farbe ist der Ton der Kürzel (--dim ins Blaue gezogen), sehr weit
+   heruntergedreht. Blau und nicht heller, weil Helligkeit hier schon etwas
+   anderes bedeutet: Sie steht für "geöffnet". Zwei Helligkeiten wären
+   verwechselbar gewesen – Farbe für den einen Zustand, Helligkeit für den
+   anderen sind es nicht.
+
+   Die Reihenfolge dieser drei Regeln ist tragend: .thread.is-unread,
+   .thread:hover und .thread.is-active sind gleich spezifisch (0,2,0), also
+   gewinnt die letzte. Ein Gespräch unter dem Zeiger und ein offenes Gespräch
+   sollen ihren eigenen Grund zeigen, nicht den blauen. Wer hier umsortiert,
+   dreht das Verhalten um. */
+.thread.is-unread { background: rgba(138, 178, 220, .115); }
+/* Ungelesen wird zweifach angezeigt: getoente Zeile und hellerer Text. Der
+   Textteil war --dim gegen --dimmer; seit die Vorschauzeile selbst auf --dim
+   steht, waere das kein Unterschied mehr. Deshalb eine Stufe hoeher auf
+   --text. Der getoente Grund traegt das Signal ohnehin mit – der Text ist die
+   Bestaetigung, nicht der einzige Hinweis. */
+.thread.is-unread .thread-prev { color: var(--text); }
+
+.thread:hover { background: var(--bg-2); }
+.thread.is-active { background: var(--bg-3); }
+.thread .h { font-family: var(--mono); font-weight: 700; flex: none; }
+/* Wer im Posteingang steht, entscheidet anhand des Bestands, welches Gespräch
+   er öffnet – das ist genau die Auskunft, die die Zeile liefern soll. Die
+   Werte stammen aus der Chatzeile, die dieselbe Frage beantwortete; sie ist
+   weg, die Zahl steht hier weiter. */
+.thread .w {
+  font-size: .86rem; font-weight: 600; color: var(--worth);
+  font-family: var(--mono); flex: none;
+  /* Schiebt den Betrag an den rechten Rand, seit die Vorschau davor nicht mehr
+     den ganzen Rest fuellt. */
+  margin-left: auto;
+}
+/* Der Punkt fuer eine ungelesene Nachricht – links vom Betrag.
+   ---------------------------------------------------------------------------
+   Warum dort und nicht am Namen: Der Blick geht in dieser Liste nach rechts,
+   zum Betrag. Dort wird entschieden, welches Gespraech man aufmacht, und dort
+   faellt der Punkt auf, ohne dass man die Zeile lesen muss.
+
+   Als ::before am Betrag und nicht als eigenes Element im Markup: Dann muss
+   renderThreads() nichts davon wissen. Der Zustand steht schon in der Klasse
+   der Zeile.
+
+   Die Farbe ist #4b9aea, und die ist nicht erfunden: Es ist Xs DM-Blau, im
+   Farbkommentar oben schon einmal abgemessen und seit dem Wechsel der
+   Sprechblase auf --fuellung-spitze frei. --fuellung-spitze selbst geht nicht –
+   gemessen 2,57:1 auf dem Listengrund, ein 6-px-Punkt darin waere kaum zu
+   sehen. Dieses Blau kommt auf 6,34:1.
+
+   Und nicht das Namensblau .h.t0: Das gehoert Personen. Ein gesaettigter Ton
+   liest sich als Zustand, ein gedaempfter als jemand. */
+.thread.is-unread .w::before {
+  content: ''; display: inline-block; vertical-align: middle;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ungelesen);
+  margin-right: .4rem; margin-top: -2px;
+}
+/* Die Vorschau endet frueher als noetig.
+   ---------------------------------------------------------------------------
+   Sie hatte 185 px und damit 23 Zeichen – und wurde bei vierzig Gespraechen
+   trotzdem in 22 von 40 Zeilen abgeschnitten. Mehr Zeichen aendern daran
+   nichts: "I sold half my bag last week and no…" sagt nicht mehr als
+   "I sold half my bag…", es macht die Zeile nur voller.
+
+   16ch statt "so viel wie da ist": Damit endet der Text an einer festen
+   Stelle, und rechts davon steht Luft. Die Betraege bilden dadurch eine
+   Spalte, die man von oben nach unten lesen kann, ohne dass unterschiedlich
+   lange Vorschauen das Auge dorthin ziehen. Genau das ist die Ordnung, die die
+   Liste hat – sortiert nach Bestand.
+
+   ch und nicht px: In der Schreibmaschinenschrift ist ein ch genau eine Zelle,
+   16ch sind also immer 16 Zeichen, egal wie gross die Schrift eingestellt ist. */
+/* "You:" vor der Vorschau, wenn Ansem zuletzt geschrieben hat.
+   ---------------------------------------------------------------------------
+   DIESELBE Farbe wie die Vorschau, nur schwerer gesetzt. Hier stand --dimmer,
+   also eine Stufe dunkler, mit dem Gedanken: Es ist keine Nachricht, sondern
+   eine Angabe darueber, wer sie geschrieben hat. Nachgemessen an einer
+   Nachrichtenliste, die es richtig macht, ist es andersherum – dort tragen
+   beide denselben Ton (#727a7a) und unterscheiden sich nur im Schnitt.
+
+   Der Grund leuchtet ein, sobald man es nebeneinander sieht: "You: hi" ist EIN
+   Satz. Zwei Helligkeiten machen daraus zwei Dinge, und das Auge liest eine
+   Pause, die nicht gemeint ist. Das Gewicht sagt dasselbe leiser.
+
+   Der Abstand zur Vorschau ist enger als der Rest der Zeile (siehe
+   margin-right unten) – aus demselben Grund.
+
+   flex: none, damit es nie gekuerzt wird. "Yo…" waere schlimmer als gar
+   nichts. */
+.thread-du {
+  flex: none; font-size: .86rem; color: var(--dim); font-weight: 650;
+  /* Enger an die Vorschau als der Rest der Zeile. Der Zeilenabstand ist
+     .45rem und trennt Kuerzel, Text und Betrag – drei verschiedene Dinge.
+     "You:" und die Nachricht sind aber EIN Satz, und ein Satz haelt in sich
+     denselben Abstand wie zwischen zwei Woertern, nicht den zwischen zwei
+     Spalten. Der negative Rand nimmt den Spaltenabstand wieder heraus und
+     laesst das Wortleerzeichen stehen. */
+  margin-right: var(--du-abstand);
+}
+
+/* ZWEI Breiten, und das ist der Punkt: Alle Vorschauen enden an DERSELBEN
+   Stelle, ob "You:" davorsteht oder nicht.
+   ---------------------------------------------------------------------------
+   Vorher war es eine Breite fuer alle, und "You:" schob den Text um vier
+   Zeichen nach rechts. Damit endete jede zweite Zeile weiter aussen als ihre
+   Nachbarn – eine ausgefranste Kante mitten in einer Liste, deren ganze Ordnung
+   darin besteht, dass man sie von oben nach unten liest.
+
+   Gerechnet und nicht gemessen: Die Textspalte ist --vorschau breit. Steht
+   "You:" davor, bekommt die Vorschau genau das weniger, was "You:" einnimmt –
+   vier Zellen plus den Abstand dahinter. Beides steht als Variable da, damit
+   die Rechnung nicht auseinanderlaeuft, wenn jemand das Wort oder den Abstand
+   aendert. */
+.thread-prev {
+  flex: 0 1 auto; min-width: 0; max-width: var(--vorschau);
+  font-size: .86rem; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.thread-du + .thread-prev {
+  max-width: calc(var(--vorschau) - var(--du-breit) - .45rem - var(--du-abstand));
+}
+/* min-width: 0 ist hier nicht kosmetisch: Als Rasterfeld darf dieses Element
+   von sich aus nicht unter seine Inhaltsbreite schrumpfen. Eine lange Zeile in
+   der Antwortleiste schob damit auf schmalen Telefonen die ganze Seite
+   seitlich hinaus. */
+.thread-view { display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 0 .9rem .9rem; }
+/* Kürzel und Adresse, sonst nichts. Die Adresse kürzt sich ab – sie ist zum
+   Nachschlagen da, nicht zum Lesen. */
+.thread-title {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .7rem 0; border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: .85rem;
+}
+.thread-title .h { flex: none; }
+.thread-title .addr {
+  flex: 1 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Am Schreibtisch stehen Liste und Gespräch nebeneinander – kein Zurück nötig. */
+.back-inbox { display: none; }
+/* Datumstrenner. Mittig, klein, ohne Linien – er soll den Verlauf gliedern und
+   nicht selbst wie eine Nachricht aussehen. Der leichte Rahmen setzt ihn vom
+   Grund ab, damit er beim Scrollen als Marke erkennbar bleibt. */
+.day-sep {
+  align-self: center; flex: none;
+  margin: .5rem 0 .15rem; padding: .12rem .6rem;
+  border: 1px solid var(--line); border-radius: 999px;
+  font-size: .7rem; color: var(--dimmer); white-space: nowrap;
+}
+/* Zwischen zwei Tagen etwas mehr Luft als zwischen zwei Nachrichten. */
+.day-sep + .dm-row { margin-top: .15rem; }
+
+/* Sprechblasen. Sie tragen weiter die Klasse .msg – aus dem Chat, wo sie
+   einmal die Zeilenliste war. Seit der raus ist, gibt es .msg nur noch hier;
+   was von der alten Regel uebrig blieb, steht oben bei ".msg".
+
+   Innen ein Raster und kein Flex-Kasten. Das ist nicht Bequemlichkeit,
+   sondern der Grund für den Fehler, den es behebt:
+
+   Mit einem Flex-Kasten bestimmt der Text selbst, wie breit er wird. Ein
+   langer Text nahm die ganze Zeile ein, die Uhrzeit rutschte in eine zweite –
+   und die war der zusätzliche Platz unter mehrzeiligen Nachrichten. Bei
+   einzeiligen passte beides nebeneinander, deshalb fiel es dort nicht auf.
+   Im Raster stehen die Felder fest: Text links, Uhrzeit rechts, Zitat darüber.
+   Es gibt keine zweite Zeile, in die etwas rutschen könnte.
+
+   align-items: end hält die Uhrzeit dabei auf Höhe der letzten Textzeile statt
+   der ersten.
+
+   Der durchsichtige Rahmen bei eingehenden Nachrichten ist kein Versehen: Die
+   eigenen haben einen sichtbaren, und ohne Gegenstück wären beide Blasen um
+   genau ein Pixel unterschiedlich hoch. */
+.msg.dm {
+  display: grid; grid-template-columns: auto auto;
+  grid-template-areas: "body meta";
+  align-items: end; gap: 0 .5rem;
+  /* auto statt 1fr fuer die Textspalte: Mit 1fr nahm der Text den Rest nach
+     der Uhrzeit – und weil die Blase zugleich fit-content ist, gab es dabei
+     nichts zu verteilen. Das Ergebnis war eine Spalte von einem Zeichen
+     Breite: "Ttt" stand untereinander. Mit auto nimmt der Text seine
+     natuerliche Breite und bricht erst an max-width um. */
+  /* Die Blase soll sich um ihren Inhalt legen, nicht die erlaubte Breite
+     ausfüllen: Ein "ok" in einem 78 % breiten Kasten sieht aus wie ein Fehler.
+     max-width bleibt die Obergrenze, ab der der Text umbricht. */
+  /* max-content und nicht fit-content: Die Blase liegt in einer Flexspalte,
+     und dort loest fit-content ueber die Mindestbreite ihrer Spalten auf. Weil
+     .body zugleich overflow-wrap: anywhere traegt – noetig fuer lange Adressen
+     –, ist dessen Mindestbreite EIN ZEICHEN. Ergebnis: "Ttt" stand
+     untereinander. max-content nimmt die natuerliche Breite, max-width kappt
+     sie am Block, und der ist bei 78 % der Zeile. */
+  width: max-content; max-width: 100%; padding: .5rem .85rem;
+  /* 18px statt 12: bei X sind die Blasen so rund, dass eine einzeilige fast
+     eine Kapsel ist. Kein 999px – dann wuerde eine dreizeilige Blase zur
+     Wurst. 18 traegt beide Faelle. */
+  border: 0; border-radius: 18px;
+  background: var(--dm-fremd);
+  color: var(--dm-fremd-text);
+}
+/* Der Block aus Kopfzeile, Zitat und Blase. Er traegt die Ausrichtung, die
+   vorher an der Blase hing: eigene Nachrichten rechtsbuendig, eingehende
+   links. Alle drei Teile richten sich an derselben Kante aus – bei X steht
+   das Zitat genau ueber der Blase, nicht daneben. */
+/* Die Breite steckt am BLOCK, nicht an der Blase. Beim ersten Anlauf stand
+   max-width: 78% an der Blase und min-width: 0 hier – dadurch schrumpfte der
+   Block auf null, und die Blase loeste ihr fit-content gegen diese Null auf:
+   "Ttt" brach in drei Zeilen um und die Uhrzeit klebte am Text. */
+.dm-block {
+  display: flex; flex-direction: column; align-items: flex-start; gap: .25rem;
+  max-width: 78%;
+}
+.dm-row.mine .dm-block { align-items: flex-end; }
+/* Eigene Nachrichten: gefuellt gegen umrissen, nicht hell gegen dunkel.
+   ---------------------------------------------------------------------------
+   Vorher war die eigene Blase --accent-fill, also fast weiss mit dunkler
+   Schrift. Neben einer dunklen Blase war das der lauteste Kontrast auf der
+   ganzen Seite – ausgerechnet fuer die Nachrichten, die man selbst geschrieben
+   hat und am wenigsten lesen muss.
+
+   Der Ausweg fuehrt nicht ueber einen dritten Grauton. Alle Flaechen der
+   Palette liegen innerhalb von 1,4:1 zueinander (--bg gegen --line); zwei
+   davon nebeneinander unterscheiden sich um 1,1 bis 1,2:1, und das liest
+   niemand als Absicht. Der Unterschied muss also KATEGORISCH sein und nicht
+   graduell: Die eine Blase ist gefuellt, die andere nur umrissen. Das sieht
+   man auf einen Blick, ohne zwei Grautoene vergleichen zu muessen.
+
+   Beide Toene stehen schon woanders auf der Seite: --bg ist der Seitengrund,
+   --line ist der Rahmen jeder Karte und jedes Feldes.
+
+   Welche der beiden die eigene ist, entscheidet ohnehin die Seite, auf der sie
+   steht – die Fuellung ist die zweite Auskunft, nicht die erste. */
+.msg.dm.mine {
+  background: var(--dm-eigen);
+  color: var(--dm-eigen-text);
+}
+/* Auf dem Blau ist --dimmer nicht mehr zu sehen. Die Uhrzeit nimmt deshalb
+   dieselbe Schrift wie der Text daneben, nur heruntergedreht – dasselbe
+   Verhaeltnis wie in der dunklen Blase, nur andersherum gemischt. */
+.msg.dm.mine .time { color: rgba(255, 255, 255, .72); }
+/* Ein Link auf Blau: weiss und unterstrichen. --worth waere dort fast
+   unsichtbar. */
+.msg.dm.mine .body a { color: #fff; }
+.msg.dm.mine .body a:hover { color: #fff; }
+
+/* ---- Die Antwort: Kopfzeile und Zitatblase, beide AUSSERHALB der Blase ----
+   So macht es X. Der Gewinn ist nicht bloss optisch: Innerhalb der Blase lag
+   das Zitat mal auf Blau und mal auf Dunkelgrau und brauchte fuer jeden Fall
+   eine eigene Regel. Darueber liegt es immer auf dem Seitengrund. */
+.dm-antwort-kopf {
+  font-size: .78rem; color: var(--dm-zitat-text);
+  padding: 0 .3rem;
+}
+.dm-block > .quote {
+  /* Die Grundregel fuer .quote ist ein eingerueckter Strich – so sah das
+     Zitat ueber einer Chatzeile aus. Hier ist es eine eigene kleine Blase,
+     also alles davon zuruecksetzen. */
+  display: block; width: auto; max-width: 78%;
+  margin: 0; padding: .35rem .85rem;
+  border: 0; border-radius: 16px;
+  background: var(--dm-fremd); color: var(--dm-zitat-text);
+  font-size: .86rem; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dm-block > .quote:hover { color: var(--dm-fremd-text); background: var(--dm-fremd); }
+.dm-block > .quote.is-gone { font-style: italic; }
+
+/* Die Zeile um die Blase. Sie hat zwei Aufgaben:
+
+   Sie richtet die Blase aus – eigene rechts, eingehende links –, wofür vorher
+   ein automatischer Außenabstand an der Blase selbst zuständig war.
+
+   Und sie ist die empfindliche Fläche für den Antwortpfeil. Der steht neben
+   der Blase, nicht darin: In einem Rahmen säße er mitten im Satz und schöbe
+   bei jedem Erscheinen den Text. Läge die empfindliche Fläche nur auf der
+   Blase, verschwände er genau dann, wenn man ihn ansteuert. */
+.dm-row { display: flex; align-items: center; gap: .35rem; }
+.dm-row.mine { justify-content: flex-end; }
+/* Der Pfeil steht dort, wo neben der Blase ohnehin Platz ist.
+   ---------------------------------------------------------------------------
+   Eine Runde lang stand er bei ALLEN Nachrichten links, damit er auf der Seite
+   liegt, zu der gewischt wird. Das kostete zu viel: Die eingehenden Blasen
+   ruecken damit um die Breite des Pfeils vom linken Rand ab, und der Rand ist
+   der Anker, an dem man eine eingehende Nachricht erkennt. Der Befund dazu:
+   "die Nachrichten sollen normal am Rand stehen wie frueher."
+
+   Also wieder wie vorher – der Pfeil auf der Innenseite, dort, wo die Zeile
+   ohnehin leer ist: bei eigenen (rechtsbuendigen) links, bei eingehenden
+   rechts. Beide Blasen stehen damit an ihrem Rand.
+
+   Gewischt wird jetzt nach RECHTS (siehe app.js), also von der Mitte weg. */
+.dm-row.mine .reply-btn { order: -1; }
+.dm-row .reply-btn { margin-left: 0; flex: none; }
+
+@media (hover: hover) {
+  .dm-row:hover .reply-btn { opacity: 1; pointer-events: auto; }
+}
+/* Hier stand .dm-row.is-active .reply-btn { opacity: 1 } – der Pfeil, der nach
+   einem Tipp auf die Nachricht erschien. Die Klasse setzt niemand mehr: Am
+   Finger wird gewischt, am Rechner zeigt :hover den Pfeil. Die Begruendung
+   steht in app.js beim Klick-Handler. */
+.msg.dm .body { min-width: 0; overflow-wrap: anywhere; }
+.msg.dm .time { font-size: .66rem; }
+
+/* Hier standen die Regeln fuer ein Zitat INNERHALB der Blase. Seit es
+   darueber steht (siehe .dm-block > .quote), gibt es dort keins mehr – und mit
+   ihm sind zwei Sonderregeln weggefallen, die sich widersprachen: ein
+   schwarzer Schleier fuer die dunkle Blase und ein weisser fuer die helle. */
+
+/* ---------------- Toast ---------------- */
+.toast {
+  position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: 10px;
+  padding: .6rem 1rem; font-size: .86rem; z-index: 50; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.toast.err { border-color: var(--warn); color: #ffc9c9; }
+
+/* ==========================================================================
+   Handy
+   ==========================================================================
+
+   Die Regeln hier folgen vier Sätzen, die auf einem Telefon anders wiegen als
+   am Schreibtisch:
+
+   1. Ein Daumen ist kein Mauszeiger. Apple und Google nennen beide rund 44 px
+      als Mindestmaß für etwas Antippbares. Darunter trifft man daneben.
+   2. iOS zoomt die ganze Seite hinein, sobald man in ein Feld tippt, dessen
+      Schrift kleiner als 16 px ist. Das sieht aus wie ein Fehler und lässt
+      sich nur so verhindern.
+   3. Senkrechter Platz ist knapp. Alles, was über dem Verlauf steht, nimmt
+      dem Gespräch Zeilen weg.
+   4. Unten am Rand liegt bei neueren Telefonen die Home-Leiste. Ohne
+      Berücksichtigung liegt das Eingabefeld darunter.
+   ========================================================================== */
+
+@media (max-width: 760px) {
+  /* --- Kopfzeile: eine Zeile für Kennung und Bestand, eine für die Reiter --- */
+  /* Zurück auf Flex: Auf dem Handy soll die Kopfzeile umbrechen – Marke und
+     Bestand in die erste Zeile, die Reiter als eigene darunter. Ein Raster
+     mit festen Spalten kann das nicht, und mittig müssen die Reiter hier
+     auch nicht sein: Sie nehmen ohnehin die volle Breite. */
+  .topbar { display: flex; flex-wrap: wrap; gap: .5rem;
+    padding: calc(.55rem + env(safe-area-inset-top, 0px))
+             calc(.8rem + env(safe-area-inset-right, 0px)) .55rem
+             calc(.8rem + env(safe-area-inset-left, 0px)); }
+  .brand.small { font-size: .85rem; }
+  :root { --nah: .35rem; }
+  .me { margin-left: auto; }
+  .unit { font-size: .8rem; }
+  .tabs { order: 3; width: 100%; margin: 0; gap: .3rem; }
+  .tab { flex: 1; min-height: 44px; padding: .5rem .4rem; }
+  .icon-btn { width: 44px; height: 44px; }
+  /* Daumentaugliches Ziel, ohne die Kopfzeile höher zu machen. */
+  /* Mehr Luft für den Daumen. Der Wert steht als --marke-luft da und nicht
+     zweimal ausgeschrieben: An ihm hängt auch der negative Rand daneben, der
+     ihn wieder ausgleicht. */
+  :root { --marke-luft: .45rem; }
+  .brand.brand-link { min-height: 44px; }
+
+  /* Oben stand hier eine Null.
+     -------------------------------------------------------------------------
+     Das sparte eine Zeile Hoehe und kostete zwei sichtbare Fehler: Die oberste
+     Abstimmung stiess direkt an den Strich unter der Kopfzeile und sah dort
+     abgeschnitten aus, und der Rahmen um das DM-Fenster hatte nach oben gar
+     keinen Abstand.
+
+     Unten stand hier eine Weile calc(.8rem + env(safe-area-inset-bottom)).
+     -------------------------------------------------------------------------
+     Das war die Ueberkorrektur zum Fehler davor. Vorher hing die sichere Zone
+     an .composer – die sitzt INNERHALB des Rahmens und konnte ihn nicht
+     anheben, also verschwanden seine unteren Ecken unter dem Schliess-Balken.
+     Die Zeile wanderte deshalb hierher, wo sie den ganzen Rahmen hebt. Nur
+     ADDIERTE sie sich dabei zum vorhandenen Abstand:
+
+       12,8 px eigener Abstand  +  34 px sichere Zone  =  46 px leerer Grund
+
+     Gemessen auf einem iPhone 14 vom Startbildschirm. Der Befund dazu:
+     "der Umriss geht nicht weit genug nach unten, da ist zu viel leerer Platz."
+
+     Jetzt sind die beiden Aufgaben getrennt, und zwar an den Stellen, an die
+     sie gehoeren:
+
+       .pane      traegt nur noch den eigenen Abstand         -> Rahmen endet
+                  (.8rem, wie ueberall sonst)                    12,8 px ueber
+                                                                 der Kante
+       .composer  weicht dem Balken aus                       -> Eingabe bleibt
+                  (env(safe-area-inset-bottom))                  61 px darueber
+
+     Der Rahmen laeuft damit UNTER dem Balken durch, statt neben ihm zu enden –
+     so wie in einer App, wo der Balken auf dem Grund liegt. Seine unteren
+     Ecken bleiben sichtbar, weil 12,8 px Rand uebrig sind.
+
+     Fuer die Abstimmungen gilt dasselbe eine Zeile tiefer: Dort gibt es keine
+     Eingabe, die ausweichen koennte, also traegt die Liste selbst den Abstand
+     am Ende – die unterste Abstimmung laesst sich damit ueber den Balken
+     hinaufrollen. */
+  .pane { padding: .7rem .8rem .8rem; }
+  .composer { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .poll-list { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  /* Ansems Posteingang rollt eigenstaendig und braucht denselben Auslauf. */
+  #thread-items { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+  /* --- Zahlenfeld: eine Zeile, daumentaugliche Hoehe --- */
+  /* Die Beschriftung bleibt hier stehen. Im Chat war sie ausgeblendet, weil
+     die Voreinstellungs-Knoepfe daneben sich selbst erklaerten; die gibt es
+     nicht mehr, und ohne den Satz bliebe nur "$ 10 in $ANSEM" – das kann
+     alles Moegliche heissen. */
+  .filters { gap: .45rem; padding: .55rem 0; flex-wrap: nowrap; }
+  .filter-group { flex: none; width: 178px; min-height: 46px; align-items: stretch; padding: 0 .6rem; }
+  .filter-group input { width: 100%; font-size: 16px; min-width: 0; }
+  .filter-group .unit { align-self: center; }
+
+  /* Kleiner als der Nachrichtentext daneben (.9rem), aber weiterhin ein
+     daumentaugliches Ziel – das Zitat ist antippbar und springt zur zitierten
+     Nachricht. Die Hoehe kommt aus min-height, nicht aus der Schriftgroesse. */
+  .quote { font-size: .8rem; padding: .35rem 0 .35rem .6rem; min-height: 44px; align-items: center; }
+  /* .7rem sind hier 10,5 px – unter der Grenze der Lesbarkeit. */
+  .day-sep { font-size: .78rem; padding: .18rem .7rem; }
+
+  /* Auf dem schmalen Bildschirm darf die Blase mehr Breite nehmen – aber der
+     Pfeil daneben braucht auch Platz, sonst rutscht er unter den Rand. */
+  .dm-block { max-width: 82%; }
+  /* Ohne .is-active davor: Die Klasse gibt es nicht mehr (siehe oben), das
+     Mass gilt jetzt fuer den Pfeil ueberhaupt. Angetippt wird er auf dem
+     Handy zwar nicht mehr – gewischt wird –, aber er ist waehrend des
+     Wischens sichtbar, und ein Zeichen in Daumengroesse ist dabei besser zu
+     sehen als eines in Textgroesse. */
+  .dm-row .reply-btn {
+    min-width: 44px; min-height: 44px; font-size: 1.1rem;
+  }
+  /* .66rem sind auf dem Handy 10,6 px – unter der Grenze, ab der eine Ziffer
+     noch zuverlässig lesbar ist. */
+  .msg.dm .time { font-size: .78rem; }
+  /* Das Zitat ist antippbar und braucht ein daumentaugliches Maß. */
+  /* Die Blase behaelt ihr eigenes Polster – die Regel darueber nimmt allen
+     Zitaten den rechten Innenabstand, und in einer gefuellten Blase saehe der
+     Text dann an der Kante kleben. */
+  /* Die Zitatblase liegt jetzt UEBER der Nachricht statt darin – der Waehler
+     heisst entsprechend anders. Daumengroesse bleibt: Sie ist anklickbar und
+     springt zur zitierten Nachricht. */
+  .dm-block > .quote { min-height: 44px; display: flex; align-items: center; font-size: .84rem; }
+  .quote .h { font-size: .8rem; }
+  .reply-bar { font-size: .9rem; }
+  /* Der eigene Bestand in der Kopfzeile bleibt so groß wie das Kürzel daneben
+     und braucht hier keine eigene Regel.
+     .7rem sind auf dem Handy 10,5 px – unter der Grenze der Lesbarkeit. */
+  .msg .time { font-size: .78rem; }
+  .closed-tag { font-size: .74rem; padding: .05rem .35rem; }
+
+  /* --- Eingabezeile: über der Home-Leiste, ohne Hineinzoomen --- */
+  /* padding-bottom steht weiter oben bei .pane, zusammen mit der Begruendung –
+     hier nur die beiden Masse fuers Handy. */
+  .composer { padding-top: .6rem; gap: .4rem; }
+  .composer input { font-size: 16px; min-height: 46px; }
+  .composer .btn { min-height: 46px; padding-inline: 1.1rem; }
+
+  /* --- Abstimmung: Antwort und Zahlen untereinander statt gequetscht --- */
+  .poll { padding: .9rem; }
+  .poll h4 { font-size: 1rem; }
+  /* Hier stand ein eigener Aufbau fuer das Handy: Antwort und Betrag
+     untereinander statt nebeneinander, mit der Begruendung, eine lange Antwort
+     und ein sechsstelliger Betrag passten nicht in dieselbe Zeile.
+     -------------------------------------------------------------------------
+     Nachgemessen bei 375 px, mit dem Grenzfall, den die Datenbank zulaesst
+     (60 Zeichen Antwort, achtstelliger Betrag):
+
+                          Zeilenhoehen      Betrag gequetscht
+       untereinander      81 / 81 / 81 px   nein
+       wie am Computer    85 / 85 / 85 px   nein
+
+     Der Einwand traegt also nicht: Gequetscht wird nichts, seit .opt-num auf
+     flex: none steht. Dafuer kostete das Untereinander etwas, das man auf
+     einem Bild sofort sieht – die Kante der Fuellung lief bei jeder Antwort
+     zusaetzlich durch den Betrag darunter, im Normalfall 4 statt 2 Mal.
+
+     Deshalb gibt es hier nichts mehr: Handy und Computer benutzen dieselben
+     Regeln. Wer den Unterschied wieder einbaut, soll das an Zahlen begruenden –
+     scripts/vorschau-antwortzeilen.mjs zeigt beide Fassungen nebeneinander. */
+  .poll-admin input { font-size: 16px; min-height: 44px; }
+  /* Die beiden Schalter brauchen Daumengroesse – sie sind der einzige Weg,
+     die Laufzeit zu aendern. Der Rahmen bekommt sie ueber sie, nicht
+     umgekehrt: So ist die Trefferflaeche wirklich der Knopf und nicht ein
+     Streifen daneben. Die Schrift muss hier nicht auf 16px, weil nichts mehr
+     angetippt wird, in das iOS hineinzoomen koennte. */
+  /* Und die Laufzeitfelder ebenfalls. Am Rechner sind sie flacher; hier
+     entscheidet der Daumen, nicht das Auge. */
+  .lz-wahl { padding: .45rem 1.5rem .45rem .6rem; font-size: 16px; }
+  /* .72rem sind hier 10,8 px – unter der Grenze, ab der ein Wort auf einem
+     Telefon noch zuverlaessig zu lesen ist. Und "Days" gegen "Minutes" ist
+     die einzige Auskunft darueber, welche Zahl gerade wo steht. */
+  .lz-name { font-size: .78rem; }
+  .poll-admin .btn, .poll-meta .btn { min-height: 44px; }
+  /* Daumengröße. Der Knopf wird dabei nicht optisch größer – nur seine
+     Trefferfläche. Der negative Abstand rechts und oben holt zurück, was die
+     größere Fläche sonst an Rand fräße. */
+  .poll-tools .icon-btn { width: 44px; height: 44px; }
+  .poll-tools { margin: -.5rem -.5rem 0 auto; }
+
+  /* --- DMs --- */
+  /* Einzeilig braucht auf dem Handy trotzdem ein daumentaugliches Maß. */
+  .thread { padding: .7rem .8rem; min-height: 48px; align-items: center; }
+  /* Eine Stufe ueber dem Rechner, und aus demselben Grund wie dort: Der
+     Betrag darf nicht kleiner sein als die Vorschauzeile daneben. Die beiden
+     Werte – Text und Betrag – gehören zusammen und werden zusammen
+     verschoben. */
+  .thread .w { font-size: .9rem; }
+  .thread-view { padding: 0 .7rem .7rem; }
+  .thread-title { font-size: .8rem; }
+
+  /* Posteingang und Gespräch teilen sich nicht den Bildschirm, sondern lösen
+     einander ab – so wie es jede Nachrichten-App auf dem Handy macht.
+     Nebeneinander blieb für beides zu wenig Platz, und man sah weder die
+     Liste vollständig noch das Gespräch. */
+  .dm-admin { grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 0; }
+  .thread-list { max-height: none; min-height: 0; }
+  .dm-admin > .thread-view { display: none; }
+  .dm-admin.viewing > .thread-list { display: none; }
+  .dm-admin.viewing > .thread-view { display: flex; }
+
+  .back-inbox {
+    display: inline-flex; align-self: flex-start;
+    min-height: 44px; padding: .4rem .6rem .4rem 0;
+    color: var(--accent); font-size: .95rem;
+  }
+  .dm-admin.viewing .thread-title { padding-top: 0; }
+  .thread-top .w { font-size: .78rem; }
+  .thread-prev { font-size: .9rem; }
+  .thread-head, .thread-head .dim { font-size: .78rem; }
+
+  /* --- Login --- */
+  .login { padding: 1.2rem .8rem; justify-content: flex-start; padding-top: 2.2rem; }
+  .login-card { padding: 1.3rem 1.1rem; border-radius: 16px; }
+  .brand { font-size: 1.25rem; margin-bottom: 1.1rem; }
+  .field input { font-size: 16px; min-height: 48px; }
+  .login .btn { min-height: 48px; }
+
+  /* Der Zahlbildschirm ist der Moment, in dem Geld bewegt wird. Beschriftung
+     oben, Wert groß darunter, Kopieren als volle Breite – auf 375 px passt
+     die dreispaltige Anordnung sonst nicht. */
+  .pay-row { padding: .85rem; min-height: 64px; gap: .3rem .6rem; }
+  .pay-label { font-size: .78rem; }
+  .copy-hint { font-size: .78rem; }
+  .pay-value.big { font-size: 1.4rem; }
+  .mono-sm { font-size: .92rem; }
+  .why p, .steps { font-size: .95rem; }
+  .foot-note { font-size: .8rem; }
+
+  /* Sichtbare Rückmeldung beim Antippen, weil es kein :hover gibt. */
+  .btn:active, .tab:active, .thread:active, .opt:active { filter: brightness(1.3); }
+}
+
+/* Sehr schmale Geräte: Der Bestand neben der Kennung ist dort der erste
+   Kandidat zum Weglassen – er steht ohnehin auf jeder eigenen Nachricht. */
+@media (max-width: 360px) {
+  .holdings { display: none; }
+  .brand.small { font-size: .8rem; }
+}
+
+/* Wer Bewegung reduziert haben möchte, bekommt keine. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ---------------- Adminvorschau ----------------
+   Sitzt fest am unteren Rand und ist bewusst auffällig: Eine Oberfläche, die
+   aussieht wie Ansems, aber keine seiner Rechte hat, muss sich selbst
+   erklären – sonst hält man die Fehlermeldungen beim Speichern für Fehler. */
+.preview-flag {
+  position: fixed; left: 50%; bottom: .8rem; transform: translateX(-50%);
+  z-index: 40; max-width: min(560px, calc(100% - 1.6rem));
+  padding: .5rem .85rem; border-radius: 999px;
+  background: rgba(255, 204, 77, .12); border: 1px solid rgba(255, 204, 77, .45);
+  color: var(--gold); font-size: .78rem; text-align: center;
+  backdrop-filter: blur(8px); pointer-events: none;
+}

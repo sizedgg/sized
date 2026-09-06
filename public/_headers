@@ -1,0 +1,167 @@
+# ===========================================================================
+# Netlify-Kopfzeilen
+#
+# /p/12 wird an die Supabase-Function durchgereicht, und die antwortet mit
+# text/html. Netlify liefert es trotzdem als text/plain aus: Beim Durchreichen
+# rät es den Typ aus der Dateiendung im Pfad, und /p/12 hat keine. Der Browser
+# zeigt dann den Quelltext statt der Seite, die Weiterleitung greift nicht,
+# und Xs Crawler findet die Meta-Zeilen nicht.
+#
+# Nachgemessen, nicht geraten:
+#   curl -sI https://sized.gg/p/16                        -> text/plain
+#   curl -sI https://<projekt>.supabase.co/.../og/p/16    -> text/html
+#
+# Dieselbe Datei liegt richtig, wenn sie im Wurzelverzeichnis der
+# hochgeladenen Seite steht – also neben index.html.
+# ===========================================================================
+
+# ===========================================================================
+# Die Sicherheitskopfzeilen
+#
+# WICHTIG – vor dem Hochladen einsetzen:
+#
+# In connect-src unten steht zweimal DEIN-PROJEKT. Dort muss die echte
+# Projektadresse stehen, sonst kommt die Seite an ihre eigene Datenbank nicht
+# heran und zeigt gar nichts. Derselbe Handgriff wie bei _redirects:
+#
+#   cd ~/Documents/ansem-hub
+#   URL=$(grep -o 'https://[a-z0-9]*\.supabase\.co' public/config.js | head -1)
+#   HOST=${URL#https://}
+#   sed -i '' "s#wbkfjvpxxlwcivqcmmpo.supabase.co#$HOST#g" public/_headers
+#   grep connect-src public/_headers
+#
+# Die letzte Zeile zeigt, was jetzt dort steht – da darf kein "DEIN-PROJEKT"
+# mehr stehen.
+#
+# ---------------------------------------------------------------------------
+# Was die einzelnen Zeilen tun, und warum sie so und nicht strenger sind
+#
+# default-src 'none'
+#   Nichts ist erlaubt, ausser was darunter ausdrücklich dasteht. Alles, was
+#   vergessen wurde, fällt auf und funktioniert nicht – lieber so herum als
+#   eine Lücke, die niemand bemerkt.
+#
+# script-src 'self'
+#   Nur Skripte von sized.gg selbst. Kein 'unsafe-inline', kein CDN. Das ist
+#   die Zeile, auf die es ankommt: Sie ist es, die eingeschleusten Code
+#   wirkungslos macht. Die Seite hat kein einziges Inline-Skript und lädt
+#   supabase-js aus public/vendor/, deshalb kostet die Strenge hier nichts.
+#
+# style-src 'self' 'unsafe-inline'
+#   Hier steht 'unsafe-inline', und das ist eine Abwägung, keine
+#   Nachlässigkeit. Die Balkenbreite einer Abstimmung steht als
+#   style="width:61.8%" in der Auszeichnung (app.js, in pollHtml). Ohne
+#   'unsafe-inline' stünden alle Balken auf null.
+#
+#   Der Umbau wäre möglich – die Breite nach dem Einsetzen per JavaScript
+#   setzen –, aber pollHtml wird von dreizehn Skripten wörtlich mitbenutzt,
+#   und in jedem müsste der neue Aufruf mit. Ein vergessener davon zeigt
+#   stillschweigend leere Balken.
+#
+#   Was 'unsafe-inline' beim Stil wirklich öffnet: eingeschleustes CSS. Das
+#   setzt voraus, dass jemand überhaupt Auszeichnung einschleusen kann (alles
+#   Eingesetzte läuft durch esc()), und der übliche Weg, damit Daten
+#   abzugreifen – background: url(https://fremde-adresse/…) – ist durch
+#   default-src 'none' ohnehin zu. Skripte bleiben streng, und dort liegt der
+#   Schaden.
+#
+# img-src 'self' data: blob:
+#   data: für das Symbol in der Adresszeile, das als SVG direkt in der
+#   index.html steht. blob: für die Bilder, die die Seite selbst aus einer
+#   Abstimmung baut.
+#
+# connect-src 'self' https://… wss://…
+#   Die Datenbank und die Live-Leitung. wss:// ist nicht optional – ohne die
+#   zweite Adresse kommen DMs nicht mehr an, und man sähe es erst im Betrieb.
+#
+# frame-ancestors 'none' (und X-Frame-Options als Wiederholung für ältere
+#   Browser): Niemand kann sized.gg in einen unsichtbaren Rahmen legen und
+#   Klicks abfangen. Bei einer Seite, auf der man Ansems Abstimmungen bedient,
+#   ist das nicht theoretisch.
+#
+# base-uri 'none' / form-action 'none' / object-src 'none'
+#   Drei Wege, die kein Mensch braucht und über die sich sonst umleiten lässt.
+#
+# Referrer-Policy: no-referrer
+#   Beim Klick auf den X-Link erfährt die Gegenseite nicht, von welcher Seite
+#   er kam. Das ist die Zeile, die zu "keiner soll den Namen finden können"
+#   gehört.
+#
+# Strict-Transport-Security
+#   Zwei Jahre, alle Unteradressen. OHNE preload, und das mit Absicht: preload
+#   trägt die Domain in eine Liste ein, die in den Browsern selbst
+#   mitgeliefert wird, und da wieder herauszukommen dauert Monate. Wenn
+#   sized.gg ein Jahr steht, kann man das nachholen.
+#
+# Permissions-Policy
+#   Kamera, Mikrofon, Ort, Bewegungsmelder, Bezahlvorgänge: nichts davon
+#   braucht die Seite, also fragt sie auch nie danach.
+#
+# Was bewusst FEHLT: Cross-Origin-Resource-Policy. Auf same-origin gesetzt,
+# könnte es Xs Kartenvorschau daran hindern, og-karte.png zu holen – und die
+# Karte ist der halbe Grund, warum ein geteilter Link etwas taugt. Der Gewinn
+# stünde in keinem Verhältnis.
+# ===========================================================================
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://wbkfjvpxxlwcivqcmmpo.supabase.co wss://wbkfjvpxxlwcivqcmmpo.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=(), xr-spatial-tracking=()
+  Cross-Origin-Opener-Policy: same-origin
+
+# ===========================================================================
+# /p/* braucht KEINE eigene CSP – nachgemessen am 3. September 2026
+#
+# Hier stand kurzzeitig eine eigene, weichere Regel, mit der Begründung: Die
+# og-Function liefert eine Seite mit einem Inline-Skript, und die strenge
+# Regel oben (script-src 'self') würde das blockieren. Beides war falsch.
+#
+# Was wirklich zurückkommt:
+#
+#   curl -s -D - -o /dev/null 'https://sized.gg/p/16'
+#   -> HTTP/2 302
+#      location: https://sized.gg/#poll-16
+#      content-length: 0
+#      x-served-by: supabase-edge-runtime
+#
+# Eine leere Weiterleitung. Kein HTML, kein Skript, nichts, was eine CSP
+# blockieren könnte. Die og-Function unterscheidet nämlich: Menschen bekommen
+# ein echtes 302, nur Crawler bekommen die Seite mit den Meta-Zeilen – und ein
+# Crawler wertet keine CSP aus, er liest Text. Siehe die ausführliche
+# Begründung in supabase/functions/og/index.ts.
+#
+# Zweiter Befund aus derselben Messung: In der Antwort steht
+#
+#   strict-transport-security: max-age=31536000; includeSubDomains; preload
+#
+# Das ist NICHT unser Wert (oben stehen 63072000 ohne preload), sondern
+# Supabases. Netlify legt auf eine durchgereichte Antwort also gar keine
+# Kopfzeilen aus dieser Datei. Der ganze Block hier ist wirkungslos.
+#
+# Die Content-Type-Zeile bleibt trotzdem stehen: Sie kostet nichts, sie stand
+# schon vorher da, und sollte Netlify das Durchreichen einmal ändern, greift
+# sie wieder. Nur soll niemand glauben, sie täte gerade etwas.
+# ===========================================================================
+
+/p/*
+  Content-Type: text/html; charset=utf-8
+
+# ===========================================================================
+# Solange die Seite noch nicht freigegeben ist: nicht in den Suchindex.
+#
+# Das Blatt liegt oeffentlich, es ist nur niemand hereingelassen (siehe
+# app_config.open_to_public). Suchmaschinen kommen trotzdem vorbei, und ein
+# einmal aufgenommener Eintrag verschwindet nicht auf Zuruf – er bleibt
+# stehen, auch wenn dahinter noch nichts ist.
+#
+# Zum Start diese vier Zeilen loeschen und neu hochladen. Steht der Eintrag
+# erst einmal drin, ist das Aufraeumen deutlich mehr Arbeit als dieses
+# Entfernen. Die Sicherheitskopfzeilen weiter oben bleiben stehen – die
+# gehoeren NICHT zu diesen vier Zeilen.
+# ===========================================================================
+
+/*
+  X-Robots-Tag: noindex, nofollow

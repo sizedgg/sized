@@ -1,0 +1,23 @@
+# ===========================================================================
+# Netlify-Weiterleitungen
+#
+# /p/12 ist die Adresse, die in geteilten Links steht. Sie muss auf sized.gg
+# liegen und nicht auf supabase.co – sonst stünde unter der Karte auf X eine
+# fremde Domain, und der Link sähe aus wie ein Umweg.
+#
+# Der Statuscode 200 ist der entscheidende Teil: Damit holt Netlify die
+# Antwort im Hintergrund und liefert sie unter der eigenen Adresse aus. Eine
+# echte Weiterleitung (301/302) würde die Adresse im Browser ändern, und Xs
+# Crawler bekäme am Ende supabase.co zu sehen.
+#
+# Die Projektadresse unten ist eingetragen. Wechselt das Supabase-Projekt
+# jemals, muss sie hier von Hand mitwandern – sie steht in public/config.js,
+# und diese Datei liest sie nicht, weil Netlify beim Ausliefern kein
+# JavaScript ausfuehrt.
+# ===========================================================================
+
+/p/*  https://wbkfjvpxxlwcivqcmmpo.supabase.co/functions/v1/og/p/:splat  200
+
+# Alles andere ist die App selbst. Ohne diese Zeile gäbe jeder direkte Aufruf
+# einer Unteradresse einen 404, weil auf dem Server nur index.html liegt.
+/*    /index.html                                                200

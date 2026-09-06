@@ -1,0 +1,55 @@
+# ============================================================================
+# Was NICHT in das oeffentliche Verzeichnis gehoert
+#
+# Zwei verschiedene Gruende, und sie sind nicht gleich wichtig:
+#
+#   Groesse    – node_modules und preview machen zusammen 200 MB. Beides ist
+#                jederzeit neu erzeugbar, also gehoert es nicht in die
+#                Versionsverwaltung.
+#
+#   Preisgabe  – alles, was das Projekt mit einer Person oder einem laufenden
+#                Dienst verbindet. Diese Zeilen sind die wichtigen. Eine Datei,
+#                die einmal eingecheckt war, bleibt im Verlauf stehen, auch
+#                wenn man sie spaeter loescht.
+# ============================================================================
+
+# --- Groesse ---------------------------------------------------------------
+node_modules/
+preview/
+*.tgz
+
+# --- Preisgabe -------------------------------------------------------------
+# Zugangsdaten in jeder Form. Im Quelltext steht nichts davon fest verdrahtet
+# (nachgesehen, nicht angenommen) – diese Zeilen sind fuer das naechste Mal.
+.env
+.env.*
+*.pem
+*.key
+
+# Der Arbeitsstand der Supabase-CLI. Enthaelt die Projektkennung, die
+# Organisations-ID und die Pooler-Adresse – nichts davon ist ein Schluessel,
+# aber alles davon ist internes Inventar und gehoert niemandem sonst.
+supabase/.temp/
+
+# Die echten Verbindungsdaten der Seite.
+#
+# Der anon-Key ist von Haus aus oeffentlich – er steht im Browser jedes
+# Besuchers, sobald die Seite live ist, und jeder Zugriff laeuft ueber RLS.
+# Trotzdem liegt er hier nicht im Verzeichnis: Vor dem Start gibt es keinen
+# Grund, jemandem zu sagen, welches Projekt das ist. public/config.example.js
+# traegt die Platzhalter, daraus wird die eigene Fassung.
+public/config.js
+
+# Der Ordner, in dem geloeschte Sachen auf ihre Loeschung warten.
+_to_delete/
+
+# --- Werkzeuge, die hier nur zufaellig liegen ---------------------------------
+# Die Supabase-CLI, heruntergeladen und entpackt. 107 MB Programmdatei, die
+# jeder selbst holen kann und die mit dem Projekt nichts zu tun hat.
+bin/
+supabase.tar.gz
+
+# --- Nebenprodukte ---------------------------------------------------------
+.DS_Store
+*.log
+.test-app-*.mjs

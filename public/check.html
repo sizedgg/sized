@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connection check</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◎</text></svg>">
+<style>
+  /* Bewusst eigenständig: Diese Seite muss auch dann funktionieren, wenn an
+     der App gerade etwas kaputt ist. Sie ist das Messgerät, nicht das Gerät. */
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; min-height: 100dvh; background: #0a0b0f; color: #e7e9ee;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; gap: 1rem;
+    max-width: 560px; margin-inline: auto;
+  }
+  h1 { font-size: 1.1rem; letter-spacing: .1em; margin: 0;
+       display: flex; align-items: center; gap: .45rem; }
+  h1 .mark { display: block; height: 1em; color: #eceff5; }
+  h1 .mark svg { display: block; height: 100%; width: auto; }
+  /* Die Marke folgt der neuen Akzentfarbe. Das Gruen weiter unten bleibt
+     bewusst stehen: Dort heisst es "hat funktioniert" und nicht "SIZED". */
+  h1 span { color: #eceff5; }
+  .lede { color: #8b93a7; font-size: .92rem; margin: 0; }
+  .verdict {
+    border-radius: 14px; padding: 1.2rem 1rem; text-align: center;
+    border: 1px solid #262b39; background: #101218;
+  }
+  .verdict .big { font-size: 1.35rem; font-weight: 700; display: block; margin-bottom: .3rem; }
+  .verdict .sub { font-size: .9rem; color: #8b93a7; }
+  .verdict.ok { border-color: #14f195; background: rgba(20,241,149,.08); }
+  .verdict.ok .big { color: #14f195; }
+  .verdict.bad { border-color: #ff6b6b; background: rgba(255,107,107,.08); }
+  .verdict.bad .big { color: #ff6b6b; }
+  .rows { display: flex; flex-direction: column; gap: .4rem; }
+  .row {
+    display: flex; gap: .6rem; align-items: baseline;
+    background: #101218; border: 1px solid #262b39; border-radius: 10px;
+    padding: .6rem .8rem; font-size: .88rem;
+  }
+  .row .n { font-weight: 700; color: #8b93a7; flex: none; min-width: 1.6rem; }
+  .row .msg { overflow-wrap: anywhere; }
+  .row.ok .msg { color: #14f195; }
+  .row.bad .msg { color: #ff6b6b; }
+  .row .ms { margin-left: auto; color: #5d657a; font-size: .8rem; flex: none; }
+  button {
+    font: inherit; min-height: 50px; border-radius: 12px; cursor: pointer;
+    background: #c6ccd8; color: #0a0b0f; border: 0; font-weight: 700;
+  }
+  button:disabled { opacity: .5; }
+  .meta { color: #5d657a; font-size: .78rem; overflow-wrap: anywhere; margin: 0; }
+</style>
+</head>
+<body>
+
+<h1><span class="mark"><svg viewBox="29 16 42 64" fill="currentColor" aria-hidden="true"><rect x="29" y="54" width="18" height="26" rx="9"/><rect x="53" y="16" width="18" height="64" rx="9"/></svg></span>CONNECTION <span>CHECK</span></h1>
+<p class="lede">Opens live connections to the database from <strong>this</strong> device and
+  reports what happens. No login and no payment needed — it only tests whether
+  the connection is accepted.</p>
+
+<div id="verdict" class="verdict">
+  <span class="big">Ready</span>
+  <span class="sub">Tap the button below.</span>
+</div>
+
+<button id="run">Run the check</button>
+
+<div id="ipbox" class="verdict" style="padding:.8rem 1rem">
+  <span class="sub">Public address of this device: <strong id="ip">checking…</strong></span>
+</div>
+
+<div id="rows" class="rows"></div>
+<p id="meta" class="meta"></p>
+
+<script type="module">
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+
+const $ = (s) => document.querySelector(s);
+const ATTEMPTS = 5;
+
+$('#meta').textContent = 'Target: ' + SUPABASE_URL;
+
+/**
+ * Die öffentliche Adresse dieses Geräts anzeigen.
+ *
+ * Das ist keine Spielerei, sondern der Kern des Tests: Ein Handy im selben
+ * WLAN wie der Messrechner tritt nach außen unter derselben Adresse auf. Ohne
+ * diese Anzeige könnte ein grünes Ergebnis genauso gut bedeuten, dass beide
+ * Geräte dieselbe Adresse teilen – und die Schlussfolgerung wäre falsch.
+ */
+(async () => {
+  for (const url of ['https://api.ipify.org?format=json', 'https://ipapi.co/json/']) {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      const j = await r.json();
+      if (j.ip) { $('#ip').textContent = j.ip; return; }
+    } catch { /* nächster Dienst */ }
+  }
+  $('#ip').textContent = 'could not be determined';
+})();
+
+/**
+ * Eine einzelne Realtime-Verbindung öffnen.
+ *
+ * Genau hier entsteht der Fehler, den wir jagen: Wird die Verbindung
+ * abgewiesen, passiert das beim Aufbau – vor jeder Anmeldung und vor jeder
+ * Datenbankabfrage. Deshalb reicht der öffentliche anon-Key.
+ *
+ * Der Browser verrät bei einem gescheiterten WebSocket aus Sicherheitsgründen
+ * nicht, welcher HTTP-Status kam. Ob der Aufbau klappt, verrät er aber – und
+ * mehr brauchen wir nicht.
+ */
+function openOne(timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    const url = SUPABASE_URL.replace(/^http/, 'ws')
+      + '/realtime/v1/websocket?apikey=' + encodeURIComponent(SUPABASE_ANON_KEY) + '&vsn=1.0.0';
+    const t0 = performance.now();
+    let ws;
+    const done = (ok, msg) => {
+      clearTimeout(timer);
+      try { ws && ws.close(); } catch { /* egal */ }
+      resolve({ ok, msg, ms: Math.round(performance.now() - t0) });
+    };
+    const timer = setTimeout(() => done(false, 'Timed out'), timeoutMs);
+    try {
+      ws = new WebSocket(url);
+    } catch (e) {
+      done(false, 'Blocked: ' + e.message);
+      return;
+    }
+    ws.onopen = () => done(true, 'Connected');
+    ws.onerror = () => done(false, 'Refused');
+    ws.onclose = (ev) => done(false, 'Closed before opening (code ' + ev.code + ')');
+  });
+}
+
+$('#run').addEventListener('click', async () => {
+  const btn = $('#run');
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  $('#rows').innerHTML = '';
+  setVerdict('', 'Checking…', `Opening ${ATTEMPTS} connections.`);
+
+  let good = 0;
+  for (let i = 1; i <= ATTEMPTS; i++) {
+    const r = await openOne();
+    if (r.ok) good++;
+    const row = document.createElement('div');
+    row.className = 'row ' + (r.ok ? 'ok' : 'bad');
+    row.innerHTML = `<span class="n">${i}</span>
+      <span class="msg">${r.msg}</span><span class="ms">${r.ms} ms</span>`;
+    $('#rows').appendChild(row);
+  }
+
+  if (good === ATTEMPTS) {
+    setVerdict('ok', 'All ' + good + ' connected',
+      'This device can reach the live chat normally.');
+  } else if (good > 0) {
+    setVerdict('bad', good + ' of ' + ATTEMPTS + ' connected',
+      'Some connections were refused.');
+  } else {
+    setVerdict('bad', 'None connected',
+      'Every connection from this device was refused.');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Run again';
+});
+
+function setVerdict(cls, big, sub) {
+  const v = $('#verdict');
+  v.className = 'verdict ' + cls;
+  v.innerHTML = `<span class="big">${big}</span><span class="sub">${sub}</span>`;
+}
+</script>
+</body>
+</html>

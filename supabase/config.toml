@@ -1,0 +1,15 @@
+project_id = "ansem-hub"
+
+[functions.verify]
+# Muss ohne Login erreichbar sein – hier entsteht die Session ja erst.
+verify_jwt = false
+
+[functions.refresh-holdings]
+# Prüft das Wallet-JWT selbst (bzw. den CRON_SECRET-Header), damit auch der
+# Cron-Job ohne Supabase-Auth-Token durchkommt.
+verify_jwt = false
+
+[functions.holdings-webhook]
+# Helius kann kein Supabase-JWT mitschicken; die Function prüft stattdessen
+# den frei gewählten Auth-Header gegen WEBHOOK_SECRET.
+verify_jwt = false
