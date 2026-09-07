@@ -1,63 +1,63 @@
 -- ============================================================================
--- Stimmen werden mitgezählt, nicht bei jedem Abruf neu zusammengezählt
+-- Votes are kept as a running tally, not recomputed on every fetch
 -- ============================================================================
 --
--- Das Problem
+-- The problem
 --
--- public.poll_results war eine Sicht:
+-- public.poll_results used to be a view:
 --
 --   select poll_id, option_id, count(*), sum(weight_usd)
 --   from public.votes group by poll_id, option_id
 --
--- Ohne where. Jeder Abruf zählte also JEDE jemals abgegebene Stimme zusammen,
--- über alle Abstimmungen, auch längst beendete. Ein vollständiger Durchlauf
--- durch die Stimmentabelle, jedes Mal.
+-- No where clause. So every fetch summed up EVERY vote ever cast, across all
+-- polls, including ones long since closed. A full scan through the votes
+-- table, every single time.
 --
--- Und abgerufen wird das jetzt im Takt: Seit die Stimmen nicht mehr zugestellt,
--- sondern nachgefragt werden (STIMMEN_TAKT_MS in public/app.js), holt jeder
--- offene Polls-Tab die Ergebnisse alle 5 Sekunden. Bei 3.000 Zuschauern sind
--- das 600 Abrufe pro Sekunde.
+-- And this now gets fetched on a clock: since votes stopped being pushed and
+-- started being polled instead (STIMMEN_TAKT_MS in public/app.js), every open
+-- Polls tab fetches the results every 5 seconds. At 3,000 viewers that's 600
+-- fetches per second.
 --
--- Gemessen gegen echtes Postgres, 600 Abrufe pro Sekunde:
+-- Measured against real Postgres, 600 fetches per second:
 --
---     3.000 Stimmen ->  1,0 ms je Abruf  ->  0,6 Kerne ausgelastet
---    10.000 Stimmen ->  2,9 ms           ->  1,7 Kerne
---    30.000 Stimmen ->  8,6 ms           ->  5,2 Kerne
---   100.000 Stimmen -> 28,3 ms           -> 17,0 Kerne
+--     3,000 votes   ->  1.0 ms per fetch  ->  0.6 cores busy
+--    10,000 votes   ->  2.9 ms            ->  1.7 cores
+--    30,000 votes   ->  8.6 ms            ->  5.2 cores
+--   100,000 votes   -> 28.3 ms            -> 17.0 cores
 --
--- Eine Pro-Instanz hat zwei Kerne, und die machen nebenbei alles andere auch.
--- Die Seite hätte ihre ersten Abstimmungen überlebt und wäre in der ersten
--- Woche zäh geworden – nicht mit einem Knall, sondern schleichend.
---
--- ----------------------------------------------------------------------------
--- Die Lösung
---
--- Die Summe wird beim SCHREIBEN fortgeschrieben statt beim Lesen gebildet.
--- Eine Zeile je Antwortmöglichkeit, per Trigger gepflegt. Der Abruf liest dann
--- ein paar Dutzend Zeilen statt hunderttausend:
---
---   vorher (180.000 Stimmen):  55,3 ms
---   nachher:                    0,03 ms
---
--- Das ist rund 1.800 mal billiger, und es wächst nicht mehr mit der Zahl der
--- Stimmen – nur noch mit der Zahl der Antwortmöglichkeiten, und die liegt bei
--- vier je Abstimmung.
---
--- Der Preis steht auf der Schreibseite: Jede Stimme kostet zusätzlich eine
--- kleine Aktualisierung. Das ist genau der richtige Tausch – eine Stimme wird
--- einmal abgegeben und tausendfach gelesen.
+-- A Pro instance has two cores, and they're also doing everything else at
+-- the same time. The site would have survived its first polls and turned
+-- sluggish over its first week - not with a bang, but gradually.
 --
 -- ----------------------------------------------------------------------------
--- Warum die Sicht public.poll_results bleibt
+-- The fix
 --
--- Der Browser fragt weiter `from('poll_results').select('*')`. Die Sicht liegt
--- jetzt nur über der Summentabelle statt über den Stimmen. So ändert sich am
--- Client nichts, und wenn hier etwas schiefginge, wäre es eine Wanderung
--- zurück und keine neue Auslieferung von app.js.
+-- The sum is kept up to date on WRITE instead of computed on read. One row
+-- per answer option, maintained by a trigger. A fetch then reads a few dozen
+-- rows instead of a hundred thousand:
+--
+--   before (180,000 votes):  55.3 ms
+--   after:                    0.03 ms
+--
+-- That's roughly 1,800 times cheaper, and it no longer grows with the number
+-- of votes - only with the number of answer options, and that sits at four
+-- per poll.
+--
+-- The cost sits on the write side: every vote now also pays for a small
+-- update. That's exactly the right trade - a vote gets cast once and read a
+-- thousand times.
+--
+-- ----------------------------------------------------------------------------
+-- Why the public.poll_results view stays
+--
+-- The browser keeps querying `from('poll_results').select('*')`. The view
+-- now just sits on top of the totals table instead of the votes. Nothing
+-- changes on the client this way, and if something here went wrong, it would
+-- be a migration back, not a new deployment of app.js.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- 1. Die Tabelle
+-- 1. The table
 -- ----------------------------------------------------------------------------
 
 create table if not exists public.poll_totals (
@@ -73,44 +73,43 @@ create index if not exists idx_poll_totals_poll on public.poll_totals (poll_id);
 
 alter table public.poll_totals enable row level security;
 
--- Lesbar wie die Stimmen selbst: votes_read steht auf `using (true)`, damit
--- die Gewichtung nachvollziehbar bleibt. Eine Summe daraus darf nicht
--- geheimer sein als die Zeilen, aus denen sie entsteht.
+-- Readable like the votes themselves: votes_read is set to `using (true)`,
+-- so the weighting stays traceable. A sum built from those rows must not be
+-- more secret than the rows it comes from.
 drop policy if exists poll_totals_read on public.poll_totals;
 create policy poll_totals_read on public.poll_totals
   for select to authenticated using (true);
 
--- Kein insert/update/delete für Clients. Geschrieben wird ausschliesslich
--- durch den Trigger unten, und der läuft als security definer.
+-- No insert/update/delete for clients. Writes happen exclusively through the
+-- trigger below, and it runs as security definer.
 grant select on public.poll_totals to authenticated;
 
 -- ----------------------------------------------------------------------------
--- 2. Der Trigger, der sie fortschreibt
+-- 2. The trigger that maintains it
 -- ----------------------------------------------------------------------------
 --
--- Er hängt AFTER an public.votes und sieht damit die Werte, die die beiden
--- bestehenden BEFORE-Trigger schon festgelegt haben:
+-- It's attached AFTER on public.votes, so it sees the values the two
+-- existing BEFORE triggers have already set:
 --
---   trg_votes_stamp  (before insert or update) -> setzt weight_usd
---   trg_votes_freeze (before update)           -> verhindert unerlaubte Änderungen
+--   trg_votes_stamp  (before insert or update) -> sets weight_usd
+--   trg_votes_freeze (before update)           -> blocks unauthorized changes
 --
--- Reihenfolge ist hier wichtig und stimmt: Wenn dieser Trigger läuft, steht
--- in new.weight_usd bereits der endgültige Wert. Läse er ihn vorher, würde
--- die Summe dauerhaft von den Stimmen abweichen.
+-- Order matters here, and it's correct: by the time this trigger runs,
+-- new.weight_usd already holds the final value. If it read it earlier, the
+-- sum would permanently drift from the votes.
 --
--- Drei Fälle, und alle drei kommen wirklich vor:
+-- Three cases, and all three actually occur:
 --
---   INSERT  jemand stimmt ab
---   DELETE  app.sync_votes_with_balance() löscht die Stimme, wenn der Bestand
---           auf 0 fällt – wer nichts mehr hält, wiegt nichts mehr
---   UPDATE  zwei Wege: die Stimme wandert auf eine andere Antwort (der Nutzer
---           ändert seine Meinung, onConflict poll_id,wallet), ODER das Gewicht
---           ändert sich, weil sich der Bestand geändert hat
+--   INSERT  someone casts a vote
+--   DELETE  app.sync_votes_with_balance() deletes the vote when holdings
+--           drop to 0 - whoever holds nothing anymore weighs nothing anymore
+--   UPDATE  two paths: the vote moves to a different answer (the user
+--           changes their mind, onConflict poll_id,wallet), OR the weight
+--           changes because the holdings changed
 --
--- Der UPDATE-Fall wird als "alte Zeile abziehen, neue Zeile addieren"
--- behandelt. Das deckt beide Wege ab, auch wenn sich beides gleichzeitig
--- ändert, und ist kürzer als eine Fallunterscheidung, die man falsch
--- verzweigen kann.
+-- The UPDATE case is handled as "subtract the old row, add the new row".
+-- That covers both paths, even if both change at once, and is shorter than
+-- a case distinction that's easy to branch wrong.
 -- ----------------------------------------------------------------------------
 
 create or replace function app.poll_totals_pflegen()
@@ -120,7 +119,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  -- Alte Zeile abziehen
+  -- Subtract the old row
   if tg_op in ('DELETE', 'UPDATE') then
     update public.poll_totals
        set votes = votes - 1,
@@ -128,9 +127,9 @@ begin
      where option_id = old.option_id;
   end if;
 
-  -- Neue Zeile addieren. `on conflict` legt die Summenzeile beim ersten
-  -- Zugriff an, statt sie beim Anlegen der Abstimmung mit erzeugen zu müssen –
-  -- so kann keine Antwortmöglichkeit ohne Summenzeile entstehen.
+  -- Add the new row. `on conflict` creates the totals row on first access
+  -- instead of requiring it to be created alongside the poll - this way no
+  -- answer option can end up without a totals row.
   if tg_op in ('INSERT', 'UPDATE') then
     insert into public.poll_totals (option_id, poll_id, votes, usd)
     values (new.option_id, new.poll_id, 1, new.weight_usd)
@@ -139,7 +138,7 @@ begin
           usd   = public.poll_totals.usd + excluded.usd;
   end if;
 
-  return null; -- AFTER-Trigger: der Rückgabewert wird ohnehin verworfen
+  return null; -- AFTER trigger: the return value gets discarded anyway
 end;
 $$;
 
@@ -149,13 +148,13 @@ create trigger trg_votes_totals
   for each row execute function app.poll_totals_pflegen();
 
 -- ----------------------------------------------------------------------------
--- 3. Neu aufbauen – für die Erstbefüllung und für den Notfall
+-- 3. Rebuild from scratch - for the initial fill and for emergencies
 -- ----------------------------------------------------------------------------
 --
--- Eine fortgeschriebene Summe kann grundsätzlich auseinanderlaufen; eine neu
--- gebildete nicht. Deshalb gibt es hier den Weg zurück zur Wahrheit, und der
--- Test scripts/test-schema.mjs vergleicht nach jeder Operation beides
--- gegeneinander.
+-- A running tally can in principle drift; a freshly computed one can't.
+-- That's why there's a way back to the ground truth here, and the test
+-- scripts/test-schema.mjs compares the two against each other after every
+-- operation.
 -- ----------------------------------------------------------------------------
 
 create or replace function app.poll_totals_neu_aufbauen()
@@ -176,33 +175,33 @@ $$;
 select app.poll_totals_neu_aufbauen();
 
 -- ----------------------------------------------------------------------------
--- 4. Die Sicht zeigt jetzt auf die Summentabelle
+-- 4. The view now points at the totals table
 -- ----------------------------------------------------------------------------
 --
--- Erst weg, dann neu: "create or replace view" kann den Unterbau nicht
--- austauschen. Der Umweg über drop ist der einzige Weg.
+-- Drop first, then recreate: "create or replace view" can't swap out the
+-- underlying structure. The detour through drop is the only way.
 --
--- Das `usd::numeric` ist KEIN Schönheitsfehler, sondern nötig, und die Stelle
--- kostet sonst eine halbe Stunde Suchen:
+-- The `usd::numeric` is NOT a cosmetic flaw, it's necessary, and skipping it
+-- costs half an hour of searching:
 --
--- Die Wanderungen müssen ein zweites Mal durchlaufen können – etwa beim
--- Aufsetzen eines frischen Projekts oder in scripts/test-schema.mjs. Beim
--- zweiten Durchlauf trifft die alte Zeile in 20260823020000_init.sql
--- ("create or replace view public.poll_results ... sum(v.weight_usd)") auf
--- diese Sicht hier. sum() über numeric(20,4) liefert numeric OHNE Längenangabe;
--- die Spalte in der Summentabelle hat aber numeric(20,4). Postgres steigt dann
--- aus mit:
+-- The migrations need to be able to run a second time - say, when setting
+-- up a fresh project, or in scripts/test-schema.mjs. On the second run, the
+-- old line in 20260823020000_init.sql ("create or replace view
+-- public.poll_results ... sum(v.weight_usd)") collides with this view here.
+-- sum() over numeric(20,4) returns numeric WITHOUT a precision/scale; but
+-- the column in the totals table has numeric(20,4). Postgres then bails out
+-- with:
 --
 --   cannot change data type of view column "usd" from numeric(20,4) to numeric
 --
--- Der Cast macht die Spalte hier typgleich mit dem, was init erwartet. Danach
--- ersetzt init die Sicht beim Neulauf kurz durch die langsame Fassung, und
--- diese Wanderung setzt sie unmittelbar darauf wieder auf die Summentabelle –
--- die Reihenfolge nach Dateinamen sorgt dafür.
+-- The cast here makes the column's type match what init expects. After
+-- that, init briefly replaces the view with the slow version on rerun, and
+-- this migration immediately points it back at the totals table right
+-- after - the ordering by filename guarantees that.
 --
--- security_invoker bleibt an: Die Rechte des Aufrufers gelten, also greift
--- poll_totals_read oben. Ohne diese Zeile liefe die Sicht mit den Rechten
--- ihres Eigentümers und umginge RLS.
+-- security_invoker stays on: the caller's rights apply, so poll_totals_read
+-- above kicks in. Without this line, the view would run with its owner's
+-- rights and bypass RLS.
 -- ----------------------------------------------------------------------------
 
 drop view if exists public.poll_results;

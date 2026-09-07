@@ -1,58 +1,58 @@
 -- ============================================================================
--- Ansem kann einzelne Gespraeche aus seinem Posteingang nehmen
+-- Ansem can remove individual conversations from his inbox
 --
 -- ----------------------------------------------------------------------------
--- Was es tut und was ausdruecklich NICHT
+-- What it does, and what it explicitly does NOT
 --
--- Verbergen wirkt NUR auf Ansems Ansicht. Der andere merkt nichts: Er sieht
--- seinen Verlauf weiter, er kann weiter schreiben, und seine Nachrichten werden
--- weiter gespeichert. Nur Ansems Liste zeigt das Gespraech nicht mehr.
+-- Hiding affects ONLY Ansem's view. The other side notices nothing: they
+-- still see their history, they can still write, and their messages keep
+-- getting stored. Only Ansem's list stops showing the conversation.
 --
--- Das ist eine Entscheidung und keine Bequemlichkeit. Wer hier schreiben darf,
--- haelt dafuer einen Mindestbestand – er hat fuer den Zugang bezahlt. Was man
--- damit kauft, ist das Recht zu SCHREIBEN, nicht das Recht auf Antwort. Ihm
--- nachtraeglich das Schreiben zu nehmen, waere etwas anderes als "ich lese das
--- nicht mehr", und es waere unehrlich gegenueber dem, wofuer er bezahlt hat.
---
--- ----------------------------------------------------------------------------
--- Warum verborgen VERBORGEN bleibt, auch bei einer neuen Nachricht
---
--- Die Liste ist nach Bestand sortiert, nicht nach Zeit – die Reihenfolge
--- aendert sich also nie von selbst. Eine neue Nachricht laesst ein Gespraech
--- weder nach oben springen noch sonst etwas tun; sie aendert nur die Vorschau
--- und den Ungelesen-Zaehler.
---
--- Damit ist "verbergen" auch nicht dasselbe wie "archivieren". Es gibt keinen
--- Stapel, in den etwas zurueckkaeme. Wer verborgen wird, bleibt weg, bis Ansem
--- ihn zurueckholt. Das ist der Sinn: Man verbirgt jemanden, den man nicht mehr
--- lesen will, und nicht, um in zwei Tagen wieder von ihm zu hoeren.
---
--- Der Preis steht dazu und wird nicht verschwiegen: Eine spaetere, ernst
--- gemeinte Nachricht sieht Ansem dann auch nicht. Deshalb ist die Liste der
--- verborgenen Gespraeche in der Oberflaeche erreichbar und nicht nur hier.
+-- That is a decision, not a convenience. Whoever can write here holds a
+-- minimum balance to do it - they paid for access. What that buys is the
+-- right to WRITE, not a right to a reply. Taking away their ability to write
+-- afterward would be a different thing from "I don't read this anymore", and
+-- it would be dishonest about what they paid for.
 --
 -- ----------------------------------------------------------------------------
--- Warum eine eigene Tabelle und keine Spalte
+-- Why hidden stays HIDDEN, even on a new message
 --
--- Naheliegend waere eine Spalte an dms oder ein Vermerk je Wallet. Beides geht
--- nicht sauber:
+-- The list is sorted by balance, not by time - so the order never changes by
+-- itself. A new message doesn't bump a conversation up or do anything else;
+-- it only changes the preview and the unread counter.
 --
---   * An dms haengt es an der NACHRICHT, nicht am Gespraech. Man muesste bei
---     jeder neuen Nachricht mitschreiben, dass sie auch verborgen ist – und
---     genau das wuerde beim ersten Vergessen auffallen, naemlich gar nicht.
---   * An wallets haengt es am Bestand und nicht an der Unterhaltung. Die
---     Tabelle beschreibt, was jemand HAT; sie ist der falsche Ort fuer eine
---     Entscheidung darueber, was Ansem lesen will.
+-- That also makes "hide" different from "archive". There's no stack for
+-- something to fall back into. Whoever gets hidden stays gone until Ansem
+-- brings them back. That's the point: you hide someone you no longer want to
+-- read, not someone you expect to hear from again in two days.
 --
--- Eine eigene Tabelle mit einer Zeile je verborgenem Gespraech sagt genau das,
--- was gemeint ist, und ist beim Zurueckholen ein delete.
+-- The cost of that is stated, not hidden: a later, genuine message is one
+-- Ansem then also won't see. That's why the list of hidden conversations is
+-- reachable in the UI, not just here.
 --
 -- ----------------------------------------------------------------------------
--- Wer darf das
+-- Why a separate table and not a column
 --
--- Nur Ansem, und zwar auf allen vier Wegen: lesen, anlegen, loeschen. Ohne die
--- Leseregel koennte jeder nachsehen, wen Ansem verborgen hat – das waere eine
--- oeffentliche Liste der Leute, die er nicht mehr liest.
+-- The obvious choice would be a column on dms, or a flag per wallet. Neither
+-- works cleanly:
+--
+--   * On dms it would hang off the MESSAGE, not the conversation. Every new
+--     message would have to carry along that it's also hidden - and that's
+--     exactly the kind of thing that goes unnoticed the first time someone
+--     forgets it.
+--   * On wallets it hangs off the balance, not the conversation. That table
+--     describes what someone HAS; it's the wrong place for a decision about
+--     what Ansem wants to read.
+--
+-- A dedicated table with one row per hidden conversation says exactly what's
+-- meant, and bringing someone back is a plain delete.
+--
+-- ----------------------------------------------------------------------------
+-- Who is allowed to do this
+--
+-- Only Ansem, on all four paths: read, create, delete. Without the read
+-- policy, anyone could look up who Ansem has hidden - that would be a public
+-- list of the people he no longer reads.
 -- ============================================================================
 
 create table if not exists public.dm_hidden (
@@ -81,23 +81,22 @@ create policy dm_hidden_admin_delete on public.dm_hidden
 grant select, insert, delete on public.dm_hidden to authenticated;
 
 -- ----------------------------------------------------------------------------
--- Die Ansicht bekommt eine Spalte statt eines Filters
+-- The view gets a column instead of a filter
 --
--- Naheliegend waere, verborgene Gespraeche in dm_threads gleich wegzulassen.
--- Dann waeren sie aber auch fuer Ansem weg, und er koennte sie nicht mehr
--- zurueckholen – die Oberflaeche braucht sie, um "3 hidden" anzuzeigen.
+-- The obvious choice would be to just leave hidden conversations out of
+-- dm_threads. But then they'd be gone for Ansem too, and he could no longer
+-- bring them back - the UI needs them to show "3 hidden".
 --
--- Also liefert die Ansicht die Angabe mit, und wer filtert, entscheidet die
--- Seite. Das ist hier gefahrlos: dm_threads laeuft mit security_invoker, und
--- die Zeilenregel auf dms laesst ohnehin nur den eigenen Verlauf oder – fuer
--- Ansem – alles durch. Ein Nutzer sieht in dieser Ansicht also weiterhin genau
--- ein Gespraech, sein eigenes, und dessen hidden steht fuer ihn immer auf
--- false: Die Unterabfrage laeuft unter SEINEN Rechten, und dm_hidden gibt ihm
--- keine Zeile heraus.
+-- So the view supplies the flag, and whoever filters is the page's call.
+-- That's safe here: dm_threads runs with security_invoker, and the row
+-- policy on dms lets through only one's own history or - for Ansem -
+-- everything anyway. So a regular user still sees exactly one conversation
+-- in this view, their own, and its hidden always reads false for them: the
+-- subquery runs under THEIR rights, and dm_hidden hands them back no row.
 --
--- Das ist kein Zufall, sondern der Grund, warum die Leseregel oben nicht nur
--- Datenschutz ist: Sie sorgt zugleich dafuer, dass niemand seinem eigenen
--- Eintrag ansieht, dass er verborgen wurde.
+-- That's not an accident, it's why the read policy above is more than
+-- privacy: it also makes sure no one can tell from their own entry that they
+-- were hidden.
 -- ----------------------------------------------------------------------------
 create or replace view public.dm_threads
 with (security_invoker = on) as

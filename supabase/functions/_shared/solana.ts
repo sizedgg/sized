@@ -1,9 +1,9 @@
 /**
- * Solana-Zugriff per reinem JSON-RPC über fetch – bewusst ohne @solana/web3.js,
- * damit die Edge Function klein und kaltstartschnell bleibt.
+ * Solana access via plain JSON-RPC over fetch - deliberately without
+ * @solana/web3.js, so the Edge Function stays small and cold-starts fast.
  *
- * Gebraucht wird dreierlei: Zahlungen an die Treasury, der Token-Bestand einer
- * Wallet und der Kurs.
+ * Three things are needed: payments to the treasury, a wallet's token
+ * balance, and the price.
  */
 
 export const RPC_URL = Deno.env.get('SOLANA_RPC_URL') ?? 'https://api.mainnet-beta.solana.com';
@@ -23,7 +23,7 @@ export async function rpc<T>(method: string, params: unknown[]): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Zahlungen an die Treasury
+// Payments to the treasury
 // ---------------------------------------------------------------------------
 
 export interface TreasuryPayment {
@@ -36,30 +36,32 @@ export interface TreasuryPayment {
 interface SignatureInfo { signature: string; slot: number; err: unknown }
 
 /**
- * Wie viele Detailabfragen ein einzelner Scan höchstens macht – und wie viele
- * davon gleichzeitig laufen.
+ * How many detail queries a single scan makes at most - and how many of
+ * them run at the same time.
  *
- * Die Signaturliste ist EIN billiger Aufruf, egal ob für 40 oder 200 Einträge.
- * Teuer ist danach `getTransaction`, einmal pro Signatur. Deshalb darf das
- * Fenster breit sein, solange bekannte Signaturen vorher wegfallen – aber ein
- * Kaltstart (noch nichts bekannt) hätte sonst 200 Abfragen am Stück, seriell
- * über 20 Sekunden, und die Funktion läuft vorher in ihr Zeitlimit.
+ * The signature list is ONE cheap call, whether for 40 or 200 entries.
+ * `getTransaction` is expensive after that, once per signature. So the
+ * window is allowed to be wide, as long as known signatures fall away
+ * beforehand - but a cold start (nothing known yet) would otherwise mean
+ * 200 queries back to back, serially, over 20 seconds, and the function
+ * would run into its time limit first.
  *
- * Also: höchstens DETAILS_PRO_SCAN pro Lauf, neueste zuerst, GLEICHZEITIG
- * parallel. Was nicht mehr hineinpasst, kommt beim nächsten Lauf 5 Sekunden
- * später dran – die Challenge lebt 25 Minuten, das reicht vielfach.
+ * So: at most DETAILS_PRO_SCAN per run, newest first, CONCURRENTLY in
+ * parallel. Whatever doesn't fit any more gets its turn on the next run,
+ * 5 seconds later - the challenge lives for 25 minutes, which covers that
+ * many times over.
  */
 const DETAILS_PRO_SCAN = 60;
 const GLEICHZEITIG = 4;
 
 /**
- * Liest die letzten Transaktionen der Treasury-Adresse und gibt alle einfachen
- * SOL-Transfers *an* diese Adresse zurück.
+ * Reads the treasury address's most recent transactions and returns all
+ * plain SOL transfers *to* that address.
  *
- * `aussieben` bekommt die komplette Signaturliste und gibt zurück, welche davon
- * noch unbekannt sind – VOR der teuren Detailabfrage. Ohne diesen Schritt holt
- * jeder Lauf dieselben `limit` Transaktionen wieder vom RPC, obwohl längst
- * verbucht.
+ * `aussieben` gets the complete signature list and returns which of them are
+ * still unknown - BEFORE the expensive detail query. Without this step,
+ * every run would fetch the same `limit` transactions from the RPC again,
+ * even though they were recorded long ago.
  */
 export async function recentTreasuryPayments(
   treasury: string,
@@ -69,8 +71,8 @@ export async function recentTreasuryPayments(
   const sigs = await rpc<SignatureInfo[]>('getSignaturesForAddress', [treasury, { limit }]);
   const brauchbar = sigs.filter((s) => !s.err);
 
-  // Neueste zuerst – so kommt eine Zahlung von gerade eben auch dann dran,
-  // wenn davor ein Berg alter Signaturen liegt.
+  // Newest first - that way a payment from just now still gets its turn
+  // even when a pile of old signatures sits in front of it.
   const offen = new Set(await aussieben(brauchbar.map((s) => s.signature)));
   const wanted = brauchbar.filter((s) => offen.has(s.signature)).slice(0, DETAILS_PRO_SCAN);
 
@@ -82,8 +84,8 @@ export async function recentTreasuryPayments(
         { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' },
       ]);
     } catch {
-      // Nicht verbuchen heisst nicht verloren: die Signatur bleibt unbekannt
-      // und der nächste Lauf versucht es erneut.
+      // Not recording it doesn't mean it's lost: the signature stays
+      // unknown and the next run tries again.
       return null;
     }
     if (!tx || tx.meta?.err) return null;
@@ -103,7 +105,7 @@ export async function recentTreasuryPayments(
         slot: tx.slot ?? s.slot,
         sender: info.source,
         lamports: Number(info.lamports),
-      }; // ein Transfer pro Transaktion genügt
+      }; // one transfer per transaction is enough
     }
     return null;
   };
@@ -117,31 +119,31 @@ export async function recentTreasuryPayments(
 }
 
 // ---------------------------------------------------------------------------
-// Token-Bestand
+// Token balance
 // ---------------------------------------------------------------------------
 
 /**
- * Summiert alle Token-Accounts einer Wallet für einen Mint.
+ * Sums up all of a wallet's token accounts for one mint.
  *
- * Nur nach `mint` filtern. Die RPC akzeptiert genau eines von `mint` ODER
- * `programId` – beides zusammen wird abgelehnt. Der Mint-Filter gilt
- * unabhängig davon, ob der Token unter dem klassischen Token-Programm oder
- * unter Token-2022 läuft, deckt also beides ab.
+ * Filter only by `mint`. The RPC accepts exactly one of `mint` OR
+ * `programId` - both together get rejected. The mint filter applies
+ * regardless of whether the token runs under the classic token program or
+ * under Token-2022, so it covers both.
  *
- * Fehler werden bewusst NICHT verschluckt: Ein abgefangener RPC-Fehler sähe
- * hier aus wie ein Bestand von null und würde still jedes Stimmgewicht, jeden
- * Chat-Filter und die DM-Sortierung auf null setzen. Lieber laut scheitern.
+ * Errors are deliberately NOT swallowed: a caught RPC error would look like
+ * a balance of zero here and would quietly set every vote weight, every
+ * chat filter, and the DM sort order to zero. Better to fail loudly.
  */
 export async function tokenBalance(owner: string, mint: string): Promise<number> {
-  // commitment: 'confirmed' ist hier wichtig. Ohne Angabe antwortet die RPC
-  // mit 'finalized', und das hinkt gut ein Dutzend Sekunden hinterher. Wer
-  // gerade Token gekauft hat, sieht sie in seiner Wallet und im Explorer
-  // längst, hier aber noch nicht – das sieht nach einem Fehler aus.
+  // commitment: 'confirmed' matters here. Without it the RPC answers with
+  // 'finalized', which lags a good dozen seconds behind. Whoever just
+  // bought tokens already sees them in their wallet and in the explorer,
+  // but not here yet - that looks like a bug.
   //
-  // Für Zahlungen an die Treasury wäre das die falsche Wahl: Dort geht es um
-  // Geld, und eine bestätigte, aber noch nicht endgültige Transaktion kann in
-  // seltenen Fällen wieder verschwinden. Ein Bestand ist unkritisch – er wird
-  // ohnehin laufend neu gelesen und beim nächsten Mal korrigiert.
+  // For payments to the treasury this would be the wrong choice: that's
+  // about money, and a confirmed but not yet final transaction can in rare
+  // cases still disappear again. A balance is uncritical - it gets read
+  // freshly all the time anyway and corrects itself next time.
   const res = await rpc<{ value?: any[] }>('getTokenAccountsByOwner', [
     owner, { mint }, { encoding: 'jsonParsed', commitment: 'confirmed' },
   ]);
@@ -154,7 +156,7 @@ export async function tokenBalance(owner: string, mint: string): Promise<number>
 }
 
 // ---------------------------------------------------------------------------
-// Preis
+// Price
 // ---------------------------------------------------------------------------
 
 async function fetchJson(url: string, timeoutMs = 6000): Promise<any> {
@@ -169,13 +171,13 @@ async function fetchJson(url: string, timeoutMs = 6000): Promise<any> {
   }
 }
 
-/** USD-Preis eines Tokens, Jupiter zuerst, DexScreener als Rückfall. */
+/** USD price of a token, Jupiter first, DexScreener as fallback. */
 export async function tokenPrice(mint: string): Promise<number> {
   try {
     const data = await fetchJson(`https://lite-api.jup.ag/price/v3?ids=${mint}`);
     const p = Number(data?.[mint]?.usdPrice);
     if (p > 0) return p;
-  } catch { /* weiter zum Fallback */ }
+  } catch { /* fall through to the fallback */ }
 
   try {
     const data = await fetchJson(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
@@ -183,7 +185,7 @@ export async function tokenPrice(mint: string): Promise<number> {
     pairs.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
     const p = Number(pairs[0]?.priceUsd);
     if (p > 0) return p;
-  } catch { /* Preis unbekannt */ }
+  } catch { /* price unknown */ }
 
   return 0;
 }

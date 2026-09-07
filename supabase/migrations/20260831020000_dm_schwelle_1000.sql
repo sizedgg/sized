@@ -1,33 +1,33 @@
 -- ============================================================================
--- Die DM-Schwelle steht standardmaessig auf $1.000
+-- The DM threshold defaults to $1,000
 --
--- Bisher: Die Spalte hatte 10 als Vorgabe, und in dieser Datenbank stand 0 –
--- also aus. Jeder verifizierte Nutzer konnte schreiben.
---
--- ----------------------------------------------------------------------------
--- Was das aendert, und zwar sofort
---
--- Wer weniger als $1.000 in $ANSEM haelt, kann Ansem ab dem Einspielen dieser
--- Migration NICHT mehr schreiben. Bestehende Gespraeche bleiben vollstaendig
--- erhalten – geloescht wird nichts, und wer wieder ueber die Schwelle kommt,
--- ist von selbst zurueck. Aber neue Nachrichten von darunter werden abgelehnt,
--- und im Posteingang stehen diese Gespraeche nicht mehr.
---
--- Das ist der Zweck der Schwelle und keine Nebenwirkung. Es steht hier
--- trotzdem ausgeschrieben, weil es die einzige Migration in diesem Projekt
--- ist, die Leuten etwas WEGNIMMT, das sie vorher hatten.
+-- Until now: the column had 10 as its default, and this database had 0 -
+-- meaning off. Any verified user could write.
 --
 -- ----------------------------------------------------------------------------
--- Warum die bestehende Zeile mitgeaendert wird – und nur die Null
+-- What this changes, and immediately
 --
--- Eine neue Vorgabe allein aendert nichts: Sie gilt fuer Zeilen, die noch
--- angelegt werden, und app_config hat genau eine, die es laengst gibt. Ohne
--- das update waere diese Migration folgenlos, und man wuerde es erst merken,
--- wenn weiter jeder schreibt.
+-- Anyone holding less than $1,000 in $ANSEM can NO LONGER write to Ansem
+-- once this migration is applied. Existing conversations stay fully intact
+-- - nothing gets deleted, and anyone who comes back above the threshold is
+-- automatically back in. But new messages from below it get rejected, and
+-- those conversations no longer show up in the inbox.
 --
--- Geaendert wird aber nur, wo noch 0 steht – der Wert, der ersetzt werden
--- soll. Haette Ansem inzwischen selbst etwas eingestellt, waere es seine
--- Entscheidung, und eine Migration, die sie ueberschreibt, waere ein Fehler.
+-- That's the purpose of the threshold, not a side effect. It's spelled out
+-- here anyway, because this is the only migration in this project that
+-- TAKES something away from people that they had before.
+--
+-- ----------------------------------------------------------------------------
+-- Why the existing row also gets changed - and only the zero
+--
+-- A new default alone changes nothing: it applies to rows still to be
+-- created, and app_config has exactly one, which has existed for a long
+-- time already. Without the update, this migration would be inconsequential,
+-- and nobody would notice until everyone keeps writing.
+--
+-- But it only changes rows where 0 is currently set - the value meant to
+-- be replaced. If Ansem had set something himself in the meantime, that
+-- would be his decision, and a migration overwriting it would be a bug.
 -- ============================================================================
 
 alter table public.app_config

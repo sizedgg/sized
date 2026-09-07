@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
-// SIZED – Frontend.
+// SIZED - Frontend.
 //
-// Nach der Verifikation spricht der Browser direkt mit Supabase (PostgREST +
-// Realtime). Was er dabei darf, entscheidet ausschließlich RLS – hier wird
-// nichts abgesichert, was nicht auch in der Datenbank abgesichert ist.
+// After verification the browser talks to Supabase directly (PostgREST +
+// Realtime). What it's allowed to do is decided entirely by RLS - nothing
+// here is secured that isn't also secured in the database.
 // ---------------------------------------------------------------------------
 
 import { createClient } from './vendor/supabase.js';
@@ -15,61 +15,62 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const TOKEN_KEY = 'ansem_jwt';
 
 /**
- * Die laufende Anmeldung, damit ein Neuladen sie fortsetzt.
+ * The login in progress, so a reload can resume it.
  *
- * Darin steckt das Geheimnis der Challenge – der Nachweis, dass diese
- * Anmeldung MIR gehört. Die Edge Function gibt es genau einmal heraus und
- * kennt danach nur noch seinen Abdruck.
+ * This holds the challenge secret - the proof that this login belongs to
+ * ME. The edge function hands it out exactly once and afterward knows only
+ * its hash.
  *
- * Ohne diese Zeile wäre die Sperre in verify eine Verschlechterung statt
- * einer Verbesserung: Früher fand die Function eine offene Challenge über die
- * Wallet und gab sie jedem weiter, der dieselbe Adresse eintippte – genau
- * daran hing die Übernahme. Jetzt setzt sie nur fort, wer sein Geheimnis
- * mitschickt. Wer es beim Neuladen verliert, bekäme eine zweite Challenge mit
- * einem zweiten Betrag und zahlte zweimal.
+ * Without this line, the lock in verify would be a step backward instead of
+ * an improvement: it used to look up an open challenge by wallet and hand
+ * it to whoever typed in the same address - that's exactly what the
+ * takeover hinged on. Now it only resumes for whoever sends back their
+ * secret. Anyone who loses it on reload would get a second challenge with a
+ * second amount and pay twice.
  *
- * localStorage und nicht sessionStorage: Wer auf dem Handy zur Wallet-App
- * wechselt und zurückkommt, hat je nach Browser einen neuen Tab.
+ * localStorage and not sessionStorage: someone who switches to a wallet app
+ * on their phone and comes back may land in a new tab, depending on the
+ * browser.
  */
 const CHALLENGE_KEY = 'ansem_challenge';
 
-const merkeChallenge = (c) => {
-  try { localStorage.setItem(CHALLENGE_KEY, JSON.stringify(c)); } catch { /* privater Modus */ }
+const rememberChallenge = (c) => {
+  try { localStorage.setItem(CHALLENGE_KEY, JSON.stringify(c)); } catch { /* private mode */ }
 };
-const vergissChallenge = () => {
-  try { localStorage.removeItem(CHALLENGE_KEY); } catch { /* egal */ }
+const forgetChallenge = () => {
+  try { localStorage.removeItem(CHALLENGE_KEY); } catch { /* doesn't matter */ }
 };
-const gemerkteChallenge = () => {
+const rememberedChallenge = () => {
   try {
     const c = JSON.parse(localStorage.getItem(CHALLENGE_KEY) || 'null');
-    // Abgelaufenes gar nicht erst mitschicken – verify legt dann ohnehin eine
-    // neue an, aber so bleibt der Fall hier sichtbar statt dort.
+    // Don't even send back an expired one - verify would create a new one
+    // anyway, but this way the case stays visible here instead of there.
     return c && new Date(c.expiresAt).getTime() > Date.now() ? c : null;
   } catch { return null; }
 };
 
 /**
- * Merken, ob gerade mit der Tastatur oder mit der Maus bedient wird.
+ * Track whether the keyboard or the mouse is currently driving input.
  *
- * Der Anlass: Ein Textfeld soll beim Anklicken nicht aufleuchten. Wer
- * hineinklickt, weiss, wo er hineingeklickt hat – der Rahmen sagt ihm nichts
- * Neues und ist bei jeder getippten DM wieder da.
+ * The reason: a text field shouldn't light up on click. Whoever clicks into
+ * it already knows where they clicked - the outline tells them nothing new
+ * and would reappear on every DM typed.
  *
- * Beim Tabben ist es umgekehrt: Dort ist der Rahmen die einzige Auskunft
- * darueber, wo man steht, und im Abstimmungskasten koennen zehn gleich
- * aussehende Felder untereinander stehen.
+ * Tabbing is the opposite case: there, the outline is the only information
+ * about where you are, and a poll box can have ten identical-looking fields
+ * stacked on top of each other.
  *
- * Warum das nicht in CSS geht, obwohl es dafuer :focus-visible gibt: Bei
- * Knoepfen trennt :focus-visible Maus und Tastatur sauber, bei Textfeldern
- * NICHT. Die Regel im Browser lautet, dass ein Feld, in das man tippen kann,
- * immer als "sichtbar fokussiert" gilt – auch nach einem Mausklick.
- * Nachgemessen in Chromium: Knopf nach Klick false, Textfeld nach Klick true.
- * Ohne diese paar Zeilen gaebe es die Unterscheidung fuer Felder also gar
- * nicht.
+ * Why this can't be done in CSS, even though :focus-visible exists for it:
+ * on buttons, :focus-visible cleanly separates mouse and keyboard; on text
+ * fields it does NOT. The browser rule says a field you can type into always
+ * counts as "visibly focused" - even after a mouse click. Measured in
+ * Chromium: button after click is false, text field after click is true.
+ * Without these few lines, there would be no way to make that distinction
+ * for fields at all.
  *
- * Nur die Tabulatortaste zaehlt, nicht jede Taste: Wer in einem Feld tippt,
- * bedient die Tastatur, navigiert aber nicht – dabei soll kein Rahmen
- * erscheinen.
+ * Only the Tab key counts, not every key: someone typing in a field is
+ * using the keyboard but not navigating - no outline should appear for
+ * that.
  */
 addEventListener('keydown', (e) => {
   if (e.key === 'Tab') document.documentElement.dataset.tastatur = '';
@@ -79,19 +80,19 @@ addEventListener('pointerdown', () => {
 }, true);
 
 /**
- * Ansems Ansicht anschauen, ohne etwas an der Datenbank zu ändern.
+ * Look at Ansem's view without changing anything in the database.
  *
- * Aufruf: ?preview=admin – und nur auf dem eigenen Rechner. Die Sperre auf
- * localhost ist kein Beiwerk: Ohne sie könnte jeder Besucher der echten Seite
- * den Parameter anhängen und sähe Ansems Posteingangs-Oberfläche.
+ * Call it with ?preview=admin - and only on your own machine. The lock to
+ * localhost isn't incidental: without it, any visitor to the real site
+ * could append the parameter and see Ansem's inbox UI.
  *
- * Es ist ausdrücklich nur die ANSICHT. Wer wirklich Adminrechte hat, steht in
- * app_config.admin_wallet, und danach fragt die Datenbank bei jedem Zugriff.
- * Eine Umfrage anlegen, fremde DMs lesen oder die DM-Schwelle setzen schlägt
- * in dieser Vorschau also fehl – mit genau der Fehlermeldung, die ein
- * Fremder auch bekäme. Das ist die richtige Antwort und kein Mangel: Ließe
- * sich die Oberfläche hier zum Schreiben überreden, wäre die eigentliche
- * Prüfung an der falschen Stelle.
+ * It is explicitly the VIEW only. Whoever actually has admin rights is
+ * listed in app_config.admin_wallet, and the database checks that on every
+ * access. Creating a poll, reading someone else's DMs, or setting the DM
+ * threshold all fail in this preview - with exactly the error message a
+ * stranger would get. That's the correct behavior, not a gap: if the UI
+ * here could be talked into writing, the real check would be in the wrong
+ * place.
  */
 const NUR_HIER = ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname);
 
@@ -99,23 +100,24 @@ const PREVIEW_ADMIN =
   new URLSearchParams(location.search).get('preview') === 'admin' && NUR_HIER;
 
 /**
- * Ein voller Posteingang zum Ansehen – erfunden, nicht geladen.
+ * A full inbox to look at - made up, not loaded.
  *
- * Aufruf: ?demo=40 – und wie die Vorschau oben nur auf dem eigenen Rechner.
+ * Call it with ?demo=40 - and like the preview above, only on your own
+ * machine.
  *
- * Der Grund: Fast jede Frage an diesen Posteingang stellt sich erst bei
- * vierzig Zeilen und nicht bei vier. Bleibt die Schwelle beim Blaettern
- * stehen? Faellt ein ungelesenes Gespraech zwischen den anderen noch auf? Wie
- * liest sich eine Spalte aus vierzig Betraegen? Mit echten Daten waere die
- * Antwort: erst wenn Ansem vierzig Leute hat.
+ * The reason: almost every question about this inbox only shows up at forty
+ * rows, not at four. Does the threshold line stay put while scrolling? Does
+ * an unread conversation still stand out among the others? How does a
+ * column of forty amounts read? With real data, the answer would be: not
+ * until Ansem has forty people.
  *
- * WICHTIG: In
- * diesem Modus wird NICHTS geladen und NICHTS geschrieben. Die Gespraeche
- * gibt es nicht. Ein Klick auf "Hide" aendert nur die Anzeige – die Datenbank
- * sieht ihn gar nicht. So ist ausgeschlossen, dass beim Ausprobieren
- * Testdaten in einer Produktionsdatenbank landen.
+ * IMPORTANT: in this mode NOTHING is loaded and NOTHING is written. The
+ * conversations don't exist. Clicking "Hide" only changes the display - the
+ * database never sees it. That rules out test data ending up in a
+ * production database while trying things out.
  *
- * Die Zahl ist frei waehlbar (?demo=200 geht auch); ohne Zahl sind es 40.
+ * The number is freely chosen (?demo=200 works too); without a number it's
+ * 40.
  */
 const DEMO_DMS = (() => {
   if (!NUR_HIER) return 0;
@@ -125,21 +127,21 @@ const DEMO_DMS = (() => {
 })();
 
 /**
- * Die erfundenen Gespraeche.
+ * The made-up conversations.
  *
- * Feste Streuzahl statt Math.random(): Zwei Aufrufe derselben Adresse sollen
- * dasselbe Bild ergeben. Sonst vergleicht man beim Hin- und Herschalten
- * zwischen zwei Fassungen des Blatts zwei verschiedene Datensaetze und haelt
- * den Unterschied fuer eine Wirkung der Aenderung.
+ * A fixed seed instead of Math.random(): two calls to the same address
+ * should produce the same picture. Otherwise, switching back and forth
+ * between two versions of the sheet compares two different data sets, and
+ * you mistake the difference for an effect of the change.
  */
 function demoThreads(n) {
   const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   let saat = 20260831;
   const zufall = () => (saat = (saat * 1103515245 + 12345) % 2147483648) / 2147483648;
-  // Zwei Listen, nicht eine. Die Vorschau ist die letzte Nachricht, und die
-  // hat einen Absender – steht "You:" davor, hat Ansem sie geschrieben. Aus
-  // einem gemeinsamen Topf kam "You: wen poll" heraus, also Ansem, der sich
-  // selbst nach einer Umfrage fragt.
+  // Two lists, not one. The preview is the last message, and it has a
+  // sender - if "You:" is in front of it, Ansem wrote it. Drawing from one
+  // shared pool produced "You: wen poll" - Ansem asking himself about a
+  // poll.
   const VON_NUTZERN = [
     'gm', 'wen poll', 'thanks for the reply', 'can you look at this',
     'I sold half my bag last week and now I am not sure that was right',
@@ -152,8 +154,8 @@ function demoThreads(n) {
     'thats in the docs', 'not yet', 'sent', 'ill post about it later',
   ];
   return Array.from({ length: n }, (_, i) => {
-    // Betraege ueber die ganze Spanne, von siebenstellig bis unter jede
-    // Schwelle – die Raender sind das, was man sehen will.
+    // Amounts across the whole range, from seven digits down to below any
+    // threshold - the edges are what you actually want to see.
     const usd = Math.round(5_000_000 * (0.3 + zufall()) ** 3 * ((n - i) / n) ** 4) + 3;
     return {
       wallet: Array.from({ length: 44 }, () => B58[Math.floor(zufall() * 58)]).join(''),
@@ -166,23 +168,23 @@ function demoThreads(n) {
       hidden: zufall() < 0.08,
     };
   }).map((t) => ({
-    // Wer zuletzt geschrieben hat, haengt am Ungelesen-Zaehler und ist nicht
-    // frei wuerfelbar. Das war hier falsch, und es war im Bild zu sehen:
-    // Gespraeche mit "You:" UND blauem Punkt.
+    // Who wrote last is tied to the unread counter and can't be rolled
+    // independently. That was wrong here, and it showed in the picture:
+    // conversations with "You:" AND a blue dot.
     //
-    // Den Zustand kann es nicht geben. Ungelesen zaehlt Nachricht DES ANDEREN,
-    // die Ansem noch nicht gesehen hat – und um zu antworten, muss er das
-    // Gespraech oeffnen, was sie als gelesen vermerkt. Hat er zuletzt
-    // geschrieben, ist nichts mehr offen.
+    // That state can't exist. Unread counts messages FROM THE OTHER PERSON
+    // that Ansem hasn't seen yet - and to reply, he has to open the
+    // conversation, which marks it read. If he wrote last, nothing is open
+    // anymore.
     //
-    // Erfundene Daten muessen dieselben Regeln einhalten wie echte, sonst
-    // prueft man die Oberflaeche gegen einen Fall, den sie nie sieht – und
-    // uebersieht dafuer, wie sie im echten aussieht.
+    // Made-up data has to follow the same rules as real data, or you end up
+    // testing the UI against a case it never sees - and miss how it looks
+    // in the real one.
     ...t,
     last_from_admin: t.unread === 0 && zufall() < 0.45,
   })).map((t) => ({
-    // Erst jetzt der Text: Er haengt daran, wer zuletzt geschrieben hat, und
-    // das steht eine Zeile vorher fest.
+    // The text only now: it depends on who wrote last, and that's settled
+    // one line earlier.
     ...t,
     preview: t.last_from_admin
       ? VON_ANSEM[Math.floor(zufall() * VON_ANSEM.length)]
@@ -190,174 +192,174 @@ function demoThreads(n) {
   })).sort((a, b) => b.usd - a.usd);
 }
 
-/* Speicher, der auch dann nicht umfaellt, wenn es keinen gibt.
+/* Storage that doesn't take the page down when there isn't any.
    ---------------------------------------------------------------------------
-   localStorage ist nicht "manchmal leer", sondern manchmal VERBOTEN: Safari
-   mit "alle Cookies blockieren", Brave mit harten Shields, mehrere
-   In-App-Browser werfen beim blossen Zugriff einen SecurityError.
+   localStorage isn't "sometimes empty" - it's sometimes FORBIDDEN: Safari
+   with "block all cookies", Brave with strict shields, several in-app
+   browsers throw a SecurityError on the mere access.
 
-   Hier stand der Zugriff einmal nackt in der Zeile darunter, auf oberster
-   Modulebene – der Fehler fiel also, bevor irgendetwas gezeichnet war, und der
-   Besucher sah eine schwarze Flaeche. Kein Login, keine Meldung, und Neuladen
-   half nie. Getroffen hat es ausgerechnet die, die einen Link aus X oder
-   Telegram oeffnen.
+   The access used to sit bare in the line below, at top module level - so
+   the error hit before anything had been drawn, and the visitor saw a black
+   screen. No login, no message, and reloading never helped. It hit exactly
+   the people opening a link from X or Telegram.
 
-   Ein leerer Speicher ist dagegen harmlos: Dann ist man eben nicht angemeldet.
-   Deshalb faengt lies() den Fehler ab und gibt null zurueck, und schreib()
-   schluckt ihn. Was verlorengeht, ist das Wiederkommen ohne neue Anmeldung –
-   nicht die Seite. */
-const lies = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-const schreib = (k, v) => { try { localStorage.setItem(k, v); } catch { /* gesperrt */ } };
-const loesche = (k) => { try { localStorage.removeItem(k); } catch { /* gesperrt */ } };
+   Empty storage, on the other hand, is harmless: you're just not logged in.
+   That's why read() catches the error and returns null, and write()
+   swallows it. What's lost is staying logged in across visits - not the
+   page. */
+const read = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* blocked */ } };
+const removeKey = (k) => { try { localStorage.removeItem(k); } catch { /* blocked */ } };
 
 const state = {
-  jwt: lies(TOKEN_KEY) || null,
+  jwt: read(TOKEN_KEY) || null,
   db: null,
   me: null,
-  // min_chat_usd steht weiter in der Datenbank, wird hier aber nicht mehr
-  // gelesen: Der Chat ist raus, und die Spalte bleibt nur stehen, damit
-  // nichts gelöscht werden muss.
+  // min_chat_usd still lives in the database but isn't read here anymore:
+  // chat is gone, and the column just stays so nothing has to be dropped.
   cfg: { symbol: 'ANSEM', admin_wallet: null, treasury: null, min_dm_usd: 0 },
   dmMessages: [],
   dmReplyTo: null,
   dmRepliesAvailable: true,
-  // Bereits geöffnete Gespräche, nach Adresse. Damit der zweite Klick auf
-  // einen Faden sofort etwas zeigt statt erst nach der Netzantwort.
+  // Conversations already opened, by address. So a second click on a
+  // thread shows something right away instead of only after the network
+  // reply.
   dmCache: new Map(),
-  // Was Ansem gerade tippt, bevor es gespeichert ist. Der Posteingang folgt
-  // schon dieser Zahl; gespeichert wird erst beim Verlassen des Feldes.
-  // Getrennt von cfg.min_dm_usd, weil sonst nicht mehr erkennbar wäre, ob
-  // sich gegenüber dem gespeicherten Stand überhaupt etwas geändert hat.
+  // What Ansem is currently typing, before it's saved. The inbox already
+  // follows this number; it's only saved when the field loses focus.
+  // Kept separate from cfg.min_dm_usd, otherwise there'd be no way to tell
+  // whether anything actually changed compared to the saved value.
   dmMinEntwurf: null,
-  // Zeigt der Posteingang die von Hand verborgenen Gespraeche gerade mit?
-  // Nur fuer diese Sitzung – beim naechsten Laden sind sie wieder weg, denn
-  // das ist der Normalzustand.
+  // Is the inbox currently showing the manually hidden conversations?
+  // Only for this session - gone again on the next load, since that's the
+  // normal state.
   zeigeVerborgene: false,
-  // Kennt die Datenbank das Verbergen ueberhaupt schon? Siehe pruefeVerbergen().
+  // Does the database even know about hiding yet? See checkHiding().
   dmHideAvailable: false,
   polls: [],
   dmThreads: [],
   activeThread: null,
   challenge: null,
-  poller: null,      // fragt nach, ob die Zahlung angekommen ist (3s/10s/30s)
-  uhr: null,         // schreibt den Rest auf dem Zahlungsbildschirm, im Sekundentakt
+  poller: null,      // polls whether the payment has arrived (3s/10s/30s)
+  clock: null,         // writes the remaining time on the payment screen, once a second
   activeTab: 'polls',
   channels: {},
   reloadTimers: {},
   fallback: {},
-  stimmenTakt: null,   // fragt die Stimmenzahlen nach, statt sie zugestellt zu bekommen
+  stimmenTakt: null,   // polls the vote counts instead of receiving them pushed
 };
 
 // ---------------------------------------------------------------------------
-// Formatierung
+// Formatting
 // ---------------------------------------------------------------------------
 
-// Zahlen bewusst im en-US-Format: "$1,325" ist eindeutig, "$1.325" liest sich
-// im Deutschen wie ein Euro-Betrag mit Nachkommastellen.
+// Numbers deliberately in en-US format: "$1,325" is unambiguous, "$1.325"
+// reads like a euro amount with decimal places.
 const nfCompact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
 const nfFull = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 const fmtUsd = (n) => (!n ? '$0' : n < 1 ? '$' + n.toFixed(2) : '$' + (n >= 10_000 ? nfCompact.format(n) : nfFull.format(n)));
 const fmtTime = (ts) => new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-/* Ausgeschrieben statt abgekürzt – für die Abstimmungen und für das Bild, das
-   der Ladeknopf erzeugt.
+/* Written out in full instead of abbreviated - for the polls, and for the
+   image the download button generates.
 
-   fmtUsd kürzt ab 10.000 ab ("$482.9K"), weil der Betrag im Posteingang in
-   einer schmalen Spalte neben dem Kürzel steht; dort zählt Kürze. In einer
-   Abstimmung steht er allein am Zeilenende und hat Platz, und dort ist
-   "$482,900" die belastbarere Angabe: Es ist die Zahl, über die jemand
-   streiten kann. */
+   fmtUsd abbreviates from 10,000 up ("$482.9K"), because in the inbox the
+   amount sits in a narrow column next to the handle; there, brevity counts.
+   In a poll it stands alone at the end of a line and has room, and there
+   "$482,900" is the more defensible figure: it's the number someone can
+   actually argue with. */
 const nfGanz = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const vollUsd = (n) => '$' + nfGanz.format(Math.round(Number(n) || 0));
+const fullUsd = (n) => '$' + nfGanz.format(Math.round(Number(n) || 0));
 
-/* Mit Tausendertrennung: "38100" liest sich als Ziffernkette, bei der man
-   mitzählen muss – "38,100" nicht. */
-const ganzeZahl = (n) => nfGanz.format(Number(n) || 0);
+/* With thousands separators: "38100" reads as a string of digits you have
+   to count along - "38,100" doesn't. */
+const wholeNumber = (n) => nfGanz.format(Number(n) || 0);
 
 /**
- * Der Betrag neben einer Zeile im Posteingang – so kurz, dass er in eine
- * schmale Spalte passt.
+ * The amount next to a row in the inbox - short enough to fit a narrow
+ * column.
  *
- * Regel: nie mehr als drei Ziffernstellen. Unter tausend die ganze Zahl,
- * darüber mit K, M oder B abgekürzt. Eine Nachkommastelle gibt es nur, solange
- * die Vorzahl einstellig bleibt:
+ * Rule: never more than three digits. Under a thousand, the whole number;
+ * above that, abbreviated with K, M, or B. There's a decimal place only as
+ * long as the leading digit stays single:
  *
- *      1.412 → $1.4K        31.500 → $32K
- *      3.444 → $3.4K       781.420 → $781K
- *        999 → $999      1.240.000 → $1.2M
+ *      1,412 -> $1.4K        31,500 -> $32K
+ *      3,444 -> $3.4K       781,420 -> $781K
+ *        999 -> $999      1,240,000 -> $1.2M
  *
- * Damit ist der längste Fall fünf Zeichen breit. Genau das macht die Spalte
- * möglich, in der die Beträge untereinander stehen: Sie kann eng sein und
- * läuft trotzdem nie über.
+ * That makes the longest case five characters wide. That's exactly what
+ * makes the column possible where the amounts line up underneath each
+ * other: it can be narrow and still never overflow.
  *
- * Erst runden, dann die Einheit wählen. Andersherum würden aus 999.960 nach
- * dem Aufrunden "1000K" – vier Stellen, und die Spalte wäre gesprengt. Über
- * toPrecision(3) sind es 1.000.000 und damit "$1.0M".
+ * Round first, then pick the unit. The other way around, 999,960 would
+ * round up to "1000K" - four digits, and the column would blow out. Via
+ * toPrecision(3) it becomes 1,000,000 and thus "$1.0M".
  *
- * Unter einem Dollar steht "<$1" statt "$0.42": Zwei Nachkommastellen wären
- * der einzige Fall, der aus der Spalte fällt, und auf den Cent genau ist bei
- * einem Bestand von Cents ohnehin niemandem gedient.
+ * Under a dollar it shows "<$1" instead of "$0.42": two decimal places
+ * would be the one case that falls outside the column, and being accurate
+ * to the cent serves nobody anyway for a balance measured in cents.
  *
- * fmtUsd() bleibt daneben bestehen und wird weiter benutzt, wo Platz ist und
- * die genaue Zahl zählt: in der Kopfzeile, in den Sperrmeldungen und in der
- * Angabe, wie viele Gespräche der Posteingang gerade ausblendet.
+ * fmtUsd() still exists alongside this and keeps being used wherever there
+ * is room and the exact number matters: in the header, in the lockout
+ * messages, and in the count of how many conversations the inbox is
+ * currently hiding.
  *
- * Die ZEILEN des Posteingangs benutzen dagegen kurzUsd. Sie standen anfangs
- * auf fmtUsd, und das kürzt erst ab 10.000 ab – daneben also "$9,800" und
- * "$214K" untereinander in derselben schmalen Spalte. Zwei Schreibweisen für
- * dieselbe Sache in einer Liste, und die längere ausgerechnet für die
- * kleineren Beträge.
+ * The ROWS of the inbox use shortUsd instead. They originally used fmtUsd,
+ * which only abbreviates from 10,000 up - so "$9,800" and "$214K" sat
+ * stacked in the same narrow column. Two different notations for the same
+ * thing in one list, and the longer one landed on the smaller amounts.
  *
- * Zwischen 1.000 und 10.000 steht keine Nachkommastelle: "$9K" statt "$8.8K".
- * Die Begründung steht bei der Zeile selbst – kurz: Die Stelle behauptet dort
- * eine Genauigkeit, die die Zahl nicht hat.
+ * Between 1,000 and 10,000 there's no decimal place: "$9K" instead of
+ * "$8.8K". The reasoning is with the line itself - short version: that
+ * digit claims a precision the number doesn't have.
  */
-const STUFEN = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
-function kurzUsd(n) {
-  const zahl = Number(n);
-  if (!Number.isFinite(zahl) || zahl <= 0) return '$0';
-  if (zahl < 1) return '<$1';
-  const gerundet = Number(zahl.toPrecision(3));
-  for (const [ab, kurz] of STUFEN) {
+const TIERS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+function shortUsd(n) {
+  const number = Number(n);
+  if (!Number.isFinite(number) || number <= 0) return '$0';
+  if (number < 1) return '<$1';
+  const gerundet = Number(number.toPrecision(3));
+  for (const [ab, short] of TIERS) {
     if (gerundet < ab) continue;
     const wert = gerundet / ab;
-    // Zwischen 1.000 und 10.000 KEINE Nachkommastelle: "$9K", nicht "$8.8K".
+    // Between 1,000 and 10,000, NO decimal place: "$9K", not "$8.8K".
     //
-    // Der Grund ist nicht Platz, sondern Ehrlichkeit. "$8.8K" sieht aus wie
-    // eine genaue Angabe und ist keine – dahinter steht irgendetwas zwischen
-    // 8.750 und 8.849. Die Stelle behauptet eine Genauigkeit, die die Zahl
-    // nicht hat, und ausgerechnet dort, wo die Betraege dicht beieinander
-    // liegen und man sie vergleicht.
+    // The reason isn't space, it's honesty. "$8.8K" looks like a precise
+    // figure and isn't one - behind it is something between 8,750 and
+    // 8,849. That digit claims a precision the number doesn't have, and it
+    // does so exactly where the amounts sit close together and get
+    // compared.
     //
-    // "$9K" sagt dasselbe und behauptet nichts. Wer den genauen Betrag will,
-    // oeffnet das Gespraech.
+    // "$9K" says the same thing and claims nothing. Anyone who wants the
+    // exact amount opens the conversation.
     //
-    // Nur diese eine Stufe: Bei Millionen bleibt die Nachkommastelle, weil
-    // dort zwischen "$1M" und "$2M" eine Million liegt – da traegt sie eine
-    // echte Auskunft.
+    // Only this one tier: at millions the decimal place stays, because
+    // there a million sits between "$1M" and "$2M" - there it carries real
+    // information.
     //
-    // Gerundet wird hier vom ROHWERT und nicht von gerundet: Das toPrecision(3)
-    // oben ist dafuer da, dass aus 999.960 nicht "1000K" wird – es macht aus
-    // 1.499 aber schon 1.500, und Math.round() daraus dann "$2K". Zweimal
-    // runden rundet zweimal auf. Vom Rohwert sind es "$1K", und das ist die
-    // richtige Antwort.
-    if (kurz === 'K' && wert < 9.95) return '$' + Math.round(zahl / ab) + kurz;
-    return '$' + (wert < 9.95 ? wert.toFixed(1) : String(Math.round(wert))) + kurz;
+    // Rounding here comes from the RAW VALUE, not from gerundet: the
+    // toPrecision(3) above exists so that 999,960 doesn't become "1000K" -
+    // but it does turn 1,499 into 1,500, and Math.round() of that into
+    // "$2K". Rounding twice rounds up twice. From the raw value it's "$1K",
+    // and that's the correct answer.
+    if (short === 'K' && wert < 9.95) return '$' + Math.round(number / ab) + short;
+    return '$' + (wert < 9.95 ? wert.toFixed(1) : String(Math.round(wert))) + short;
   }
   return '$' + Math.round(gerundet);
 }
 
 /**
- * Datumstrenner in Gesprächen.
+ * Date separator in conversations.
  *
- * Ein DM-Faden läuft über Tage oder Wochen. Ohne Trenner steht dort eine
- * Uhrzeit, und "09:12" sagt nicht, ob das heute früh war oder vor drei Wochen.
+ * A DM thread runs over days or weeks. Without a separator there's just a
+ * timestamp, and "09:12" doesn't say whether that was this morning or three
+ * weeks ago.
  *
- * "Today" und "Yesterday" statt eines Datums für die letzten zwei Tage: Das
- * ist die Auskunft, die man tatsächlich sucht, und man muss nicht erst
- * nachrechnen, welcher Wochentag heute ist. Das Jahr steht nur dabei, wenn es
- * nicht das laufende ist – sonst wiederholt es sich in jedem Trenner.
+ * "Today" and "Yesterday" instead of a date for the last two days: that's
+ * the information you're actually after, and you don't have to work out
+ * what weekday today is first. The year is only shown when it isn't the
+ * current one - otherwise it repeats in every separator.
  */
 const tagBeginn = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 const dfTag = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
@@ -373,32 +375,33 @@ function tagLabel(ts) {
 }
 const handleOf = (wallet) => (wallet || '').slice(0, 3);
 
-/* kurzAdresse() stand hier: die eigene Adresse als "EMwU…QLxP", vier Zeichen,
-   Auslassung, vier Zeichen. Sie hat oben rechts das Kuerzel ersetzt, mit dem
-   Argument, dort sei die Frage nicht "wer bin ich", sondern "mit welcher
-   Wallet bin ich hier".
+/* kurzAdresse() used to be here: your own address as "EMwU...QLxP", four
+   characters, ellipsis, four characters. It replaced the handle in the top
+   right, on the argument that the question there isn't "who am I" but
+   "which wallet am I here as".
 
-   Sie ist wieder raus, samt der Funktion: Oben rechts stehen jetzt wieder die
-   drei Zeichen in der eigenen Farbe – dieselbe Kennung wie in den DMs und im
-   Posteingang. Eine Abkuerzung ohne Aufrufer haette hier stehen bleiben
-   koennen; sie sah aus, als wuerde sie gebraucht.
+   It's gone again, function and all: the top right now shows the three
+   characters in your own color again - the same identifier as in the DMs
+   and the inbox. An abbreviation with no caller could have stayed here; it
+   just looked like it was needed.
 
 /**
- * Farbton für einen Nutzernamen.
+ * Hue for a username.
  *
- * Drei Zeichen reichen nicht, um Leute sicher auseinanderzuhalten: Bei ein paar
- * hundert Mitgliedern teilen sich zwangsläufig welche dasselbe Kürzel. Eine
- * feste Farbe je Wallet gibt dem Namen ein zweites Merkmal, ohne ihn zu
- * verlängern – zwei "7xK" nebeneinander sehen dann trotzdem verschieden aus.
+ * Three characters aren't enough to reliably tell people apart: with a few
+ * hundred members, some are bound to share the same handle. A fixed color
+ * per wallet gives the name a second feature without making it longer -
+ * two "7xK"s side by side then still look different.
  *
- * Zwei Entscheidungen dahinter:
+ * Two decisions behind this:
  *
- *   * Gerechnet wird über die volle Adresse, nicht über die drei Zeichen.
- *     Sonst bekämen ausgerechnet die Doppelgänger dieselbe Farbe.
- *   * Die Akzentfarbe ist hier nicht dabei. Sie gehört allein Ansem – so
- *     heißt sie überall "das ist er", und kein Teilnehmer kann zufällig in
- *     seiner Farbe erscheinen. Bleiben vier Töne, was für die Unterscheidung
- *     reicht.
+ *   * It's computed from the full address, not the three characters.
+ *     Otherwise the look-alikes would end up with the same color, of all
+ *     people.
+ *   * The accent color isn't in the pool. It belongs to Ansem alone - that
+ *     way it always means "that's him", and no participant can randomly
+ *     end up in his color. That leaves four tones, which is enough to tell
+ *     people apart.
  */
 const HANDLE_TONES = 4;
 function toneOf(wallet) {
@@ -412,62 +415,62 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /**
- * Text mit anklickbaren Links.
+ * Text with clickable left.
  *
- * Die Reihenfolge ist hier das Sicherheitsmerkmal, nicht ein Detail: Der Text
- * wird ZERLEGT und jedes Stueck einzeln maskiert. Der naheliegende Weg – erst
- * maskieren, dann mit einem regulaeren Ausdruck ueber das Ergebnis laufen –
- * ist heikel, weil das Maskieren selbst Zeichen einfuegt (& wird &amp;), die
- * der Ausdruck dann wieder auseinandernehmen muesste. Wer sich dabei
- * verrechnet, baut ein Loch, durch das fremdes HTML in die Seite kommt.
+ * The order here is the security property, not a detail: the text is SPLIT
+ * APART and each piece is escaped individually. The obvious approach -
+ * escape first, then run a regex over the result - is risky, because
+ * escaping itself inserts characters (& becomes &amp;) that the regex would
+ * then have to take apart again. Get that wrong and you open a hole that
+ * lets foreign HTML into the page.
  *
- * Nur http:// und https:// und www. – bewusst NICHT die nackte Domain wie
- * "sized.gg". Der Filter in der Datenbank kennt eine Liste von Endungen und
- * darf grosszuegig sein, weil er nur ablehnt. Hier wuerde dieselbe
- * Grosszuegigkeit aus "1.25" und "z.b" Links machen. Ablehnen ist billig,
- * einen falschen Link anbieten nicht.
+ * Only http:// and https:// and www. - deliberately NOT a bare domain like
+ * "sized.gg". The filter in the database knows a list of TLDs and is
+ * allowed to be generous, because it only rejects. Here, the same
+ * generosity would turn "1.25" and "z.b" into left. Rejecting is cheap;
+ * offering a wrong link is not.
  *
- * Bei www. wird https:// vorangestellt. Ohne Schema laese der Browser die
- * Adresse als relativen Pfad und landete auf sized.gg/www.example.com.
+ * For www., https:// is prepended. Without a scheme the browser would read
+ * the address as a relative path and land on sized.gg/www.example.com.
  *
- * Das Schema ist damit IMMER http oder https – "javascript:" kann hier nicht
- * entstehen, weil der Ausdruck es gar nicht erst faengt.
+ * The scheme is therefore ALWAYS http or https - "javascript:" can't occur
+ * here, because the pattern never matches it in the first place.
  *
- * rel und referrerpolicy sind nicht Kosmetik:
- *   * noopener  – ohne das kann die geoeffnete Seite ueber window.opener auf
- *                 diese hier zugreifen und sie z. B. auf eine Nachbau-Seite
- *                 umleiten, waehrend der Nutzer im anderen Tab liest.
- *   * noreferrer, no-referrer – die Zielseite erfaehrt nicht, woher der Klick
- *                 kam. In einem Raum, dessen Mitgliedschaft Geld kostet, ist
- *                 schon die Herkunft eine Auskunft.
- *   * nofollow  – kein Anreiz, die Seite als Linkschleuder zu benutzen.
+ * rel and referrerpolicy aren't cosmetic:
+ *   * noopener - without it, the opened page can reach back through
+ *                window.opener and, say, redirect this one to a lookalike
+ *                page while the user is reading in the other tab.
+ *   * noreferrer, no-referrer - the target site doesn't learn where the
+ *                click came from. In a room whose membership costs money,
+ *                even the origin is information.
+ *   * nofollow  - no incentive to use this as a link farm.
  */
 const LINK_MUSTER = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
 
-function mitLinks(text) {
+function withLinks(text) {
   const roh = String(text ?? '');
   let out = '';
-  let zuletzt = 0;
+  let latest = 0;
 
   for (const treffer of roh.matchAll(LINK_MUSTER)) {
     const start = treffer.index;
     let url = treffer[0];
 
-    // Satzzeichen am Ende gehoeren zum Satz, nicht zur Adresse:
-    // "schau auf https://sized.gg." endet nicht mit einem Punkt in der URL.
-    // Eine schliessende Klammer bleibt nur, wenn sie eine oeffnende hat –
-    // Wikipedia-Adressen enthalten welche.
-    let schwanz = '';
+    // Trailing punctuation belongs to the sentence, not the address:
+    // "check out https://sized.gg." doesn't end with a period in the URL.
+    // A closing parenthesis stays only if there's a matching opening one -
+    // Wikipedia addresses contain those.
+    let tail = '';
     for (;;) {
-      const letztes = url.slice(-1);
-      // Bei der Klammer wird gezaehlt, nicht geraten: Eine schliessende zu
-      // viel gehoert zum Satz, eine ausgeglichene zur Adresse.
-      // "(https://de.wikipedia.org/wiki/Foo_(bar))" endet mit der Adresse
-      // "..._(bar)" und einer Klammer, die den Satz schliesst.
-      const zuViele = letztes === ')'
+      const lastChar = url.slice(-1);
+      // Parentheses are counted, not guessed: one closing paren too many
+      // belongs to the sentence, a balanced one belongs to the address.
+      // "(https://en.wikipedia.org/wiki/Foo_(bar))" ends with the address
+      // "..._(bar)" and a parenthesis that closes the sentence.
+      const zuViele = lastChar === ')'
         && (url.split(')').length - 1) > (url.split('(').length - 1);
-      if ('.,;:!?'.includes(letztes) || zuViele) {
-        schwanz = letztes + schwanz;
+      if ('.,;:!?'.includes(lastChar) || zuViele) {
+        tail = lastChar + tail;
         url = url.slice(0, -1);
         continue;
       }
@@ -476,14 +479,14 @@ function mitLinks(text) {
     if (!url) continue;
 
     const ziel = /^www\./i.test(url) ? 'https://' + url : url;
-    out += esc(roh.slice(zuletzt, start));
+    out += esc(roh.slice(latest, start));
     out += `<a href="${esc(ziel)}" target="_blank"`
       + ` rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">${esc(url)}</a>`;
-    out += esc(schwanz);
-    zuletzt = start + treffer[0].length;
+    out += esc(tail);
+    latest = start + treffer[0].length;
   }
 
-  out += esc(roh.slice(zuletzt));
+  out += esc(roh.slice(latest));
   return out;
 }
 
@@ -497,7 +500,7 @@ function toast(msg, isError = false) {
 }
 
 // ---------------------------------------------------------------------------
-// Edge Functions
+// Edge functions
 // ---------------------------------------------------------------------------
 
 async function callFunction(name, body, withAuth = false) {
@@ -516,13 +519,13 @@ async function callFunction(name, body, withAuth = false) {
 }
 
 /**
- * Wichtig: das Token über `accessToken` übergeben, nicht als fester Header.
+ * Important: pass the token through `accessToken`, not as a fixed header.
  *
- * Ein Header in `global.headers` gilt nur für die REST-Aufrufe. Die
- * Realtime-Verbindung würde weiter mit dem anon-Key laufen, und weil unsere
- * RLS-Policies nur `authenticated` lesen lassen, käme dort kein einziges
- * Ereignis an – Nachrichten erschienen erst nach einem Reload.
- * `accessToken` gilt für beides und wird bei jeder Verbindung neu abgefragt.
+ * A header in `global.headers` only applies to REST calls. The realtime
+ * connection would keep running with the anon key, and since our RLS
+ * policies only let `authenticated` read, not a single event would arrive
+ * there - messages would only show up after a reload. `accessToken` applies
+ * to both and is re-fetched on every connection.
  */
 function makeClient() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -531,27 +534,29 @@ function makeClient() {
   });
 }
 
-/** Wirft mit sprechender Meldung statt mit dem rohen PostgREST-Objekt. */
+/** Throws with a readable message instead of the raw PostgREST object. */
 function unwrap({ data, error }) {
   if (error) throw new Error(error.message || 'Database error');
   return data;
 }
 
 // ---------------------------------------------------------------------------
-// Login per Zahlungsverifikation
+// Login via payment verification
 // ---------------------------------------------------------------------------
 
-// Enter im Adressfeld tut dasselbe wie der Knopf.
+// Enter in the address field does the same thing as the button.
 // ---------------------------------------------------------------------------
-// Das Feld steht in keinem <form>, also gab es kein Absenden – und ohne
-// Zuhoerer passierte auf Enter gar nichts. Auf dem Handy ist das der
-// schlimmste Ort dafuer: Man tippt die Adresse, drueckt die "Los"-Taste der
-// Tastatur, nichts geschieht, und der Knopf liegt in dem Moment hinter der
-// eingeblendeten Tastatur. Das ist die erste Handlung jedes neuen Nutzers.
+// The field isn't inside any <form>, so there was nothing to submit - and
+// without a listener, Enter did nothing at all. On a phone this is the
+// worst possible place for that: you type the address, hit the "Go" key on
+// the keyboard, nothing happens, and at that moment the button is sitting
+// behind the on-screen keyboard. This is the first thing every new user
+// does.
 //
-// Kein <form> nachtraeglich drumherum: Ein Formular ohne action laedt bei
-// Enter die Seite neu, wenn das JavaScript einmal nicht laeuft – und dann ist
-// die eingetippte Adresse weg. Ein Zuhoerer tut genau das eine, was er soll.
+// No wrapping it in a <form> after the fact: a form without an action
+// reloads the page on Enter if the JavaScript ever fails to run - and then
+// the typed-in address is gone. A listener does exactly the one thing it's
+// supposed to.
 $('#wallet-input').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
@@ -565,25 +570,24 @@ $('#btn-challenge').addEventListener('click', async () => {
   if (!wallet) { err.textContent = 'Enter your wallet address.'; err.hidden = false; return; }
 
   const btn = $('#btn-challenge');
-  // disabled UND die Klasse: Das eine sperrt den zweiten Klick, das andere
-  // zeigt, dass etwas laeuft. Bisher gab es nur das Erste – ein blasser Knopf
-  // sieht aber aus wie kaputt, nicht wie beschaeftigt.
+  // disabled AND the class: one blocks the second click, the other shows
+  // that something is happening. There used to be only the first - but a
+  // faded button looks broken, not busy.
   btn.disabled = true;
   btn.classList.add('laedt');
   try {
-    // Eine eigene, noch laufende Anmeldung für dieselbe Adresse fortsetzen –
-    // sonst würfelt verify einen zweiten Betrag, und wer schon gezahlt hat,
-    // zahlt noch einmal.
-    const weiter = gemerkteChallenge();
+    // Resume our own still-running login for the same address - otherwise
+    // verify rolls a second amount, and whoever already paid pays again.
+    const next = rememberedChallenge();
     const c = await callFunction('verify', {
       action: 'challenge',
       wallet,
-      ...(weiter?.wallet === wallet
-        ? { challengeId: weiter.challengeId, secret: weiter.secret }
+      ...(next?.wallet === wallet
+        ? { challengeId: next.challengeId, secret: next.secret }
         : {}),
     });
     state.challenge = c;
-    merkeChallenge(c);
+    rememberChallenge(c);
     $('#pay-amount').textContent = c.sol.toFixed(9).replace(/0+$/, '') + ' SOL';
     $('#pay-treasury').textContent = c.treasury;
     $('#btn-mock-pay').hidden = !c.mock;
@@ -615,21 +619,21 @@ $('#btn-mock-pay').addEventListener('click', async () => {
 $('#btn-cancel').addEventListener('click', () => {
   stopPolling();
   state.challenge = null;
-  // Abbrechen heisst abbrechen: Die naechste Anmeldung faengt neu an. Die
-  // alte Challenge laeuft von selbst ab.
-  vergissChallenge();
+  // Cancel means cancel: the next login starts fresh. The old challenge
+  // expires on its own.
+  forgetChallenge();
   $('#step-pay').hidden = true;
   $('#step-address').hidden = false;
 });
 
 /**
- * Kopieren mit sichtbarer Bestätigung.
+ * Copy with a visible confirmation.
  *
- * navigator.clipboard gibt es nur über HTTPS und nicht in jedem eingebetteten
- * Browser (etwa dem in Twitter). Der zweite Weg über ein verstecktes Feld
- * funktioniert überall – und wenn auch das scheitert, wird der Text wenigstens
- * markiert, damit man ihn von Hand kopieren kann. Hier hängt eine Zahlung
- * dran; Wegklicken ohne Ergebnis wäre die schlechteste Variante.
+ * navigator.clipboard only exists over HTTPS and not in every embedded
+ * browser (Twitter's, for instance). The second path, through a hidden
+ * field, works everywhere - and if even that fails, the text is at least
+ * selected so it can be copied by hand. There's a payment riding on this;
+ * dismissing with no result would be the worst outcome.
  */
 async function copyText(text) {
   try {
@@ -637,7 +641,7 @@ async function copyText(text) {
       await navigator.clipboard.writeText(text);
       return true;
     }
-  } catch { /* zweiter Weg */ }
+  } catch { /* fall through to the second path */ }
 
   try {
     const ta = document.createElement('textarea');
@@ -654,13 +658,13 @@ async function copyText(text) {
   } catch { return false; }
 }
 
-// Wie lange der Umriss nach dem Kopieren hell bleibt.
+// How long the outline stays lit after copying.
 //
-// Erst 1800, dann 900, jetzt 1500 – und die Zahl ist am Geraet entschieden
-// und nicht am Schreibtisch. 1800 sahen aus wie ein Zustand statt einer
-// Antwort; 900 waren, seit der Umriss nur noch dezent hell wird, zu knapp, um
-// ihn ueberhaupt zu bemerken. Wer eine Adresse kopiert, schaut in dem Moment
-// meist schon auf seine Wallet-App.
+// First 1800, then 900, now 1500 - and the number was decided on the
+// device, not at a desk. 1800 looked like a state instead of a response;
+// 900 was too short to even notice once the outline was toned down to a
+// subtle glow. Whoever copies an address is usually already looking at
+// their wallet app by that point.
 const KOPIERT_MS = 1500;
 
 $$('.copy').forEach((b) => b.addEventListener('click', async () => {
@@ -679,12 +683,12 @@ $$('.copy').forEach((b) => b.addEventListener('click', async () => {
     return;
   }
 
-  // Letzter Ausweg: markieren, damit der Nutzer selbst kopieren kann.
+  // Last resort: select it so the user can copy it themselves.
   //
-  // Die Klasse zuerst: Die Zeile ist sonst gar nicht markierbar (siehe
-  // .pay-row in styles.css – ein blauer Block neben "Copied ✓" waere eine
-  // zweite Antwort auf dasselbe Antippen). Ohne diese Zeile zeigte die
-  // Meldung darunter auf nichts.
+  // The class first: otherwise the row isn't even selectable (see .pay-row
+  // in styles.css - a blue block next to "Copied ✓" would be a second
+  // response to the same tap). Without this line, the message below would
+  // be pointing at nothing.
   b.classList.add('zum-markieren');
   try {
     const range = document.createRange();
@@ -692,172 +696,176 @@ $$('.copy').forEach((b) => b.addEventListener('click', async () => {
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
-  } catch { /* dann eben nicht */ }
+  } catch { /* then it just doesn't select */ }
   toast('Could not copy automatically - the text is selected for you', true);
 }));
 
 // ---------------------------------------------------------------------------
-// Startbildschirm
+// Start screen
 //
-// Auf dem Handy kommt vor dem Login die Aufforderung, die Seite abzulegen. Der
-// Grund ist handfest: Browser räumen gespeicherte Sitzungen nach längerer Zeit
-// ohne Besuch weg – und eine neue Anmeldung kostet hier eine echte Zahlung.
-// Vom Startbildschirm aus gilt das nicht.
+// On a phone, the login is preceded by a prompt to add the page to the home
+// screen. The reason is concrete: browsers clear out stored sessions after
+// a long stretch without a visit - and logging in again here costs a real
+// payment. From the home screen, that doesn't happen.
 //
-// Es ist eine Aufforderung, keine Sperre. Wer sie wegklickt, kommt weiter und
-// wird nicht wieder gefragt: In eingebetteten Browsern (Twitter, Telegram)
-// lässt sich gar nichts ablegen, und diese Leute jedes Mal anzuhalten wäre
-// reine Schikane.
+// It's a prompt, not a gate. Dismissing it lets you continue and you're not
+// asked again: embedded browsers (Twitter, Telegram) can't add to the home
+// screen at all, and stopping those people every time would be pure
+// harassment.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Die Tastatur schiebt nicht mehr die ganze Ansicht hoch
+// The keyboard no longer pushes the whole view up
 // ---------------------------------------------------------------------------
 //
-// Befund vom Geraet: Tippt man auf dem Handy eine DM, wandert alles nach oben
-// aus dem Bild – Kopfzeile, die Reiter, der obere Rand des Rahmens.
+// Found on-device: typing a DM on a phone pushes everything up out of the
+// picture - the header, the tabs, the top edge of the frame.
 //
-// Warum iOS das tut, steht ausfuehrlich in styles.css bei --sicht. Kurz: Die
-// Seite ist 100dvh hoch, und dvh weiss von der Tastatur nichts. Unten ist die
-// halbe Seite verdeckt, das Eingabefeld liegt darunter – also schiebt iOS von
-// sich aus alles hoch. Der einzige Weg, ihm das abzugewoehnen, ist, ihm den
-// Anlass zu nehmen: Ist die Seite nur so hoch wie das, was man sieht, gibt es
-// nichts zu schieben.
+// Why iOS does this is explained in full in styles.css at --sicht. Short
+// version: the page is 100dvh tall, and dvh knows nothing about the
+// keyboard. The bottom half of the page ends up covered, the input field
+// sits underneath it - so iOS pushes everything up on its own. The only way
+// to stop it is to remove the reason for it: if the page is only as tall as
+// what's actually visible, there's nothing to push.
 //
-// visualViewport ist der Teil des Fensters, der wirklich zu sehen ist – ohne
-// Tastatur, ohne Leisten. Genau die Zahl wird gebraucht.
+// visualViewport is the part of the window that's actually visible - no
+// keyboard, no browser chrome. That's exactly the number needed here.
 //
 // ---------------------------------------------------------------------------
-// Warum eine Schwelle und nicht einfach immer die sichtbare Hoehe
+// Why a threshold, and not just always the visible height
 //
-// visualViewport.height aendert sich auch, wenn Safaris Adressleiste beim
-// Rollen ein- und ausfaehrt – Dutzende Male pro Wisch, um wenige Pixel. Wuerde
-// die Seitenhoehe dem folgen, zuckte bei jedem Rollen das ganze Blatt. Dafuer
-// ist 100dvh da, und das macht der Browser fluessiger, als wir es koennten.
+// visualViewport.height also changes when Safari's address bar slides in
+// and out while scrolling - dozens of times per swipe, by a few pixels. If
+// the page height tracked that, the whole sheet would twitch on every
+// scroll. That's exactly what 100dvh is for, and the browser does it more
+// smoothly than we could.
 //
-// Eine Tastatur nimmt dagegen ein Drittel des Bildschirms. 120 px trennt das
-// eine sicher vom anderen: Weniger ist eine Leiste, mehr ist eine Tastatur.
+// A keyboard, on the other hand, takes up a third of the screen. 120px
+// reliably separates the two: less is a toolbar, more is a keyboard.
 const TASTATUR_AB_PX = 120;
 
 function tastaturBeobachten() {
   const vv = window.visualViewport;
-  // Aeltere Browser kennen das nicht. Dann bleibt es beim alten Verhalten –
-  // unschoen, aber nicht kaputt.
+  // Older browsers don't have this. Then it just falls back to the old
+  // behavior - not pretty, but not broken either.
   if (!vv) return;
 
 
-  const nachfuehren = () => {
+  const track = () => {
     const verdeckt = window.innerHeight - vv.height;
     if (verdeckt > TASTATUR_AB_PX) {
       document.documentElement.style.setProperty('--sicht', `${vv.height}px`);
-      // --versatz ist die Haelfte, die beim ersten Versuch gefehlt hat.
+      // --versatz is the half that was missing on the first attempt.
       // -----------------------------------------------------------------
-      // Die Hoehe allein reicht nicht. iOS macht zweierlei, wenn die Tastatur
-      // kommt: Es verkleinert den sichtbaren Ausschnitt UND es SCHIEBT ihn
-      // nach oben ueber die Seite hinweg, damit das Eingabefeld darin liegt.
-      // Das zweite ist kein Rollen – die Seite selbst steht still, es ist der
-      // Ausschnitt, der wandert. Deshalb half window.scrollTo(0, 0) hier auch
-      // nichts: Es gibt nichts zu rollen, die Seite ist overflow: hidden.
+      // Height alone isn't enough. iOS does two things when the keyboard
+      // comes up: it shrinks the visible viewport AND it SHIFTS it upward
+      // over the page, so the input field ends up inside it. The second
+      // part isn't scrolling - the page itself stays put, it's the
+      // viewport that moves. That's also why window.scrollTo(0, 0) didn't
+      // help here: there's nothing to scroll, the page is overflow:
+      // hidden.
       //
-      // Wie weit geschoben wurde, steht in visualViewport.offsetTop. Und weil
-      // die Seite stillsteht, waehrend der Ausschnitt wandert, muss die
-      // Ansicht um GENAU denselben Betrag mitwandern, damit sie wieder unter
-      // dem Ausschnitt liegt. Das ist der Versatz.
+      // How far it shifted is in visualViewport.offsetTop. And because the
+      // page stays put while the viewport moves, the view has to shift by
+      // EXACTLY the same amount so it lines back up under the viewport.
+      // That's the offset.
       //
-      // Verschoben wird nur .app, nicht der Anmeldebildschirm: Dort SOLL die
-      // Karte ausweichen (siehe styles.css).
+      // Only .app is shifted, not the login screen: there the card is
+      // SUPPOSED to move out of the way (see styles.css).
       document.documentElement.style.setProperty('--versatz', `${vv.offsetTop}px`);
     } else {
-      // Tastatur wieder unten: Die Zeilen ganz wegnehmen, nicht auf einen Wert
-      // setzen. Nur so gilt wieder der Rueckfall im Blatt (100dvh), und der
-      // folgt den Leisten des Browsers von selbst.
+      // Keyboard down again: remove the properties entirely, don't set
+      // them to a value. Only that way does the fallback in the sheet
+      // (100dvh) apply again, and it follows the browser's toolbars on its
+      // own.
       document.documentElement.style.removeProperty('--sicht');
       document.documentElement.style.removeProperty('--versatz');
     }
   };
 
-  vv.addEventListener('resize', nachfuehren);
-  // Auch bei scroll: iOS verschiebt den sichtbaren Ausschnitt manchmal, ohne
-  // seine Hoehe zu aendern – dann kommt kein resize, aber die Ansicht steht
-  // trotzdem verrutscht.
-  vv.addEventListener('scroll', nachfuehren);
-  nachfuehren();
+  vv.addEventListener('resize', track);
+  // Also on scroll: iOS sometimes shifts the visible viewport without
+  // changing its height - then no resize fires, but the view is still
+  // left misaligned.
+  vv.addEventListener('scroll', track);
+  track();
 }
 tastaturBeobachten();
 
 /* ---------------------------------------------------------------------------
-   Messanzeige: ?mess=1
+   Measurement overlay: ?measurer=1
    ---------------------------------------------------------------------------
-   Ein kleiner Kasten, der zeigt, was der Browser gerade meldet und was das
-   Blatt daraus macht. Er ist da, weil ein Fehler gemeldet wurde, den keine
-   Nachstellung hier reproduziert – das Formular wird auf dem Geraet gestaucht,
-   im Nachbau nicht. Statt zu raten, welcher Wert schuld ist, zeigt das Geraet
-   ihn selbst.
+   A small box that shows what the browser is currently reporting and what
+   the sheet does with it. It exists because a bug was reported that no
+   reproduction here reproduces - the form gets squashed on the device, not
+   in any rebuild of it. Instead of guessing which value is at fault, the
+   device shows it directly.
 
-   Bewusst nicht auf localhost beschraenkt, anders als ?demo= und ?preview=:
-   Der Fehler tritt auf dem Telefon auf, und das Telefon kann kein localhost
-   der Entwicklungsmaschine. Er zeigt auch nichts Vertrauliches – nur Zahlen
-   ueber das Fenster, in dem er selbst laeuft. Wer die Adresse nicht kennt,
-   sieht ihn nie.
+   Deliberately NOT restricted to localhost, unlike ?demo= and ?preview=:
+   the bug happens on the phone, and the phone can't reach the dev
+   machine's localhost. It also shows nothing confidential - just numbers
+   about the window it's running in. Anyone who doesn't know the URL
+   parameter never sees it.
 
-   pointer-events: none, damit er nichts abfaengt: Ein Messgeraet, das die
-   Messung stoert, misst sich selbst. */
-const MESS_SCHALTER = 'size_mess';
+   pointer-events: none, so it doesn't intercept anything: a measuring
+   device that disturbs the measurement is measuring itself. */
+const MEASURE_SWITCH = 'size_mess';
 
-/* Fuenfmal in die freie Flaeche der Kopfzeile tippen schaltet die Anzeige an
-   und wieder aus.
+/* Tapping the empty area of the header five times toggles the overlay on
+   and off.
    ---------------------------------------------------------------------------
-   Erst haengte das an der Marke – ein Fehler: Die Marke ist ein Link auf den
-   X-Account. Beim ersten Tippen war man weg, und die vier weiteren gab es nie.
+   This used to be wired to the logo - a mistake: the logo is a link to the
+   X account. The first tap already navigated away, and the other four
+   never happened.
 
-   Jetzt haengt es an der Kopfzeile selbst, und Beruehrungen, die auf einem
-   Link oder Knopf landen, zaehlen nicht mit. Auf dem Handy bricht die
-   Kopfzeile um: Marke links, Bild rechts, dazwischen rund 220 px, die nichts
-   tun. Genau dort hinein.
+   Now it's wired to the header itself, and touches that land on a link or
+   button don't count. On a phone the header wraps: logo on the left,
+   avatar on the right, roughly 220px between them that do nothing. Right
+   into that gap.
 
-   Der Umweg ueber die Adresse (?mess=1) reicht naemlich nicht: Der Fehler
-   tritt auf dem Startbildschirm auf, und dort GIBT es keine Adresszeile – die
-   App startet immer mit der start_url aus dem Manifest. Ein Schalter, den man
-   nur in Safari umlegen kann, misst genau den Fall nicht, um den es geht.
-   (Der Speicher hilft auch nicht: iOS haelt den einer abgelegten App getrennt
-   von dem in Safari.)
+   The workaround via the URL (?measurer=1) isn't enough on its own: the bug
+   happens on the home-screen app, and there IS no address bar there - the
+   app always starts at the start_url from the manifest. A switch you can
+   only flip in Safari doesn't measure the exact case in question. (Storage
+   doesn't help either: iOS keeps a home-screen app's storage separate from
+   Safari's.)
 
-   Fuenf Beruehrungen in zwei Sekunden auf eine Flaeche, die sonst nichts tut:
-   Von allein macht das niemand, und wer es absichtlich macht, sieht Zahlen
-   ueber sein eigenes Fenster. Mehr steht dort nicht. */
-(function messSchalter() {
-  const kopf = document.querySelector('.topbar');
-  if (!kopf) return;
+   Five touches within two seconds on an area that otherwise does nothing:
+   nobody does that by accident, and whoever does it on purpose sees
+   numbers about their own window. Nothing more than that. */
+(function measureSwitch() {
+  const header = document.querySelector('.topbar');
+  if (!header) return;
   let zaehler = 0;
-  let letzte = 0;
-  kopf.addEventListener('click', (e) => {
-    // Wer den Link oder einen Knopf trifft, wollte den Link oder den Knopf.
+  let last = 0;
+  header.addEventListener('click', (e) => {
+    // Whoever hits the link or a button wanted the link or the button.
     if (e.target.closest('a, button, input')) { zaehler = 0; return; }
     const jetzt = Date.now();
-    zaehler = jetzt - letzte < 2000 ? zaehler + 1 : 1;
-    letzte = jetzt;
+    zaehler = jetzt - last < 2000 ? zaehler + 1 : 1;
+    last = jetzt;
     if (zaehler < 5) return;
     zaehler = 0;
     try {
-      const an = localStorage.getItem(MESS_SCHALTER) === '1';
-      localStorage.setItem(MESS_SCHALTER, an ? '0' : '1');
+      const an = localStorage.getItem(MEASURE_SWITCH) === '1';
+      localStorage.setItem(MEASURE_SWITCH, an ? '0' : '1');
     } catch {}
     location.reload();
   });
 })();
 
-const messAn = (() => {
-  if (new URLSearchParams(location.search).get('mess') === '1') return true;
-  try { return localStorage.getItem(MESS_SCHALTER) === '1'; } catch { return false; }
+const measureOn = (() => {
+  if (new URLSearchParams(location.search).get('measurer') === '1') return true;
+  try { return localStorage.getItem(MEASURE_SWITCH) === '1'; } catch { return false; }
 })();
 
-if (messAn) {
-  const kasten = document.createElement('pre');
-  kasten.style.cssText = 'position:fixed;left:6px;top:6px;z-index:9999;'
+if (measureOn) {
+  const panel = document.createElement('pre');
+  panel.style.cssText = 'position:fixed;left:6px;top:6px;z-index:9999;'
     + 'margin:0;padding:6px 8px;border-radius:6px;pointer-events:none;'
     + 'background:rgba(0,0,0,.82);color:#9fe8b0;font:11px/1.35 ui-monospace,monospace;'
     + 'white-space:pre;max-width:calc(100vw - 12px);border:1px solid #2a2f3a';
-  document.body.appendChild(kasten);
+  document.body.appendChild(panel);
 
   const box = (s) => {
     const e = document.querySelector(s);
@@ -866,12 +874,12 @@ if (messAn) {
     return `${Math.round(r.top)}..${Math.round(r.bottom)} h=${Math.round(r.height)}`;
   };
   const stil = (n) => getComputedStyle(document.documentElement)
-    .getPropertyValue(n).trim() || '(leer)';
+    .getPropertyValue(n).trim() || '(empty)';
 
-  const zeigen = () => {
+  const show = () => {
     const vv = window.visualViewport;
     const admin = document.querySelector('#poll-admin');
-    kasten.textContent = [
+    panel.textContent = [
       `innerHeight  ${window.innerHeight}`,
       vv ? `vv.height    ${Math.round(vv.height)}   offsetTop ${Math.round(vv.offsetTop)}`
          : 'vv           fehlt',
@@ -884,21 +892,21 @@ if (messAn) {
       admin ? `  braucht    ${admin.scrollHeight}` : '',
       `poll-list    ${box('#poll-list')}`,
       `start-knopf  ${box('#btn-create-poll')}`,
-      // Nicht isStandalone() aufrufen: Die Funktion steht weiter unten und
-      // ist hier noch nicht initialisiert – der Aufruf wuerfe einen Fehler,
-      // und zwar ausgerechnet in dem Werkzeug, das Fehler finden soll.
+      // Don't call isStandalone(): the function is defined further down
+      // and isn't initialized here yet - calling it would throw an error,
+      // and in the one tool that's supposed to find errors, of all places.
       `standalone   ${window.matchMedia?.('(display-mode: standalone)').matches
         || window.navigator?.standalone === true}`,
     ].filter(Boolean).join('\n');
   };
 
-  zeigen();
-  window.visualViewport?.addEventListener('resize', zeigen);
-  window.visualViewport?.addEventListener('scroll', zeigen);
-  window.addEventListener('resize', zeigen);
-  document.addEventListener('focusin', () => setTimeout(zeigen, 350));
-  document.addEventListener('click', () => setTimeout(zeigen, 350));
-  setInterval(zeigen, 500);
+  show();
+  window.visualViewport?.addEventListener('resize', show);
+  window.visualViewport?.addEventListener('scroll', show);
+  window.addEventListener('resize', show);
+  document.addEventListener('focusin', () => setTimeout(show, 350));
+  document.addEventListener('click', () => setTimeout(show, 350));
+  setInterval(show, 500);
 }
 
 const INSTALL_SKIPPED = 'size_install_skipped';
@@ -907,24 +915,24 @@ const isStandalone = () =>
   window.matchMedia?.('(display-mode: standalone)').matches === true ||
   window.navigator?.standalone === true;
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent || '');
-/* Ein Telefon erkennt man am Finger, nicht an der Breite.
+/* A phone is recognized by touch, not by width.
    ---------------------------------------------------------------------------
-   Hier stand (max-width: 760px). Ein iPhone 14 im Querformat ist aber 844 px
-   breit, ein Pro Max 932 – wer den Link quer oeffnet, galt damit als Rechner
-   und bekam den Hinweis auf den Startbildschirm nie zu sehen.
-   
-   Das ist teurer als es klingt: Genau dieser Hinweis schuetzt davor, dass iOS
-   die Sitzung nach ein paar Tagen wegraeumt. Ist sie weg, kostet die naechste
-   Anmeldung wieder eine Zahlung.
-   
-   (hover: none) und (pointer: coarse) zusammen: Das erste allein trifft auch
-   Fernseher, das zweite allein auch Rechner mit Touchscreen. Beide zusammen
-   sind ein Geraet, das man in der Hand haelt. */
+   This used to be (max-width: 760px). But an iPhone 14 in landscape is
+   844px wide, a Pro Max 932 - opening the link in landscape counted as a
+   desktop, and the prompt to add to the home screen was never shown.
+
+   That's more expensive than it sounds: that exact prompt is what protects
+   against iOS clearing the session after a few days. Once it's gone, the
+   next login costs another payment.
+
+   (hover: none) and (pointer: coarse) together: the first one alone also
+   matches TVs, the second one alone also matches touchscreen desktops.
+   Both together mean a device you hold in your hand. */
 const isPhone = () =>
   window.matchMedia?.('(hover: none) and (pointer: coarse)').matches === true;
 
-// Chrome bietet das Ablegen selbst an – wir fangen das Angebot ab und lösen es
-// erst aus, wenn der Nutzer auf unseren Knopf tippt.
+// Chrome offers to add to home screen on its own - we intercept that offer
+// and only trigger it once the user taps our button.
 let deferredInstall = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -933,30 +941,30 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 /**
- * Den Anmeldebildschirm zeigen.
+ * Show the login screen.
  *
- * Im Blatt ist er anfangs versteckt, genau wie die App. Erst der Start
- * entscheidet, was zu sehen ist, und zeigt genau eines – sonst blitzt bei
- * jedem Aufruf kurz der Login auf, auch bei angemeldeten Leuten.
+ * In the markup it starts hidden, same as the app. Only startup decides
+ * what's shown, and shows exactly one of the two - otherwise the login
+ * would flash briefly on every load, even for people already signed in.
  */
-function zeigeLogin() {
+function showLogin() {
   $('#app').hidden = true;
   $('#login').hidden = false;
 }
 
-/** Das Gegenstück – auch hier wird genau eines von beiden gezeigt. */
-function zeigeApp() {
+/** The counterpart - here too, exactly one of the two is shown. */
+function showApp() {
   $('#login').hidden = true;
   $('#app').hidden = false;
 }
 
 
 function maybeShowInstallStep() {
-  if (state.jwt) return;                      // wer schon drin ist, wird nicht aufgehalten
+  if (state.jwt) return;                      // anyone already signed in isn't held up
   if (!isPhone() || isStandalone()) return;
-  try { if (localStorage.getItem(INSTALL_SKIPPED)) return; } catch { /* egal */ }
+  try { if (localStorage.getItem(INSTALL_SKIPPED)) return; } catch { /* doesn't matter */ }
 
-  // iOS kennt keinen Knopf dafür – dort bleibt nur die Anleitung.
+  // iOS has no button for this - only the instructions remain there.
   $('#ios-steps').hidden = !isIos();
   $('#btn-install').hidden = !deferredInstall;
   $('#step-address').hidden = true;
@@ -969,7 +977,7 @@ function leaveInstallStep() {
 }
 
 $('#btn-skip-install').addEventListener('click', () => {
-  try { localStorage.setItem(INSTALL_SKIPPED, '1'); } catch { /* egal */ }
+  try { localStorage.setItem(INSTALL_SKIPPED, '1'); } catch { /* doesn't matter */ }
   leaveInstallStep();
 });
 
@@ -979,27 +987,27 @@ $('#btn-install').addEventListener('click', async () => {
   const { outcome } = await deferredInstall.userChoice;
   deferredInstall = null;
   $('#btn-install').hidden = true;
-  // Bei Zustimmung stehen bleiben: Der Nutzer soll aus der abgelegten Fassung
-  // heraus verifizieren, nicht hier im Browser.
+  // Stay put on acceptance: the user should verify from the home-screen
+  // version, not here in the browser.
   if (outcome !== 'accepted') leaveInstallStep();
 });
 
 window.addEventListener('appinstalled', () => {
-  // Nicht automatisch weiterspringen: Verifiziert werden soll aus der
-  // abgelegten Fassung heraus, sonst liegt die Sitzung wieder im Browser.
+  // Don't jump ahead automatically: verification should happen from the
+  // home-screen version, otherwise the session ends up back in the browser.
   const lede = $('#step-install .lede');
   if (lede) lede.textContent = 'Added. Open SIZED from your home screen and verify there.';
   $('#btn-install').hidden = true;
 });
 
 /**
- * Fragt nach, ob die Zahlung angekommen ist – mit wachsendem Abstand.
+ * Poll whether the payment has arrived - with a growing interval.
  *
- * Ein fester Takt von vier Sekunden über das ganze 25-Minuten-Fenster wären
- * bis zu 375 Function-Aufrufe für einen einzigen Login, jeder davon mit einem
- * RPC-Scan im Rücken. Die Zahlung kommt fast immer in der ersten Minute an,
- * also wird dort eng getaktet und danach ausgedünnt: gleiche gefühlte
- * Geschwindigkeit, gut ein Zehntel der Aufrufe.
+ * A fixed four-second beat across the whole 25-minute window would be up to
+ * 375 function calls for a single login, each backed by an RPC scan. The
+ * payment almost always arrives within the first minute, so polling is
+ * tight there and thins out afterward: same felt speed, roughly a tenth of
+ * the calls.
  */
 function pollDelay(elapsedMs) {
   if (elapsedMs < 60_000) return 3_000;
@@ -1008,38 +1016,39 @@ function pollDelay(elapsedMs) {
 }
 
 /**
- * Die Uhr auf dem Zahlungsbildschirm.
+ * The clock on the payment screen.
  *
- * Sie hat mit dem Nachfragen NICHTS zu tun, und genau daran lag der Fehler:
- * Der Rest wurde nur dann neu geschrieben, wenn eine Antwort zurueckkam. Weil
- * der Abstand zwischen den Anfragen waechst (3s, 10s, 30s), sprang die Anzeige
- * mit – erst um drei Sekunden, nach fuenf Minuten um dreissig. Man wartet auf
- * eine Ueberweisung und sieht eine Uhr, die stockt; das sieht kaputt aus, und
- * in dem Moment ist Vertrauen das Einzige, was die Seite anzubieten hat.
+ * It has NOTHING to do with polling, and that's exactly where the bug was:
+ * the remaining time used to only get rewritten when a response came back.
+ * Because the interval between requests grows (3s, 10s, 30s), the display
+ * jumped along with it - by three seconds at first, by thirty after five
+ * minutes. You're waiting on a transfer and watching a clock that stutters;
+ * that looks broken, and at that moment trust is the only thing the page
+ * has to offer.
  *
- * Warum kein setInterval(…, 1000): Browser halten 1000 ms nicht ein, sie
- * garantieren nur MINDESTENS 1000. Die paar Millisekunden Verspaetung summieren
- * sich, wandern gegen die echte Sekundengrenze – und irgendwann faellt eine
- * Zahl aus: 24:59, 24:58, 24:56. Also derselbe Fehler in klein.
+ * Why not setInterval(..., 1000): browsers don't hold 1000ms exactly, they
+ * only guarantee AT LEAST 1000. Those few milliseconds of delay add up,
+ * drift against the real second boundary - and eventually a number gets
+ * skipped: 24:59, 24:58, 24:56. Same bug, just smaller.
  *
- * Stattdessen wird jeder naechste Aufruf auf die naechste Sekundengrenze
- * gelegt (left % 1000), plus 20 ms Sicherheitsabstand, damit er nicht knapp
- * davor landet und dieselbe Zahl zweimal schreibt. Der Wert selbst wird immer
- * aus deadline und Date.now() gerechnet, nie hochgezaehlt: Wer den Tab in den
- * Hintergrund schiebt, wo Browser Zeitgeber ausbremsen, sieht beim
- * Zurueckkommen sofort die richtige Zeit und nicht die aufgelaufene Differenz.
+ * Instead, each next call is scheduled for the next second boundary
+ * (left % 1000), plus a 20ms safety margin so it doesn't land just before
+ * it and write the same number twice. The value itself is always computed
+ * from deadline and Date.now(), never counted up: someone who backgrounds
+ * the tab, where browsers throttle timers, sees the correct time
+ * immediately on return, not the accumulated drift.
  */
 const restText = (ms) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')} left`;
 
-function starteUhr(deadline) {
-  const zeichne = () => {
+function startClock(deadline) {
+  const draw = () => {
     const left = Math.max(0, deadline - Date.now());
     $('#pay-timer').textContent = restText(left);
     if (left <= 0) return;
-    state.uhr = setTimeout(zeichne, (left % 1000) + 20);
+    state.clock = setTimeout(draw, (left % 1000) + 20);
   };
-  zeichne();
+  draw();
 }
 
 function startPolling() {
@@ -1049,7 +1058,7 @@ function startPolling() {
   const deadline = new Date(state.challenge.expiresAt).getTime();
   const startedAt = Date.now();
 
-  starteUhr(deadline);
+  startClock(deadline);
 
   const tick = async () => {
     const left = Math.max(0, deadline - Date.now());
@@ -1060,21 +1069,21 @@ function startPolling() {
       });
       if (r.status === 'verified') {
         stopPolling();
-        vergissChallenge();
+        forgetChallenge();
         state.jwt = r.token;
-        schreib(TOKEN_KEY, r.token);
+        write(TOKEN_KEY, r.token);
         state.me = r.profile;
         await enterApp();
         return;
       }
       if (r.status === 'expired') {
         stopPolling();
-        vergissChallenge();
+        forgetChallenge();
         $('#pay-error').textContent = 'This request expired. Start over to get a new amount.';
         $('#pay-error').hidden = false;
         return;
       }
-    } catch { /* nächster Versuch */ }
+    } catch { /* next attempt */ }
 
     if (left <= 0) { stopPolling(); return; }
     state.poller = setTimeout(tick, pollDelay(Date.now() - startedAt));
@@ -1084,35 +1093,35 @@ function startPolling() {
 }
 
 /**
- * Ein Ausschalter fuer beide Zeitgeber, nicht zwei.
+ * One switch for both timers, not two.
  *
- * Es sind zwei voellig verschiedene Dinge – das Nachfragen und die Uhr – aber
- * sie enden immer gemeinsam: bei bestaetigter Zahlung, bei Ablauf, beim
- * Abmelden. Zwei Ausschalter waeren zwei Stellen, an denen man einen vergisst,
- * und die vergessene Uhr laeuft dann unsichtbar weiter und schreibt in ein
- * Feld, das niemand mehr ansieht.
+ * They're two completely different things - the polling and the clock -
+ * but they always end together: on confirmed payment, on expiry, on
+ * logout. Two switches would be two places to forget one of them, and the
+ * forgotten clock would keep running invisibly, writing into a field
+ * nobody's looking at anymore.
  */
 const stopPolling = () => {
   if (state.poller) clearTimeout(state.poller);
-  if (state.uhr) clearTimeout(state.uhr);
+  if (state.clock) clearTimeout(state.clock);
   state.poller = null;
-  state.uhr = null;
+  state.clock = null;
 };
 
 function logout() {
-  loesche(TOKEN_KEY);
+  removeKey(TOKEN_KEY);
   unsubscribeAll();
   stopHoldingsTick();
   state.dmCache.clear();
   state.jwt = null; state.me = null; state.db = null;
-  zeigeLogin();
+  showLogin();
   $('#step-pay').hidden = true;
   $('#step-address').hidden = false;
 }
 $('#btn-logout').addEventListener('click', logout);
 
 // ---------------------------------------------------------------------------
-// App-Start
+// App startup
 // ---------------------------------------------------------------------------
 
 async function enterApp() {
@@ -1121,61 +1130,62 @@ async function enterApp() {
   state.cfg = unwrap(await state.db.from('app_config').select('*').eq('id', 1).single());
   if (!state.me) state.me = await loadMe();
 
-  // Kommt jemand über einen geteilten Abstimmungslink, ist das Ziel eine
-  // BESTIMMTE Abstimmung – nicht einfach die Liste.
+  // Whoever arrives via a shared poll link is headed for a SPECIFIC poll -
+  // not just the list.
   const zielPoll = /^#poll-\d+$/.test(location.hash);
 
   $('#dm-min-unit').textContent = 'in $' + state.cfg.symbol;
 
-  // Im Normalfall wird die App sofort sichtbar: Die Seite baut sich vor den
-  // Augen auf, und das ist besser als eine Sekunde Schwarz.
+  // In the normal case the app becomes visible right away: the page builds
+  // itself in front of your eyes, and that's better than a second of
+  // black.
   //
-  // Beim Abstimmungslink andersherum. Dort waere sichtbar: leere
-  // Abstimmungsliste, dann springt sie voll. Also bleibt die App verborgen,
-  // bis die Abstimmungen geladen sind – siehe unten.
-  if (!zielPoll) zeigeApp();
+  // With a poll link, it's the other way around. There, what would be
+  // visible is: empty poll list, then it snaps full. So the app stays
+  // hidden until the polls have loaded - see below.
+  if (!zielPoll) showApp();
   $('#poll-admin').hidden = !state.me.isAdmin;
-  // Deutlich sichtbar, damit niemand die Vorschau für echte Rechte hält.
-  // Der Balken sagt, WARUM die Seite gerade nicht die Wahrheit zeigt: Man
-  // sieht Ansems Oberflaeche, hat aber keine seiner Rechte, und jeder Versuch
-  // zu speichern wird abgelehnt. Ohne den Satz haelt man das fuer Fehler.
+  // Clearly visible, so nobody mistakes the preview for real admin rights.
+  // The bar says WHY the page isn't currently telling the truth: you're
+  // seeing Ansem's UI but have none of his permissions, and every attempt
+  // to save gets rejected. Without the sentence, that reads as a bug.
   //
-  // Im Demomodus steht dort NICHTS mehr. Der Balken stand dort einmal auch,
-  // und das war richtig gedacht – aber er ist nur auf localhost ueberhaupt
-  // erreichbar, sieht ihn also ausschliesslich der, der die Adresse selbst
-  // getippt hat. Der weiss, dass er ?demo= aufgerufen hat. Bezahlt hat den
-  // Hinweis dafuer jedes Bildschirmfoto: ein gelber Balken quer ueber dem
-  // unteren Rand, in jedem Bild und jedem Mitschnitt.
+  // In demo mode there's NOTHING there anymore. The bar used to be shown
+  // there too, and that was reasonable at the time - but it's only
+  // reachable on localhost in the first place, so only whoever typed the
+  // URL themselves ever sees it. They know they went to ?demo=. What paid
+  // for the reminder instead was every screenshot: a yellow bar across the
+  // bottom edge, in every image and every recording.
   //
-  // Der Schutz gegen versehentliche Testdaten haengt nicht an diesem Balken,
-  // sondern daran, dass im Demomodus nichts geladen und nichts geschrieben
-  // wird – siehe DEMO_DMS oben. Der Balken hat nur davon erzaehlt.
+  // The protection against accidental test data doesn't depend on this
+  // bar - it depends on nothing being loaded and nothing being written in
+  // demo mode at all, see DEMO_DMS above. The bar only announced that.
   const flagge = $('#preview-flag');
   flagge.hidden = !PREVIEW_ADMIN;
   renderMe();
 
-  // Tab-Auswahl vor dem Laden: Sonst überschreibt der Aufruf am Ende einen
-  // Tabwechsel, den der Nutzer während des Ladens schon vorgenommen hat.
-  // sync/catchUp aus: beide Bereiche werden direkt danach ohnehin geladen.
+  // Pick the tab before loading: otherwise the call at the end would
+  // overwrite a tab switch the user already made while loading was in
+  // progress. sync/catchUp off: both sections get loaded right after this
+  // anyway.
   //
-  // Polls ist seit dem Entfernen des Chats der Startpunkt – und damit auch
-  // beim Abstimmungslink schon der richtige Tab. Der Aufruf bleibt trotzdem
-  // stehen: Er setzt state.activeTab, und davon haengt ab, was dieser Browser
-  // per Realtime mithoert.
+  // Polls has been the starting point since chat was removed - and so it's
+  // already the right tab for the poll-link case too. The call stays in
+  // place regardless: it sets state.activeTab, and that decides what this
+  // browser listens for over realtime.
   selectTab('polls', { sync: false });
   syncRealtime({ catchUp: false });
   startHoldingsTick();
 
-  // allSettled, nicht all.
+  // allSettled, not all.
   //
-  // Vorher hat ein einziger fehlgeschlagener Bereich den ganzen Start
-  // abgebrochen – und weil der Aufrufer daraufhin den Login-Bildschirm zeigt,
-  // sah das für den Nutzer aus wie ein Rauswurf. Bei einer Seite, auf der ein
-  // neuer Login echtes Geld kostet, ist das die denkbar schlechteste Reaktion
-  // auf eine Kleinigkeit.
+  // It used to be that a single failing section aborted the whole startup
+  // - and because the caller then shows the login screen, that looked to
+  // the user like being kicked out. On a site where a new login costs real
+  // money, that's about the worst possible response to a minor failure.
   //
-  // Wer ein gültiges Token hat, kommt jetzt in jedem Fall in die App. Was
-  // nicht laden konnte, wird gemeldet und bleibt leer.
+  // Anyone with a valid token now reaches the app in every case. Whatever
+  // couldn't load gets reported and stays empty.
   const results = await Promise.allSettled([loadPolls(), loadDms()]);
   const failed = results.map((r) => r.reason).filter(Boolean);
   if (failed.length) {
@@ -1183,21 +1193,21 @@ async function enterApp() {
     toast(failed[0].message || 'Some parts could not be loaded', true);
   }
 
-  // Erst jetzt, nachdem die Abstimmungen im Blatt stehen: Vorher gäbe es das
-  // Ziel des Sprungs noch gar nicht. Steht in der Adresse keine Raute,
-  // passiert hier nichts.
+  // Only now, after the polls are in the markup: before this, the jump
+  // target wouldn't exist yet. If there's no hash in the URL, nothing
+  // happens here.
   //
-  // ohneRollen, weil die Liste in diesem Moment noch niemand gesehen hat: Ein
-  // weiches Scrollen von oben wäre eine Bewegung ohne Ausgangspunkt.
+  // ohneRollen, because nobody has seen the list yet at this point: a
+  // smooth scroll from the top would be movement with no starting point to
+  // move from.
   springeZuPollAusUrl({ ohneRollen: zielPoll });
 
-  // Und jetzt erst zeigen – mit der richtigen Abstimmung schon im Bild.
-  if (zielPoll) zeigeApp();
+  // Only now show it - with the right poll already in the picture.
+  if (zielPoll) showApp();
 
-  // Ohne await: Das Nachtragen der Vorschaukarten darf den Start nicht
-  // aufhalten. Es betrifft nur Ansem und nur Abstimmungen, die noch keine
-  // haben.
-  ergaenzeFehlendeKarten();
+  // No await: backfilling preview cards must not hold up startup. It only
+  // affects Ansem, and only polls that don't have one yet.
+  addMissingCards();
 }
 
 async function loadMe() {
@@ -1212,7 +1222,7 @@ async function loadMe() {
   };
 }
 
-/** Rohdaten aus dem Token – ohne Prüfung, nur zur Anzeige und Zeitrechnung. */
+/** Raw data from the token - unverified, only for display and time math. */
 function jwtPayload() {
   try {
     const p = state.jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -1226,36 +1236,37 @@ function walletFromJwt() {
 
 
 // ---------------------------------------------------------------------------
-// Bestandstakt
+// Holdings tick
 // ---------------------------------------------------------------------------
 
 /**
- * Zieht die $-Beträge aller sichtbaren Adressen einmal pro Minute nach.
+ * Refreshes the $ amount for every visible address once a minute.
  *
- * Zwei Dinge daran sind Absicht:
+ * Two things about this are deliberate:
  *
- * 1. Der Takt hängt an der Uhr, nicht am Ladezeitpunkt. Mit einem schlichten
- *    setInterval nach dem Laden springen die Beträge bei jedem Besucher zu
- *    einem anderen Zeitpunkt – wer nebeneinander sitzt, sieht sekundenlang
- *    verschiedene Zahlen. An der vollen Minute ausgerichtet ändert sich alles
- *    bei allen im selben Moment. Serverseitig gilt dasselbe: Dort wendet ein
- *    einziger Lauf pro Minute einen Kurs auf alle Wallets an.
+ * 1. The tick is tied to the clock, not to load time. With a plain
+ *    setInterval started after load, the amounts would jump at a different
+ *    moment for every visitor - two people sitting next to each other
+ *    would see different numbers for a few seconds. Aligned to the top of
+ *    the minute, everything changes for everyone at the same instant. The
+ *    same holds server-side: a single run per minute applies one price to
+ *    all wallets there.
  *
- * 2. Es wird nur nachgeschlagen, nicht gerechnet. Was hier ankommt, hat die
- *    Datenbank geschrieben; der Browser hat keinen Einfluss darauf, welcher
- *    Betrag neben einem Namen steht.
+ * 2. It only looks the value up, it doesn't compute it. Whatever arrives
+ *    here was written by the database; the browser has no influence over
+ *    which amount ends up next to a name.
  */
 const TICK_MS = 60_000;
 let tickTimer = null;
 
 function startHoldingsTick() {
   stopHoldingsTick();
-  // Bis zur nächsten vollen Minute warten, danach im Minutentakt.
-  const bisVoll = TICK_MS - (Date.now() % TICK_MS);
+  // Wait until the next full minute, then tick once a minute.
+  const untilFull = TICK_MS - (Date.now() % TICK_MS);
   tickTimer = setTimeout(function tick() {
     refreshLiveHoldings();
     tickTimer = setTimeout(tick, TICK_MS);
-  }, bisVoll);
+  }, untilFull);
 }
 
 function stopHoldingsTick() {
@@ -1263,39 +1274,39 @@ function stopHoldingsTick() {
 }
 
 /**
- * Zieht den eigenen Bestand nach.
+ * Refreshes just your own holdings.
  *
- * Bis zum Entfernen des Chats war das ein Sammelnachschlagen fuer JEDE gerade
- * sichtbare Adresse – neben jeder Nachricht stand ein Betrag, und alle mussten
- * im selben Takt nachziehen. Uebrig ist davon genau eine Adresse: die eigene.
+ * Before chat was removed, this was a batch lookup for EVERY currently
+ * visible address - an amount sat next to every message, and all of them
+ * had to refresh on the same tick. What's left of that is exactly one
+ * address: your own.
  *
- * Die Betraege im Posteingang kommen nicht von hier, sondern aus der Sicht
- * dm_threads, und werden mit ihr zusammen geladen. Sie hier zusaetzlich jede
- * Minute nachzuschlagen waere eine zweite Wahrheit ueber dieselbe Zahl.
+ * The amounts in the inbox don't come from here - they come from the
+ * dm_threads view and load together with it. Looking them up again here
+ * every minute would create a second source of truth for the same number.
  *
- * Warum die eigene ueberhaupt noch: Sie steuert die Schreibsperre fuer DMs und
- * den Betrag oben rechts. Wer Token nachkauft, soll nicht neu laden muessen,
- * damit die Sperre aufgeht – einen Auffrischknopf gibt es nicht mehr.
+ * Why your own is still refreshed at all: it drives the DM write lock and
+ * the amount in the top right. Someone who buys more tokens shouldn't have
+ * to reload to unlock writing - there's no refresh button anymore.
  */
 async function refreshLiveHoldings() {
   if (!state.db || document.hidden || !state.me?.wallet) return;
 
-  // Bei Ansem gibt es nichts nachzuziehen: Seine Zahl steht nirgends mehr,
-  // und an einer Schwelle kommt er nicht vorbei – renderDmGate() steigt bei
-  // isAdmin vorher aus. Eine Abfrage pro Minute fuer einen Wert, den niemand
-  // liest, ist genau die Sorte Arbeit, die man erst bemerkt, wenn man sie
-  // sucht.
+  // For Ansem there's nothing to refresh: his number isn't shown anywhere
+  // anymore, and he never runs into a threshold - renderDmGate() bails out
+  // early for isAdmin. A query every minute for a value nobody reads is
+  // exactly the kind of work you only notice once you go looking for it.
   if (state.me.isAdmin) return;
 
-  let zeile;
+  let line;
   try {
     const { data, error } = await state.db
       .from('wallets').select('usd_value').eq('address', state.me.wallet).maybeSingle();
     if (error || !data) return;
-    zeile = data;
+    line = data;
   } catch { return; }
 
-  const meins = Number(zeile.usd_value);
+  const meins = Number(line.usd_value);
   if (Number.isFinite(meins) && meins !== Number(state.me.usd)) {
     state.me.usd = meins;
     renderMe();
@@ -1303,21 +1314,21 @@ async function refreshLiveHoldings() {
 }
 
 /**
- * Schreibrecht für DMs an Ansem.
+ * Write permission for DMs to Ansem.
  *
- * Der Posteingang ist der teure Kanal: Dort liest eine einzelne Person mit,
- * statt dass etwas im Strom vorbeizieht. Ansem stellt den Wert selbst ein
- * (siehe unten).
+ * The inbox is the expensive channel: one specific person reads it,
+ * instead of it just drifting past in a stream. Ansem sets the value
+ * himself (see below).
  *
- * Für ihn selbst gibt es hier nichts zu sperren; er sieht ohnehin die
- * Posteingangsansicht und nicht dieses Eingabefeld.
+ * For him there's nothing to lock here; he sees the inbox view anyway, not
+ * this input field.
  */
 function renderDmGate() {
   const min = Number(state.cfg.min_dm_usd ?? 0);
   const allowed = state.me.isAdmin || min <= 0 || Number(state.me.usd ?? 0) >= min;
 
   $('#dm-form').classList.toggle('locked', !allowed);
-  // Wer nicht schreiben darf, braucht auch keinen Antwortknopf.
+  // Whoever can't write doesn't need a reply button either.
   $('#dm-user').classList.toggle('no-write', !allowed);
   $('#dm-gate').hidden = allowed;
   if (!allowed) clearDmReply();
@@ -1327,23 +1338,23 @@ function renderDmGate() {
 }
 
 /**
- * Der Text im Sperrhinweis.
+ * The text in the lockout notice.
  *
- * Nimmt den Anlass als Argument, obwohl es seit dem Entfernen des Chats nur
- * noch einen gibt. Das bleibt so: Die Trennung zwischen "wie viel" und "wofuer"
- * ist der Grund, warum der Satz beim naechsten Kanal nicht neu geschrieben
- * werden muss.
+ * Takes the reason as an argument even though there's only one left since
+ * chat was removed. That stays as it is: the separation between "how much"
+ * and "for what" is the reason this sentence won't need to be rewritten for
+ * the next channel.
  *
- * Hier stand ein zweiter Satz: "You hold $102." Er ist weg, und zwar nicht nur
- * aus Geschmack. Der eigene Bestand steht bei jedem, der diesen Hinweis
- * ueberhaupt sieht, schon oben rechts in der Kopfzeile – dieselbe Zahl aus
- * derselben Quelle, zwei Handbreit darueber. Zweimal dasselbe zu sagen macht
- * die Aussage nicht deutlicher, es macht nur die zweite Stelle zu einer, die
- * irgendwann von der ersten abweichen kann.
+ * There used to be a second sentence here: "You hold $102." It's gone, and
+ * not just for taste. Anyone who sees this notice at all already has their
+ * own holdings shown in the top right of the header - the same number from
+ * the same source, a couple of inches above. Saying the same thing twice
+ * doesn't make it clearer, it just turns the second spot into one that can
+ * eventually drift out of sync with the first.
  *
- * Und der Satz war die unfreundlichere Haelfte des Hinweises: "so viel
- * brauchst du" ist eine Auskunft, "so wenig hast du" ist eine Bewertung. Was
- * fehlt, rechnet sich ohnehin jeder selbst aus.
+ * And that sentence was the less friendly half of the notice: "here's how
+ * much you need" is information, "here's how little you have" is a
+ * judgment. Whatever's missing, everyone works out for themselves anyway.
  */
 function gateText(min, was) {
   return `Hold at least <strong>${esc(fmtUsd(min))}</strong> in $${esc(state.cfg.symbol)} ${esc(was)}.`;
@@ -1352,155 +1363,160 @@ function gateText(min, was) {
 function renderMe() {
   const holdings = $('#me-holdings');
 
-  // Oben rechts stehen zwei verschiedene Dinge:
+  // The top right shows two different things:
   //
-  //   Ansem       sein Profilbild. Faehrt der Zeiger darueber, sagt ein
-  //               Hinweis daneben, mit welchem Konto er angemeldet ist – bei
-  //               ihm steht dort keine Adresse, und ein Bild sagt das nicht
-  //               von selbst.
-  //   alle andern ihre drei Zeichen, in ihrer eigenen Farbe – genau so, wie
-  //               sie in den DMs und im Posteingang stehen.
+  //   Ansem         his profile picture. Hover the pointer over it and a
+  //                 tooltip next to it says which account he's signed in
+  //                 as - there's no address shown for him, and a picture
+  //                 doesn't say that on its own.
+  //   everyone else their three characters, in their own color - exactly
+  //                 as they appear in the DMs and the inbox.
   //
-  // Hier stand eine Runde lang die gekuerzte Adresse (EMwU…QLxP) in der Farbe
-  // des Betrags daneben, mit dem Argument: Oben rechts sei die Frage nicht
-  // "wer bin ich", sondern "mit welcher Wallet bin ich hier".
+  // For a while this used to show the shortened address (EMwU...QLxP) in
+  // the color of the amount next to it, on the argument that the question
+  // in the top right isn't "who am I" but "which wallet am I here as".
   //
-  // Das Argument stimmt, es rechtfertigte die Aenderung nur nicht: Die drei
-  // Zeichen SIND, wie man auf dieser Seite heisst – neben jeder eigenen
-  // Nachricht, im Zitat, im Posteingang. Oben rechts etwas anderes zu zeigen
-  // hiess, sich unter zwei Namen zu sehen. Und die Farbe traegt die Auskunft
-  // mit: Sie wird aus der vollen Adresse gerechnet, ist also fuer jede Wallet
-  // eine andere.
+  // The argument is correct, it just didn't justify the change: the three
+  // characters ARE your name on this site - next to every message of
+  // yours, in the quote, in the inbox. Showing something different in the
+  // top right meant seeing yourself under two names. And the color carries
+  // that information along with it: it's computed from the full address,
+  // so it's different for every wallet.
   //
-  // Beides sind <span> und keine Knoepfe. Es gibt hier nichts zu druecken: Der
-  // Hinweis kommt mit dem Zeiger und geht mit ihm, das macht das Blatt allein.
-  // Hier stand eine Runde lang ein <button> mit Klickzuhoerern, einem
-  // Aussenklick-Handler und einer Escape-Taste – alles fuer einen Kasten, der
-  // sich von selbst zeigt. Ein Knopf, der auf einen Klick nichts tut, liest
-  // sich ausserdem als Defekt.
+  // Both are <span> elements, not buttons. There's nothing to press here:
+  // the tooltip comes with the pointer and leaves with it, the stylesheet
+  // handles that on its own. For a while there was a <button> here with
+  // click listeners, an outside-click handler, and an Escape key - all for
+  // a box that shows itself. A button that does nothing on click also
+  // reads as broken.
   //
-  // Das Kuerzel bleibt bei Ansem im Dokument, obwohl das Blatt es versteckt:
-  // Eine Vorlesestimme braucht einen Namen, ein Bild ist ihr keiner. Den
-  // Hinweis bekommt sie ueber aria-describedby, auch wenn er nicht zu sehen
-  // ist – ein Kasten, den nur der Zeiger hervorholt, waere fuer sie sonst gar
-  // nicht da.
+  // The handle stays in the document for Ansem even though the stylesheet
+  // hides it: a screen reader needs a name, and a picture isn't one to it.
+  // It gets the tooltip via aria-describedby, even though it isn't
+  // visible - a box that only the pointer brings up would otherwise not
+  // exist for it at all.
   $('#me-handle').outerHTML = state.me.isAdmin
     ? `<span id="me-handle" class="handle h admin-name" aria-describedby="me-info"
         ><span class="kuerzel">${esc(state.me.handle)}</span></span>`
     : `<span id="me-handle" class="handle h t${toneOf(state.me.wallet)}"
         >${esc(state.me.handle)}</span>`;
 
-  // "DM" für alle anderen, "DMs" nur für Ansem – und das ist keine Kosmetik,
-  // sondern die Wahrheit über den Tab: Ein Nutzer hat genau EIN Gespräch, das
-  // mit Ansem. Es gibt für ihn keine Liste, in die er kommt, sondern einen
-  // Verlauf. Ansem sieht dahinter einen Posteingang mit allen.
+  // "DM" for everyone else, "DMs" only for Ansem - and that's not
+  // cosmetic, it's the truth about the tab: a regular user has exactly ONE
+  // conversation, the one with Ansem. There's no list for them to arrive
+  // at, just a history. Behind it, Ansem sees an inbox with everyone.
   //
-  // Umgeschaltet wird eine Klasse und nicht der Text: Das "s" steht als
-  // eigenes Element im Blatt und wird nur unsichtbar gemacht. Sein Platz
-  // bleibt damit stehen, und Polls daneben rückt nicht.
+  // A class is toggled, not the text: the "s" is its own element in the
+  // markup and just gets made invisible. That keeps its space reserved, so
+  // "Polls" next to it doesn't shift.
   //
-  // Wer hier wieder textContent setzt, loescht das Element und bekommt die
-  // Verschiebung zurueck – dann stehen die Reiter bei Ansem und einem Nutzer
-  // 4,5 px auseinander.
+  // Setting textContent here again would remove the element and bring the
+  // shift back - then the tabs would sit 4.5px apart for Ansem versus a
+  // regular user.
   $('[data-tab="dms"]').classList.toggle('zeigt-s', Boolean(state.me.isAdmin));
 
-  // Der eigene Bestand steht oben rechts – bei allen ausser Ansem.
+  // Your own holdings sit in the top right - for everyone except Ansem.
   //
-  // Fuer sie ist es die Zahl, an der alles haengt: Sie entscheidet, ob sie
-  // schreiben duerfen, und sie steht neben jeder ihrer Nachrichten. Wer sie
-  // oben sieht, weiss, woran er ist.
+  // For them it's the number everything hinges on: it decides whether they
+  // can write, and it sits next to every one of their messages. Seeing it
+  // up top tells them where they stand.
   //
-  // Bei Ansem beantwortet sie keine Frage. Er kommt an keiner Schwelle
-  // vorbei, sein Bestand aendert nichts an dem, was er tun kann – und er
-  // steht ausgerechnet ueber einem Posteingang, in dem jede Zeile einen
-  // Betrag traegt. Genau dort ist eine weitere Zahl keine Auskunft mehr,
-  // sondern eine, die man mitliest und wieder verwirft.
+  // For Ansem it doesn't answer a question. He never runs into a
+  // threshold, his holdings don't change anything he can do - and of all
+  // places, it would sit above an inbox where every row already carries an
+  // amount. Right there, one more number stops being information and
+  // becomes something you read along and discard again.
   holdings.hidden = Boolean(state.me.isAdmin);
   if (!state.me.isAdmin) holdings.textContent = fmtUsd(state.me.usd);
   renderDmGate();
 }
 
-/* Hier standen die Zuhoerer fuer den Hinweis neben Ansems Profilbild: ein
- * Klick zum Auf- und Zuklappen, ein zweiter aufs Dokument zum Schliessen und
- * die Escape-Taste dazu.
+/* This used to be where the listeners for the tooltip next to Ansem's
+ * profile picture lived: one click to open and close it, a second on the
+ * document to dismiss it, plus the Escape key.
  *
- * Alle drei sind weg. Der Hinweis erscheint, solange der Zeiger auf dem Bild
- * steht, und verschwindet, sobald er herunterfaehrt – das steht als eine Regel
- * im Blatt (siehe .me-info) und braucht hier keine Zeile.
+ * All three are gone. The tooltip appears as long as the pointer sits on
+ * the picture and disappears as soon as it moves off - that's a single
+ * rule in the stylesheet (see .me-info) and needs no line here.
  */
 
-/* Hier stand der Auffrischknopf mit seinem drehenden Symbol.
+/* This used to be where the refresh button with its spinning icon lived.
  *
- * Er ist weg, weil er nichts tat, was nicht ohnehin passiert:
+ * It's gone because it did nothing that doesn't already happen anyway:
  *
- *   - Der Helius-Webhook meldet jede Bewegung des $ANSEM-Mints und liest die
- *     betroffenen Wallets sofort neu ein.
- *   - Der Cron-Lauf von refresh-holdings ist das Netz darunter, auch fuer
- *     Kursaenderungen ohne Transfer.
- *   - refreshLiveHoldings() holt den gespeicherten Stand jede Minute in die
- *     offene Seite, ohne dass jemand etwas druecken muss.
+ *   - The Helius webhook reports every movement of the $ANSEM mint and
+ *     re-reads the affected wallets immediately.
+ *   - The refresh-holdings cron run is the safety net underneath, even for
+ *     price changes with no transfer involved.
+ *   - refreshLiveHoldings() pulls the stored value into the open page
+ *     every minute, with nobody needing to press anything.
  *
- * Was mit ihm verschwunden ist, gehoert dazugesagt: Der Knopf war der einzige
- * Weg, eine Kettenabfrage VON HAND auszuloesen. Wer gerade nachgekauft hat,
- * wartet jetzt auf Webhook oder Cron statt selbst zu druecken. Solange beide
- * laufen, sind das Sekunden; faellt beides aus, faellt es niemandem mehr auf,
- * weil es keinen Knopf mehr gibt, der sichtbar nichts tut.
+ * What disappeared along with it is worth saying: the button was the only
+ * way to trigger an on-chain lookup BY HAND. Someone who just bought more
+ * now waits on the webhook or the cron instead of pressing it themselves.
+ * As long as both are running, that's a matter of seconds; if both go
+ * down, nobody notices anymore, because there's no longer a button that
+ * visibly does nothing.
  *
- * Die Edge Function refresh-holdings bleibt bestehen – sie ist genau das, was
- * der Cron aufruft.
+ * The refresh-holdings edge function still exists - it's exactly what the
+ * cron calls.
  */
 
 
 // ---------------------------------------------------------------------------
 // Realtime
 //
-// Supabase rechnet Realtime pro Empfänger ab: Eine Stimme bei 1.000
-// zuhörenden Browsern sind 1.000 abgerechnete Nachrichten. Deshalb hört jeder
-// Browser nur das mit, was er gerade auch anzeigt:
+// Supabase bills realtime per recipient: one vote across 1,000 listening
+// browsers is 1,000 billed messages. So every browser only listens to what
+// it's actually displaying right now:
 //
-//   * Seite im Hintergrund (anderer Tab, Handy gesperrt) -> gar nichts.
-//     supabase-js trennt die WebSocket-Verbindung, sobald der letzte Kanal weg
-//     ist; damit fällt der Nutzer auch aus der Zählung der gleichzeitigen
-//     Verbindungen heraus.
-//   * Abstimmungs-Kanal nur, solange der Abstimmungs-Tab offen ist.
-//   * DMs laufen mit, solange die Seite sichtbar ist: winziges Volumen, aber
-//     der Nutzer soll Ansems Antwort sofort sehen, egal wo er gerade ist.
+//   * Page in the background (other tab, phone locked) -> nothing at all.
+//     supabase-js drops the WebSocket connection as soon as the last
+//     channel is gone; that also drops the user out of the concurrent
+//     connection count.
+//   * The polls channel only while the polls tab is open.
+//   * DMs keep listening as long as the page is visible: tiny volume, but
+//     the user should see Ansem's reply right away, no matter where they
+//     currently are.
 //
-// Beim Wiederanmelden wird der jeweilige Bereich einmal frisch geladen, damit
-// nichts fehlt, was während der Pause passiert ist.
+// On reconnect, the relevant section reloads fresh once, so nothing is
+// missed that happened during the gap.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Rückfallebene
+// Fallback layer
 //
-// Kommt die Live-Leitung nicht zustande – Verbindungskontingent erschöpft,
-// Störung bei Supabase, Firmennetz, das WebSockets blockiert –, dann darf die
-// Seite nicht einfach verstummen. Genau das wäre sonst der Fall: Anmelden,
-// Verlauf laden und Schreiben laufen über einen anderen Weg und funktionieren
-// weiter. Nur neue Nachrichten kämen nie an, ohne jeden Hinweis.
+// If the live connection doesn't come together - connection quota
+// exhausted, an outage at Supabase, a corporate network blocking
+// WebSockets - the page must not just go quiet. That's exactly what would
+// otherwise happen: logging in, loading history, and writing all go
+// through a different path and keep working. Only new messages would never
+// arrive, with no indication at all.
 //
-// Also fragt die Seite in dem Fall selbst nach. Drei Sekunden Verzögerung
-// merkt kaum jemand; eine tote Abstimmung merkt jeder. Nachfragen zählt zudem
-// nicht als Realtime-Nachricht, kostet also nichts extra.
+// So in that case the page polls for itself. A three-second delay is
+// barely noticed by anyone; a dead-looking poll is noticed by everyone.
+// Polling also doesn't count as a realtime message, so it costs nothing
+// extra.
 // ---------------------------------------------------------------------------
 
 const FALLBACK_MS = 3000;
 
 function startFallback(name) {
-  // Kanäle, die wir selbst geschlossen haben, sollen nicht nachgefragt werden.
+  // Channels we closed ourselves shouldn't be polled.
   if (!state.channels[name] || state.fallback[name]) return;
-  // Die Abstimmungen fragen ohnehin im Takt nach, ob die Leitung steht oder
-  // nicht – eine zweite Uhr daneben wäre nur eine doppelte Abfrage, und die
-  // Meldung „Live updates unavailable" wäre schlicht falsch: Die Stimmen
-  // kommen weiter an. Bricht die Leitung, verzögert sich einzig, wann eine
-  // NEUE Abstimmung auftaucht, und auch die holt der Takt binnen 5 Sekunden.
+  // Polls already poll on a tick regardless of whether the connection is
+  // up - a second timer next to that would just be a duplicate query, and
+  // the "Live updates unavailable" message would be flat-out wrong: votes
+  // keep arriving either way. If the connection drops, the only thing
+  // delayed is when a NEW poll shows up, and the tick picks that up within
+  // 5 seconds too.
   if (name === 'polls') return;
   console.warn(`[realtime] ${name}: no live connection, polling every ${FALLBACK_MS} ms`);
   if (!Object.keys(state.fallback).length) {
     toast('Live updates unavailable - refreshing every few seconds');
   }
   state.fallback[name] = setInterval(() => {
-    CATCH_UP[name]().catch(() => { /* beim nächsten Durchlauf erneut */ });
+    CATCH_UP[name]().catch(() => { /* try again next tick */ });
   }, FALLBACK_MS);
 }
 
@@ -1513,8 +1529,7 @@ function stopFallback(name) {
 const logStatus = (name) => (status, err) => {
   if (status === 'SUBSCRIBED') {
     console.info(`[realtime] ${name} verbunden`);
-    // Wieder da: einmal nachladen, um die Lücke zu schließen, dann aufhören
-    // zu fragen.
+    // Back online: reload once to close the gap, then stop polling.
     if (state.fallback[name]) {
       CATCH_UP[name]().catch(() => {});
       toast('Live updates are back');
@@ -1530,9 +1545,9 @@ const logStatus = (name) => (status, err) => {
 };
 
 /**
- * Mehrere Ereignisse kurz hintereinander zu einem Nachladen zusammenfassen.
- * Ohne das löst jede einzelne Stimme in jedem offenen Browser eine eigene
- * Abfrage aus – bei einer laufenden Abstimmung wäre das ein Anfragensturm.
+ * Coalesce several events in quick succession into one reload. Without
+ * this, every single vote would trigger its own query in every open
+ * browser - during a live poll that would be a flood of requests.
  */
 function reloadSoon(key, fn, delay = 400) {
   clearTimeout(state.reloadTimers[key]);
@@ -1540,59 +1555,61 @@ function reloadSoon(key, fn, delay = 400) {
 }
 
 // ---------------------------------------------------------------------------
-// Stimmen werden nicht zugestellt, sondern nachgefragt
+// Votes aren't pushed, they're polled
 //
-// Hier stand einmal eine dritte Zeile: `.on(… table: 'votes', refresh)`. Sie
-// hiess: Supabase, melde JEDE abgegebene Stimme an JEDEN offenen Browser.
+// There used to be a third line here: `.on(... table: 'votes', refresh)`.
+// It meant: Supabase, report EVERY vote cast to EVERY open browser.
 //
-// Supabase zählt solche Meldungen einzeln – eine Änderung an 500 Zuhörer sind
-// 500 Nachrichten, nicht eine. Und weil `votes_read` in der Datenbank auf
-// `using (true)` steht, ist jeder Zuhörer berechtigt, keiner fällt weg.
+// Supabase counts those reports individually - one change delivered to 500
+// listeners is 500 messages, not one. And because `votes_read` in the
+// database is `using (true)`, every listener is authorized, none get
+// dropped.
 //
-// Das rechnet sich so: Ansem stellt eine Abstimmung online, 500 Leute sind da
-// und stimmen in einer halben Minute ab. Das sind rund 17 Stimmen pro Sekunde
-// mal 500 Browser – etwa 8.300 Nachrichten pro Sekunde. Das Kontingent liegt
-// je nach Tarif bei 500 oder 2.500. Darüber schliesst Supabase die Kanäle mit
-// „Too many messages per second", alle treten gleichzeitig neu bei und laufen
-// ins nächste Limit. Ausgerechnet in der Minute, auf die alles hinausläuft.
+// Here's the math: Ansem posts a poll, 500 people are there and vote
+// within half a minute. That's roughly 17 votes per second times 500
+// browsers - about 8,300 messages per second. The quota, depending on
+// plan, is 500 or 2,500. Above that Supabase closes the channels with "Too
+// many messages per second", everyone rejoins at once and runs straight
+// into the next limit. In precisely the minute the whole thing was built
+// for.
 //
-// Eine Stimmenzahl ist aber ein Zähler, kein Ereignis. Niemand muss auf die
-// Zehntelsekunde wissen, dass ein Fremder abgestimmt hat – die Balken wandern
-// ohnehin dauernd. Also fragt der Polls-Tab von sich aus nach, solange er offen
-// ist. Aus 8.300 Nachrichten pro Sekunde werden 500 geteilt durch 5, also 100
-// ganz gewöhnliche Abfragen – die zählen gegen kein Realtime-Kontingent.
+// But a vote count is a counter, not an event. Nobody needs to know to the
+// tenth of a second that a stranger just voted - the bars are shifting
+// constantly anyway. So the polls tab polls on its own instead, as long as
+// it's open. 8,300 messages per second becomes 500 divided by 5, i.e. 100
+// perfectly ordinary queries - which don't count against any realtime
+// quota.
 //
-// Was live bleibt: eine NEUE oder BEENDETE Abstimmung. Das passiert ein paar
-// Mal am Tag und soll sich sofort anfühlen.
+// What stays live: a NEW or CLOSED poll. That happens a few times a day
+// and should feel instant.
 //
-// Wer selbst abstimmt, wartet auf nichts: vote() lädt direkt neu.
+// Whoever votes themselves waits on nothing: vote() reloads directly.
 //
-// Passend dazu ist public.votes aus der Realtime-Veröffentlichung genommen
-// (Wanderung 20260903040000_votes_nicht_mehr_live.sql). Wer die Zeile oben je
-// wieder einbaut, muss die Tabelle dort auch wieder aufnehmen – sonst kommt
-// nichts an, ohne Fehlermeldung.
+// To match this, public.votes has been removed from the realtime
+// publication (migration 20260903040000_votes_nicht_mehr_live.sql).
+// Anyone who ever puts the line above back in has to re-add the table
+// there too - otherwise nothing arrives, with no error at all.
 // ---------------------------------------------------------------------------
 
-const STIMMEN_TAKT_MS = 5000;
+const VOTE_CADENCE_MS = 5000;
 
 /**
- * Nach einem Stups die DMs nachziehen – und dabei nicht beim ersten Fehler
- * aufgeben.
+ * Reload the DMs after a nudge - and not give up on the first failure.
  *
- * Hier stand nur `await loadDms()` ohne jede Absicherung. Der Unterschied fiel
- * beim Blick in die Konsole auf: Beim Umstellen der Datenbankgröße und während
- * eines Lasttests scheiterten Abfragen mit `net::ERR_FAILED` – die Antwort kam
- * gar nicht erst zustande. Trifft so ein Moment genau den Stups, ging er still
- * verloren, und die Nachricht erschien erst, wenn zufällig etwas anderes ein
- * Nachladen auslöste. Bei einer DM, die Ansem daraufhin nicht sieht, ist das
- * mehr als ein Schönheitsfehler.
+ * This used to be just `await loadDms()`, with no safeguard at all. The
+ * difference showed up while watching the console: during a database
+ * resize and during a load test, queries failed with `net::ERR_FAILED` -
+ * the response never came back at all. If a moment like that landed on
+ * exactly the nudge, it was lost silently, and the message only showed up
+ * once something else happened to trigger a reload. For a DM Ansem doesn't
+ * see because of that, this is more than a cosmetic issue.
  *
- * Drei Versuche mit wachsendem Abstand (0,6 / 1,2 s) decken genau den Fall ab,
- * um den es geht: eine kurze Störung. Eine längere fängt ohnehin die
- * Rückfallebene ab, die anspringt, sobald der Kanal selbst Fehler meldet.
+ * Three attempts with a growing delay (0.6s / 1.2s) cover exactly the case
+ * at hand: a brief hiccup. A longer outage is caught by the fallback layer
+ * anyway, which kicks in as soon as the channel itself reports an error.
  *
- * Der Abstimmungs-Takt braucht das nicht – er fragt sowieso alle 5 Sekunden
- * erneut nach. Ein Stups kommt nur einmal.
+ * The poll tick doesn't need this - it polls again every 5 seconds
+ * regardless. A nudge only arrives once.
  */
 async function dmsNachziehen(versuche = 3) {
   for (let i = 0; i < versuche; i++) {
@@ -1607,8 +1624,8 @@ async function dmsNachziehen(versuche = 3) {
       }
     }
   }
-  // Aufgeben, aber nicht schweigen: Der nächste Tabwechsel, das nächste
-  // Sichtbarwerden und der nächste Stups laden ohnehin neu.
+  // Give up, but don't stay silent: the next tab switch, the next time the
+  // page becomes visible, and the next nudge will reload anyway.
   console.error('[dm] reload after nudge failed for good');
   return false;
 }
@@ -1622,33 +1639,34 @@ const CHANNELS = {
   },
 
   // -------------------------------------------------------------------------
-  // DMs: ein Stups auf einem eigenen Kanal, keine Meldung an alle
+  // DMs: a nudge on its own channel, not a broadcast to everyone
   //
-  // Hier stand `.on('postgres_changes', … table: 'dms')`. Bei dieser Art Kanal
-  // prüft Supabase die Rechte EINZELN, für jeden Zuhörer, bei jeder Änderung –
-  // eine DM an Ansem bei 3.000 offenen Seiten sind 3.000 Prüfungen. Und das
-  // läuft einfädig, ein größerer Server hilft also nicht.
+  // This used to be `.on('postgres_changes', ... table: 'dms')`. With that
+  // kind of channel, Supabase checks permissions INDIVIDUALLY, for every
+  // listener, on every change - one DM to Ansem with 3,000 open pages is
+  // 3,000 permission checks. And that runs single-threaded, so a bigger
+  // server doesn't help.
   //
-  // Jetzt schickt ein Trigger in der Datenbank einen Stups an genau zwei
-  // Kanäle: den eigenen Thread und Ansems Posteingang. Zwei Zustellungen statt
-  // dreitausend Prüfungen, und die Rechte werden einmal beim Betreten geprüft.
+  // Now a database trigger sends a nudge to exactly two channels: the
+  // sender's own thread and Ansem's inbox. Two deliveries instead of three
+  // thousand checks, and permissions get checked once, on join.
   //
-  // Der Stups trägt KEINEN Inhalt – nur "in deinem Thread hat sich etwas
-  // getan". Gelesen wird danach wie immer über die Datenbank, wo die RLS von
-  // public.dms greift. Selbst ein falsch gesetzter Kanal gäbe also nichts
-  // preis ausser der Tatsache, dass eine Nachricht existiert.
+  // The nudge carries NO content - just "something happened in your
+  // thread." Reading afterward still goes through the database as always,
+  // where public.dms's RLS applies. So even a misconfigured channel would
+  // give away nothing except the fact that a message exists.
   //
-  // private: true ist nicht optional. Ohne das prüft Supabase die Zugangsregel
-  // gar nicht erst, und der Kanal wäre für jeden offen.
+  // private: true is not optional. Without it, Supabase never checks the
+  // access rule at all, and the channel would be open to anyone.
   //
-  // Zugehörige Wanderung: 20260904010000_dm_broadcast.sql. Wer diese Zeilen je
-  // auf postgres_changes zurückbaut, muss public.dms dort wieder in die
-  // Veröffentlichung aufnehmen – sonst kommt stillschweigend nichts an.
+  // Associated migration: 20260904010000_dm_broadcast.sql. Anyone who ever
+  // reverts these lines back to postgres_changes has to re-add public.dms
+  // to the publication there too - otherwise nothing arrives, silently.
   // -------------------------------------------------------------------------
   dms: () => {
     const nachladen = () => reloadSoon('dms', dmsNachziehen);
-    // Ansem hört an einem Posteingang für alle Threads, ein Nutzer nur am
-    // eigenen. Zwei verschiedene Kanalnamen, dieselbe Behandlung.
+    // Ansem listens on one inbox for all threads; a regular user only on
+    // their own. Two different channel names, the same handling.
     const thema = state.me.isAdmin ? 'dm:admin' : `dm:${state.me.wallet}`;
     return state.db
       .channel(thema, { config: { private: true } })
@@ -1656,43 +1674,44 @@ const CHANNELS = {
   },
 };
 
-/** Was dieser Browser gerade mithören soll. */
+/** What this browser should currently be listening to. */
 function wantedChannels() {
   if (document.visibilityState === 'hidden') return [];
   const wanted = [];
-  // Der DM-Kanal heisst seit dem Umbau nach der eigenen Wallet (dm:<adresse>)
-  // beziehungsweise dm:admin. Ohne angemeldeten Nutzer gaebe es also einen
-  // Kanal namens "dm:undefined" – der wuerde von der Zugangsregel abgewiesen,
-  // und die Seite meldete eine Stoerung, wo gar keine ist.
+  // Since the rework, the DM channel is named after your own wallet
+  // (dm:<address>), or dm:admin. Without a signed-in user that would be a
+  // channel named "dm:undefined" - the access rule would reject it, and
+  // the page would report a problem where there isn't one.
   if (state.me?.wallet) wanted.push('dms');
   if (state.activeTab === 'polls') wanted.push('polls');
   return wanted;
 }
 
-/** Nachladen, um die Lücke zu schließen, die während der Abwesenheit entstand. */
+/** Reload to close the gap that opened up while away. */
 const CATCH_UP = { polls: () => loadPolls(), dms: () => loadDms() };
 
 /**
- * Der Takt, in dem der offene Polls-Tab die Stimmenzahlen nachfragt.
+ * The tick on which the open polls tab polls for vote counts.
  *
- * Läuft genau so lange wie der Kanal 'polls' – also nur, wenn der Tab wirklich
- * offen und die Seite sichtbar ist. Ein Browser im Hintergrund fragt nichts.
+ * Runs for exactly as long as the 'polls' channel does - so only while the
+ * tab is actually open and the page is visible. A backgrounded browser
+ * polls nothing.
  */
-function taktAn() {
+function cadenceOn() {
   if (state.stimmenTakt) return;
   state.stimmenTakt = setInterval(() => {
     loadPolls().catch((e) => console.warn('[poll] tick:', e.message));
-  }, STIMMEN_TAKT_MS);
+  }, VOTE_CADENCE_MS);
 }
 
-function taktAus() {
+function cadenceOff() {
   clearInterval(state.stimmenTakt);
   state.stimmenTakt = null;
 }
 
 /**
- * Bringt die offenen Kanäle mit dem gewünschten Zustand in Deckung. Darf
- * beliebig oft aufgerufen werden – was schon läuft, bleibt unangetastet.
+ * Brings the open channels in line with the desired state. Safe to call as
+ * often as needed - whatever's already running is left untouched.
  */
 function syncRealtime({ catchUp = true } = {}) {
   if (!state.db) return;
@@ -1700,25 +1719,25 @@ function syncRealtime({ catchUp = true } = {}) {
 
   for (const [name, channel] of Object.entries(state.channels)) {
     if (wanted.has(name)) continue;
-    // Erst austragen, dann schließen: Sonst meldet supabase-js das Schließen
-    // zurück, während der Kanal noch als gewollt gilt, und die Rückfallebene
-    // würde für etwas anspringen, das wir selbst abgeschaltet haben.
+    // Deregister first, then close: otherwise supabase-js reports the
+    // close while the channel still counts as wanted, and the fallback
+    // layer would kick in for something we shut down ourselves.
     delete state.channels[name];
     stopFallback(name);
-    if (name === 'polls') taktAus();
+    if (name === 'polls') cadenceOff();
     state.db.removeChannel(channel);
   }
 
   for (const name of wanted) {
     if (state.channels[name]) continue;
     state.channels[name] = CHANNELS[name]().subscribe(logStatus(name));
-    if (name === 'polls') taktAn();
-    if (catchUp) CATCH_UP[name]().catch(() => { /* nächster Versuch beim nächsten Wechsel */ });
+    if (name === 'polls') cadenceOn();
+    if (catchUp) CATCH_UP[name]().catch(() => { /* next attempt on the next switch */ });
   }
 }
 
 function unsubscribeAll() {
-  taktAus();
+  cadenceOff();
   for (const name of Object.keys(state.fallback)) stopFallback(name);
   for (const channel of Object.values(state.channels)) state.db?.removeChannel(channel);
   state.channels = {};
@@ -1728,9 +1747,8 @@ function unsubscribeAll() {
 
 document.addEventListener('visibilitychange', () => {
   syncRealtime();
-  // Ein Tab im Hintergrund fragt nichts ab. Beim Zurückkommen sofort einmal
-  // nachziehen, statt bis zur nächsten vollen Minute veraltete Beträge zu
-  // zeigen.
+  // A backgrounded tab polls nothing. On return, refresh once immediately
+  // instead of showing stale amounts until the next full minute.
   if (!document.hidden) refreshLiveHoldings();
 });
 
@@ -1745,155 +1763,156 @@ function selectTab(tab, { sync = true } = {}) {
   $$('.tab').forEach((t) => t.classList.toggle('is-active', t.dataset.tab === tab));
   $('#pane-polls').hidden = tab !== 'polls';
   $('#pane-dms').hidden = tab !== 'dms';
-  // Der Tabwechsel entscheidet mit, was dieser Browser mithört.
+  // The tab switch also decides what this browser listens to.
   if (sync) syncRealtime();
 }
 const scrollBottom = (el) => { el.scrollTop = el.scrollHeight; };
 
 // ---------------------------------------------------------------------------
-// Zahlenfelder
+// Numeric fields
 //
-// Hier stand bis zum Entfernen des Chats auch dessen Betragsfilter. Die drei
-// Helfer darunter sind geblieben, weil sie nie etwas mit dem Chat zu tun
-// hatten: Sie gehoeren zu einem Eingabefeld, in das eine Geldsumme getippt
-// wird. Davon gibt es noch eines – Ansems Schwelle fuer DMs.
+// This used to also hold chat's amount filter, up until chat was removed.
+// The three helpers below stayed, because they never had anything to do
+// with chat: they belong to an input field where a sum of money gets
+// typed. One of those still exists - Ansem's threshold for DMs.
 // ---------------------------------------------------------------------------
 
 /**
- * Laesst in einem Feld nur eine Zahl zu.
+ * Restricts a field to a number only.
  *
- * Das Feld ist bewusst type="text": Ein Zahlenfeld blendet in jedem Browser die
- * winzigen Auf-/Ab-Pfeile ein, die auf einem Telefon nicht zu treffen sind.
- * Der Preis dafuer ist, dass der Browser auch keine Eingabe mehr prueft. Das
- * passiert deshalb hier.
+ * The field is deliberately type="text": a number field brings up the tiny
+ * up/down arrows in every browser, and those aren't hittable on a phone.
+ * The price for that is that the browser no longer validates input either.
+ * That's why it happens here instead.
  *
- * Erlaubt sind Ziffern und ein einzelner Punkt als Dezimaltrennzeichen.
- * Kommas fallen weg: Sie sind in diesem Feld das Tausendertrennzeichen und
- * werden von der Anzeige selbst gesetzt, siehe gruppiere().
+ * Digits and a single period as the decimal separator are allowed. Commas
+ * are dropped: in this field they're the thousands separator and are added
+ * by the display itself, see gruppiere().
  *
- * Vor dem Punkt ist bei MAX_STELLEN Schluss. Weitere Ziffern erscheinen gar
- * nicht erst – dasselbe Verhalten, das ein Feld mit maxlength haette. Nur
- * laesst sich maxlength hier nicht benutzen: Der Browser zaehlt Zeichen, und
- * die Trennzeichen setzt diese Datei selbst dazu. Eine Grenze von 13 waere
- * beim Tippen richtig und beim Einfuegen falsch, weil eingefuegter Text die
- * Kommas noch nicht hat.
+ * Before the period, it stops at MAX_STELLEN. Further digits simply don't
+ * appear - the same behavior a maxlength field would have. Except
+ * maxlength can't be used here: the browser counts characters, and this
+ * file adds the separators itself. A limit of 13 would be correct while
+ * typing and wrong on paste, because pasted text doesn't have the commas
+ * yet.
  *
- * Nachkommastellen bleiben ungezaehlt. Sie machen die Zahl nicht groesser,
- * und gespeichert wird ohnehin auf zwei gerundet.
+ * Decimal places aren't counted. They don't make the number bigger, and
+ * it's saved rounded to two anyway.
  */
 const MAX_STELLEN = 10;
 
-function saubereZahl(text) {
+function cleanNumber(text) {
   let out = '';
-  let trenner = false;
+  let separator = false;
   let stellen = 0;
   for (const c of String(text)) {
     if (c >= '0' && c <= '9') {
-      if (trenner) { out += c; continue; }
+      if (separator) { out += c; continue; }
       if (stellen >= MAX_STELLEN) continue;
       stellen += 1;
       out += c;
       continue;
     }
-    if (c === '.' && !trenner) { out += '.'; trenner = true; }
+    if (c === '.' && !separator) { out += '.'; separator = true; }
   }
   return out;
 }
 
 /**
- * Setzt Tausendertrennzeichen.
+ * Adds thousands separators.
  *
- * Ab welcher Groesse? Ab vier Stellen, also ab 1,000 – und zwar nicht aus
- * Geschmack: Genau dort setzt sie auch der Betrag im Posteingang. In einer
- * Zeile steht "$1,325", und wer im Schwellenfeld "1325" eintippt, soll dieselbe
- * Zahl sehen und nicht raten muessen, ob er eine Null zu viel erwischt hat. Ab
- * fuenf Stellen zu gruppieren waere typografisch vertretbar, hier aber
- * inkonsequent.
+ * Starting at what size? Four digits, i.e. from 1,000 up - and not out of
+ * taste: that's exactly where the amount in the inbox switches too. A row
+ * shows "$1,325", and someone who types "1325" into the threshold field
+ * should see the same number, not have to guess whether they typed one
+ * extra zero. Grouping from five digits up would be typographically
+ * defensible, but inconsistent with that.
  *
- * Komma und nicht Punkt, obwohl das auf einer deutschen Tastatur ungewohnt
- * ist: Die Seite ist durchgehend englisch, und "$1.325" liest sich im
- * Deutschen wie ein Betrag mit Nachkommastellen – also ausgerechnet
- * tausendmal falsch. Derselbe Grund steht schon bei nfFull weiter oben.
+ * A comma, not a period, even though that looks unfamiliar to a German
+ * keyboard: the site is entirely in English, and "$1.325" reads like an
+ * amount with decimal places - wrong by exactly a factor of a thousand.
+ * The same reasoning already appears at nfFull further up.
  *
- * Nur der Teil vor dem Punkt wird gruppiert. Nachkommastellen bekommen keine
- * Trennzeichen, sonst kaeme aus 0.12345 ein "0.123,45".
+ * Only the part before the period gets grouped. Decimal places get no
+ * separators, or 0.12345 would turn into "0.123,45".
  */
 function gruppiere(roh) {
   const text = String(roh);
   if (text === '') return '';
-  const punkt = text.indexOf('.');
-  const ganz = punkt === -1 ? text : text.slice(0, punkt);
-  const rest = punkt === -1 ? '' : text.slice(punkt);
+  const dot = text.indexOf('.');
+  const ganz = dot === -1 ? text : text.slice(0, dot);
+  const rest = dot === -1 ? '' : text.slice(dot);
   return ganz.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + rest;
 }
 
 /**
- * Haengt Pruefung und Gruppierung an ein Feld.
+ * Attaches validation and grouping to a field.
  *
- * Der Umweg ueber die Schreibmarke ist noetig: Ersetzt man den Feldinhalt, setzt
- * der Browser die Marke ans Ende. Wer mitten in einer Zahl tippt, stuende
- * danach hinter der letzten Ziffer statt an seiner Stelle.
+ * Tracking the caret is necessary: if you just replace the field content,
+ * the browser moves the caret to the end. Someone typing in the middle of
+ * a number would then end up behind the last digit instead of where they
+ * were.
  *
- * Gezaehlt werden dabei nur Ziffern und der Punkt, nicht die Trennzeichen: Die
- * verschieben sich beim Tippen staendig – aus "999" wird mit einer weiteren
- * Ziffer "9,999", und alles danach rutscht um eine Stelle. Die Marke gehoert
- * hinter dieselbe Ziffer wie vorher, nicht an dieselbe Zeichenposition.
+ * Only digits and the period are counted here, not the separators: those
+ * shift constantly while typing - one more digit turns "999" into "9,999",
+ * and everything after it moves over by one position. The caret belongs
+ * behind the same digit as before, not at the same character offset.
  */
-function nurZahlen(input) {
+function onlyNumbers(input) {
   input.addEventListener('input', () => {
     const vorher = input.value;
     const pos = input.selectionStart ?? vorher.length;
-    const zeichenDavor = saubereZahl(vorher.slice(0, pos)).length;
+    const charBefore = cleanNumber(vorher.slice(0, pos)).length;
 
-    const nachher = gruppiere(saubereZahl(vorher));
+    const nachher = gruppiere(cleanNumber(vorher));
     if (nachher === vorher) return;
     input.value = nachher;
 
     let i = 0;
-    let gezaehlt = 0;
-    while (i < nachher.length && gezaehlt < zeichenDavor) {
-      if (nachher[i] !== ',') gezaehlt++;
+    let counted = 0;
+    while (i < nachher.length && counted < charBefore) {
+      if (nachher[i] !== ',') counted++;
       i++;
     }
-    try { input.setSelectionRange(i, i); } catch { /* nicht ueberall moeglich */ }
+    try { input.setSelectionRange(i, i); } catch { /* not possible everywhere */ }
   });
 }
 
-nurZahlen($('#dm-min-input'));
+onlyNumbers($('#dm-min-input'));
 
 /**
- * Der Strich rechts im Posteingang: erscheint beim Rollen, sagt wo man steht,
- * und geht wieder.
+ * The mark on the right of the inbox: shows up while scrolling, says where
+ * you are, and goes away again.
  *
- * Er ist kein Rollbalken des Browsers, sondern ein eigenes Kaestchen – warum,
- * steht in styles.css bei #thread-strich. Der Kern davon: Die Leiste des
- * Browsers ist immer so lang wie der sichtbare Anteil am Ganzen. Bei drei
- * Gespraechen fuellt sie fast die ganze Bahn. Diese Marke ist stattdessen
- * IMMER gleich klein und sagt nur eines, naemlich wo man steht.
+ * It isn't the browser's own scrollbar, it's a separate little box - why
+ * is explained in styles.css at #thread-strich. The core of it: the
+ * browser's scrollbar is always as long as the visible share of the
+ * whole. With three conversations it fills almost the entire track. This
+ * mark instead is ALWAYS the same small size and says exactly one thing:
+ * where you are.
  *
- * Gerechnet wird nur beim Rollen, und das genuegt: Zu sehen ist die Marke
- * ohnehin nur dann. Waechst die Liste oder aendert sich die Fensterhoehe,
- * waehrend sie unsichtbar ist, steht sie beim naechsten Rollen von selbst
- * wieder richtig – es braucht also keinen Beobachter, der zwischendurch
- * nachmisst.
+ * It's only computed while scrolling, and that's enough: the mark is only
+ * ever visible then anyway. If the list grows or the window height
+ * changes while it's invisible, it's correct again on its own the next
+ * time you scroll - so no observer is needed to keep re-measuring in the
+ * meantime.
  *
- * 700 ms sind kein Messwert, sondern die Spanne, in der eine Handbewegung noch
- * eine ist: Wer mit dem Finger nachschiebt, soll den Strich nicht zwischendurch
- * verlieren.
+ * 700ms isn't a measured value, it's the span within which one gesture of
+ * the hand still counts as one: someone dragging with their finger
+ * shouldn't lose the mark partway through.
  */
 const STRICH_BLEIBT = 700;
 /**
- * Wie lang die Marke wird.
+ * How long the mark is.
  *
- * Grundsatz ist der Anteil des Sichtbaren am Ganzen – also das, was ein
- * Rollbalken ohnehin tut: Bei einer langen Liste wird die Marke kurz, bei
- * einer kurzen lang. Das ist die Auskunft, die eine feste Groesse nicht geben
- * kann.
+ * The base rule is the share of the visible against the whole - the same
+ * thing a scrollbar does anyway: a long list gets a short mark, a short
+ * list a long one. That's the information a fixed size can't give.
  *
- * Nur an den Raendern nicht. Ohne Deckel wuerde die Marke bei acht
- * Gespraechen fast die ganze Bahn fuellen und waere kein Zeichen mehr,
- * sondern ein Streifen; ohne Boden verschwaende sie bei sehr langen Listen zu
- * einem Punkt, den man beim Rollen aus den Augen verliert.
+ * Except at the edges. Without a ceiling, the mark would fill almost the
+ * whole track with eight conversations and stop being a mark at all,
+ * becoming a stripe instead; without a floor it would shrink to a dot on
+ * very long lists, one you'd lose track of while scrolling.
  */
 const STRICH_MAX = 64;
 const STRICH_MIN = 24;
@@ -1902,15 +1921,15 @@ const STRICH_MIN = 24;
   const strich = $('#thread-strich');
   let weg;
 
-  const setze = () => {
+  const assign = () => {
     const rollweg = liste.scrollHeight - liste.clientHeight;
-    // Nichts zu rollen: Dann gibt es auch keine Stelle, an der man stuende.
+    // Nothing to scroll: then there's also no position to be at.
     if (rollweg <= 0) { liste.classList.remove('rollt'); return; }
 
     const anteil = liste.clientHeight / liste.scrollHeight;
-    // Die eigene Zahl weiterverwenden statt offsetHeight zurueckzulesen: Der
-    // Browser rechnet erst beim naechsten Bild nach, und die Lage haengt an
-    // genau dieser Hoehe.
+    // Keep reusing our own computed value instead of reading offsetHeight
+    // back: the browser doesn't recompute layout until the next frame, and
+    // the position depends on exactly this height.
     const hoch = Math.round(
       Math.min(STRICH_MAX, Math.max(STRICH_MIN, liste.clientHeight * anteil)));
     strich.style.height = `${hoch}px`;
@@ -1921,33 +1940,35 @@ const STRICH_MIN = 24;
   };
 
   liste.addEventListener('scroll', () => {
-    setze();
+    assign();
     clearTimeout(weg);
     weg = setTimeout(() => liste.classList.remove('rollt'), STRICH_BLEIBT);
   }, { passive: true });
 }
 
 // ---------------------------------------------------------------------------
-// Abstimmungen
+// Polls
 // ---------------------------------------------------------------------------
 
 /**
- * Drei erfundene Abstimmungen fuer den Demomodus.
+ * Three made-up polls for demo mode.
  *
- * Bewusst mit sehr verschiedenen Summen: 2,4 Mio, 184 Tausend, 912 Dollar.
- * Genau daran entscheidet sich, ob die Zahlen in der Zeile noch
- * nebeneinanderpassen und ob kurzUsd() sinnvoll rundet – bei drei Abstimmungen
- * derselben Groessenordnung sieht jede Fassung gut aus.
+ * Deliberately with very different sums: 2.4M, 184K, 912 dollars. That's
+ * exactly what decides whether the numbers in the row still fit side by
+ * side and whether shortUsd() rounds sensibly - with three polls of the
+ * same order of magnitude, every version looks fine.
  *
- * Und drei verschiedene Zustaende, weil sie verschieden aussehen: eine mit
- * Frist (die Zeile wird unter einer Stunde gold), eine ohne, eine geschlossene.
+ * And three different states, because they look different: one with a
+ * deadline (the row turns gold under an hour left), one without, one
+ * closed.
  *
- * Die Form ist genau die, die loadPolls() sonst aus der Datenbank baut – sonst
- * wuerde hier eine Oberflaeche geprueft, die es so nicht gibt.
+ * The shape is exactly what loadPolls() otherwise builds from the
+ * database - otherwise this would be testing a UI that doesn't actually
+ * exist like this.
  */
 function demoPolls() {
   const inStunden = (h) => new Date(Date.now() + h * 3600_000).toISOString();
-  const bauen = (id, question, closesAt, closed, paare) => {
+  const construct = (id, question, closesAt, closed, paare) => {
     const totalUsd = paare.reduce((a, [, usd]) => a + usd, 0);
     return {
       id, question, closesAt, closed, totalUsd, myOptionId: null,
@@ -1958,13 +1979,13 @@ function demoPolls() {
     };
   };
   return [
-    bauen(9003, 'Where should I stream next?', inStunden(3), false, [
+    construct(9003, 'Where should I stream next?', inStunden(3), false, [
       ['Twitch', 1_640_000], ['X', 620_000], ['Both, alternating', 148_000],
     ]),
-    bauen(9002, 'Should we do a weekly AMA?', null, false, [
+    construct(9002, 'Should we do a weekly AMA?', null, false, [
       ['Yes, every Friday', 121_000], ['No, keep it spontaneous', 63_000],
     ]),
-    bauen(9001, 'Change the ticker?', inStunden(-26), true, [
+    construct(9001, 'Change the ticker?', inStunden(-26), true, [
       ['Keep $ANSEM', 640], ['Something shorter', 180],
       ['Put it to a second vote', 62], ['No opinion', 30],
     ]),
@@ -1972,7 +1993,7 @@ function demoPolls() {
 }
 
 async function loadPolls() {
-  // Im Demomodus wird nichts geladen – siehe DEMO_DMS ganz oben.
+  // Nothing is loaded in demo mode - see DEMO_DMS way up top.
   if (DEMO_DMS) {
     state.polls = demoPolls();
     renderPolls();
@@ -2005,7 +2026,7 @@ async function loadPolls() {
         id: o.id,
         label: o.label,
         usd: totals[i],
-        // Nur für die Balkenbreite, nicht als Zahl angezeigt.
+        // Only for the bar width, never shown as a number.
         share: totalUsd > 0 ? totals[i] / totalUsd : 0,
       })),
     };
@@ -2014,20 +2035,20 @@ async function loadPolls() {
 }
 
 /**
- * Wie lange eine Abstimmung noch läuft, als Text.
+ * How much time a poll has left, as text.
  *
- * Es wird ABGERUNDET, und das ist eine Entscheidung, keine Bequemlichkeit.
- * Bei 2 Stunden 59 Minuten steht hier "2h". Wer das liest, glaubt weniger Zeit
- * zu haben, als er hat – und irrt sich in die harmlose Richtung. Aufgerundet
- * stünde "3h", und jemand käme fünf Minuten zu spät, weil die Seite ihm Zeit
- * versprochen hat, die es nicht gab.
+ * It's ROUNDED DOWN, and that's a decision, not a convenience. At 2 hours
+ * 59 minutes this reads "2h". Whoever reads that believes they have less
+ * time than they actually do - and is wrong in the harmless direction.
+ * Rounded up it would say "3h", and someone would show up five minutes
+ * late because the page promised them time that wasn't there.
  *
- * Zwei Einheiten, nie drei: "2d 4h" sagt alles, was man für eine Entscheidung
- * braucht. "2d 4h 17m" liest niemand zu Ende, und die Minuten sind bei zwei
- * Tagen Restzeit ohnehin bedeutungslos.
+ * Two units, never three: "2d 4h" says everything you need for a
+ * decision. Nobody reads "2d 4h 17m" all the way through, and the minutes
+ * are meaningless anyway with two days left.
  *
- * Unter einer Minute keine Zahl mehr: Eine Sekundenzahl in einer Liste, die
- * sich alle 30 Sekunden aktualisiert, wäre die meiste Zeit falsch.
+ * No number at all under a minute: a count of seconds in a list that
+ * refreshes every 30 seconds would be wrong most of the time.
  */
 function fristText(closesAt) {
   const restMs = new Date(closesAt) - Date.now();
@@ -2040,35 +2061,35 @@ function fristText(closesAt) {
   if (min > 0) return `${min}m left`;
   return 'closing now';
 }
-// Unter einer Stunde wird die Zeile golden. Eine Stunde und nicht fuenf
-// Minuten: Die Grenze soll den Punkt treffen, an dem Abstimmen noch etwas
-// aendert. Wer sie bei fuenf Minuten zoege, faerbte die Zeile in dem Moment,
-// in dem sie niemandem mehr nuetzt.
+// The row turns gold under an hour left. An hour, not five minutes: the
+// threshold is meant to land on the point where voting still changes
+// something. Setting it at five minutes would color the row exactly at the
+// moment it stops being useful to anyone.
 const BALD_MS = 60 * 60 * 1000;
-const fristZeile = (p) =>
+const deadlineLine = (p) =>
   `<span class="frist-rest${new Date(p.closesAt) - Date.now() < BALD_MS ? ' is-bald' : ''}"`
   + `>· ${esc(fristText(p.closesAt))}</span>`;
 
 /**
- * Der Zeiger, der die Restzeit nachzieht.
+ * The ticker that keeps the remaining time up to date.
  *
- * Er schreibt nur die Textstelle neu, statt die Liste neu zu bauen. Ein
- * innerHTML alle 30 Sekunden würde die Balkenanimation zurücksetzen, den
- * Mauszeiger von der Antwort werfen, über der er gerade steht, und den
- * Bildlauf verlieren – für eine Zahl, die sich um eine Minute geändert hat.
+ * It only rewrites the text node, instead of rebuilding the list. An
+ * innerHTML every 30 seconds would reset the bar animation, knock the
+ * mouse pointer off the answer it's currently sitting on, and lose the
+ * scroll position - for a number that changed by one minute.
  *
- * Neu geladen wird nur in dem einen Fall, in dem sich wirklich etwas anderes
- * ändert: wenn eine Abstimmung gerade abgelaufen ist. Dann muss sie
- * tatsächlich neu gebaut werden, denn ihre Antworten sind ab jetzt gesperrt.
- * Ohne das bliebe sie anklickbar, und der Klick käme als rote Fehlermeldung
- * aus der Datenbank zurück – die Regel ist dort richtig durchgesetzt, aber der
- * Nutzer bekäme einen Defekt zu sehen, wo eine Frist abgelaufen ist.
+ * It only reloads in the one case where something else genuinely changes:
+ * when a poll has just closed. Then it actually has to be rebuilt, because
+ * its answers are locked from now on. Without that it would stay
+ * clickable, and the click would come back as a red error from the
+ * database - the rule is correctly enforced there, but the user would see
+ * what looks like a bug where a deadline had simply passed.
  *
- * 30 Sekunden, nicht 60: Bei einem Takt von einer Minute stünde eine Minute
- * lang die vorherige Minute da.
+ * 30 seconds, not 60: with a one-minute tick, the previous minute would
+ * stay on screen for a full minute.
  */
 let fristT = null;
-function fristTakt() {
+function deadlineCadence() {
   clearInterval(fristT);
   const laufend = state.polls.filter((p) => !p.closed && p.closesAt);
   if (!laufend.length) return;
@@ -2088,18 +2109,18 @@ function fristTakt() {
 }
 
 /**
- * Woran ein Knopf in der Liste wiederzuerkennen ist, wenn sie neu gebaut wird.
+ * How to recognize a button in the list again once it's been rebuilt.
  *
- * Die Knoten selbst sind danach andere; die Kombination aus Klasse und
- * Abstimmungsnummer bleibt. Gebraucht wird das, um den Tastaturfokus zu
- * halten: list.innerHTML wirft ihn auf <body>, und wer sich gerade mit der
- * Tabulatortaste zum Löschknopf vorgearbeitet hat, drückt danach Enter ins
- * Leere. Auch das ist "manchmal geht es nicht" – nur an der Tastatur.
+ * The nodes themselves are different afterward; the combination of class
+ * and poll number stays the same. This is needed to preserve keyboard
+ * focus: list.innerHTML throws it onto <body>, and whoever just tabbed
+ * their way to the delete button ends up pressing Enter into nothing. This
+ * is the same "sometimes it doesn't work" - just for keyboard users.
  */
-const knopfMerkmal = (el) => {
+const buttonTrait = (el) => {
   if (!el || !el.dataset) return null;
-  for (const [klasse, rolle] of Object.entries(KNOPF_ROLLEN)) {
-    if (el.classList.contains(klasse)) return `.${klasse}[data-${rolle.feld}="${el.dataset[rolle.feld]}"]`;
+  for (const [klasse, rolle] of Object.entries(BUTTON_ROLES)) {
+    if (el.classList.contains(klasse)) return `.${klasse}[data-${rolle.field}="${el.dataset[rolle.field]}"]`;
   }
   return null;
 };
@@ -2111,36 +2132,36 @@ function renderPolls() {
     clearInterval(fristT);
     return;
   }
-  // Vor dem Neubau merken, was den Fokus hat – aber nur, wenn er in dieser
-  // Liste liegt. Steht er in einem Feld des Anlegekastens, hat der Neubau ihn
-  // gar nicht angefasst und darf ihn erst recht nicht verschieben.
+  // Remember what has focus before the rebuild - but only if it's in this
+  // list. If it's in a field of the create box, the rebuild never touched
+  // it, and it definitely shouldn't be moved.
   const fokusWar = list.contains(document.activeElement)
-    ? knopfMerkmal(document.activeElement) : null;
+    ? buttonTrait(document.activeElement) : null;
 
   list.innerHTML = state.polls.map(pollHtml).join('');
-  // Im selben Durchlauf wie der Neubau: Zwischen den beiden Zeilen kann kein
-  // Bild auf den Schirm kommen, in dem ein scharfer Löschknopf harmlos
-  // aussieht – und kein Klick dazwischenrutschen.
-  knoepfeMalen(list);
+  // In the same pass as the rebuild: between these two lines, no frame can
+  // reach the screen where an armed delete button looks harmless again -
+  // and no click can slip in between.
+  paintButtons(list);
   if (fokusWar) $(fokusWar, list)?.focus({ preventScroll: true });
 
   $$('.opt', list).forEach((el) => {
-    const abstimmen = () => {
+    const castVote = () => {
       if (!el.classList.contains('locked')) {
         vote(Number(el.dataset.poll), Number(el.dataset.option));
       }
     };
-    el.addEventListener('click', abstimmen);
-    // Enter und Leertaste – das ist, was ein Knopf tut, und role="button"
-    // verspricht genau das. Ein Element, das sich als Knopf ausgibt und dann
-    // auf keine Taste hoert, ist schlimmer als ein ehrliches div.
+    el.addEventListener('click', castVote);
+    // Enter and space - that's what a button does, and role="button"
+    // promises exactly that. An element that presents itself as a button
+    // and then listens to no key at all is worse than an honest div.
     //
-    // preventDefault bei der Leertaste, sonst rollt die Seite darunter weg,
-    // waehrend die Stimme abgegeben wird.
+    // preventDefault on space, or the page underneath would scroll while
+    // the vote is being cast.
     el.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
       e.preventDefault();
-      abstimmen();
+      castVote();
     });
   });
   $$('.btn-close-poll', list).forEach((b) => b.addEventListener('click', async () => {
@@ -2148,17 +2169,18 @@ function renderPolls() {
     if (error) toast(error.message, true); else loadPolls();
   }));
   $$('.poll-share', list).forEach((b) =>
-    b.addEventListener('click', () => teilePoll(b.dataset.share)));
+    b.addEventListener('click', () => sharePoll(b.dataset.share)));
   $$('.poll-image', list).forEach((b) =>
     b.addEventListener('click', () => ladePollBild(b.dataset.image)));
   $$('.poll-delete', list).forEach((b) =>
-    b.addEventListener('click', () => loeschePoll(b.dataset.delete)));
-  fristTakt();
+    b.addEventListener('click', () => deletePoll(b.dataset.delete)));
+  deadlineCadence();
 }
 
-/* Eine Kette, kein Teilen-Pfeil. Der Pfeil verspricht das Systemmenü des
-   Geräts – das gibt es aber nur auf dem Handy. Am Schreibtisch landet der Link
-   in der Zwischenablage, und dafür ist die Kette das ehrlichere Bild. */
+/* A chain link, not a share arrow. The arrow promises the device's system
+   share menu - but that only exists on a phone. On desktop the link ends
+   up in the clipboard, and the chain link is the more honest icon for
+   that. */
 const LINK_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/>
@@ -2170,18 +2192,19 @@ const CHECK_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="
     <path d="M4.5 12.5l5 5 10-11"/>
   </svg>`;
 
-/* Der Haken an der Antwort, für die man selbst gestimmt hat – ein Kreis mit
-   einem Haken darin, wie bei X.
+/* The checkmark on the answer you voted for yourself - a circle with a
+   check inside it, like on X.
 
-   Hier stand ein blosses ✓ hinter dem Text. Das Zeichen kam aus der Schrift,
-   sah je nach Gerät anders aus und stand als Buchstabe im Satz – auf einem
-   Mac fett und rund, auf Windows dünn und eckig. Als SVG ist es überall
-   dasselbe Bild und nimmt seine Farbe vom Text darüber.
+   There used to be a bare checkmark character after the text. That
+   character came from the font, looked different on every device, and sat
+   in the sentence as a letter - bold and round on a Mac, thin and angular
+   on Windows. As an SVG it's the same image everywhere and takes its color
+   from the text above it.
 
-   Der Kreis ist nicht Zierde: Ein Haken allein heisst an anderen Stellen der
-   Seite "erledigt" (Link kopiert, Löschen bestätigt). Der Kreis macht daraus
-   eine Markierung an einer Sache statt einer Rückmeldung auf eine Handlung. */
-const STIMME_SVG = `<svg class="opt-haken" viewBox="0 0 24 24" width="15" height="15"
+   The circle isn't decoration: a bare checkmark means "done" everywhere
+   else on the site (link copied, delete confirmed). The circle turns this
+   one into a marker on a thing instead of feedback on an action. */
+const VOTE_SVG = `<svg class="opt-haken" viewBox="0 0 24 24" width="15" height="15"
     aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.7 2.7 4.9-5.5"/>
@@ -2193,9 +2216,9 @@ const DOWNLOAD_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidde
     <path d="M4.5 17.5v1.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-1.5"/>
   </svg>`;
 
-/* Ein Papierkorb, kein Kreuz. Das Kreuz heißt an zu vielen Stellen "schließen",
-   und eine Abstimmung lässt sich auch schließen – das ist ein anderer Knopf
-   mit einer anderen Folge. */
+/* A trash can, not an X. The X means "close" in too many other places, and
+   a poll can also be closed - that's a different button with a different
+   consequence. */
 const TRASH_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 6.5h16"/><path d="M9.5 6.5V4.5h5v2"/>
@@ -2204,171 +2227,171 @@ const TRASH_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="
   </svg>`;
 
 // ---------------------------------------------------------------------------
-// Der flüchtige Zustand der drei Knöpfe an einer Abstimmung
+// The transient state of a poll's three buttons
 // ---------------------------------------------------------------------------
 //
-// Alle drei zeigen für eine Weile einen Haken: der Löschknopf, bis der zweite
-// Tipper kommt, Link und Bild als Quittung. Dieser Zustand hing bisher AM
-// KNOPF – als btn._scharf und btn._t am DOM-Knoten selbst.
+// All three show a checkmark for a while: the delete button until the
+// second tap arrives, link and image as a receipt. This state used to
+// live ON THE BUTTON itself - as btn._scharf and btn._t on the DOM node.
 //
-// Genau daran lag der Fehler, den Ansem gesehen hat:
+// That's exactly where the bug Ansem saw came from:
 //
-//   renderPolls() baut die Liste mit list.innerHTML komplett neu. Jeder Knopf
-//   darin ist danach ein ANDERER Knoten – ohne _scharf, mit einem Papierkorb
-//   statt dem Haken. Der alte Knoten hängt nirgends mehr und sein Zeitgeber
-//   läuft ins Leere.
+//   renderPolls() completely rebuilds the list with list.innerHTML. Every
+//   button in it is afterward a DIFFERENT node - without _scharf, showing
+//   a trash can instead of the checkmark. The old node isn't attached
+//   anywhere anymore and its timer fires into nothing.
 //
-//   Neu gebaut wird bei jeder fremden Stimme: Realtime meldet die Änderung an
-//   votes, reloadSoon wartet 400 ms und lädt neu. Zwischen "Papierkorb
-//   getippt" und "Haken getippt" liegen aber ein bis zwei Sekunden.
+//   A rebuild happens on every vote from anyone: realtime reports the
+//   change to votes, reloadSoon waits 400ms and reloads. But one to two
+//   seconds pass between "trash can tapped" and "checkmark tapped".
 //
-//   Also: Ansem tippt den Papierkorb, jemand stimmt ab, der Haken springt
-//   zurück auf den Papierkorb – und sein zweiter Tipper schärft nur wieder
-//   scharf, statt zu löschen. Nichts passiert, und beim nächsten Mal geht es.
-//   "Manchmal."
+//   So: Ansem taps the trash can, someone votes, the checkmark jumps back
+//   to a trash can - and his second tap just arms it again instead of
+//   deleting. Nothing happens, and it works the next time. "Sometimes."
 //
-// Deshalb steht der Zustand jetzt HIER und nicht am Knoten: an einer Kennung,
-// die einen Neubau der Liste überlebt. Nach jedem Neubau werden die Knöpfe
-// wieder in ihren Zustand gemalt – im selben Durchlauf, in dem die Liste
-// entsteht, sodass dazwischen kein Bild zu sehen ist, in dem der Haken fehlt.
+// That's why the state now lives HERE, not on the node: keyed by an
+// identifier that survives a list rebuild. After every rebuild, the
+// buttons get repainted into their state - in the same pass that builds
+// the list, so no frame in between ever shows the checkmark missing.
 //
-// Warum nicht einfach das Neuladen anhalten, solange scharf ist: Dann stünden
-// die Zahlen fünf Sekunden lang still, und zwar bei jedem Löschen. Der Neubau
-// ist nicht das Problem – dass er einen Zustand mitreisst, der ihn überleben
-// soll, ist das Problem.
-const KNOPF_ROLLEN = {
+// Why not just pause reloading while armed: then the numbers would sit
+// frozen for five seconds, every single time something is deleted. The
+// rebuild isn't the problem - state riding along on something that's
+// supposed to survive the rebuild is the problem.
+const BUTTON_ROLES = {
   'poll-delete': {
-    feld: 'delete', dauer: 5000, ruhe: () => TRASH_SVG,
+    field: 'delete', duration: 5000, ruhe: () => TRASH_SVG,
     ruheTitel: 'Delete this poll', aktivTitel: 'Tap again to delete',
   },
-  'poll-share': { feld: 'share', dauer: 1800, ruhe: () => LINK_SVG, klasse: 'is-copied' },
-  'poll-image': { feld: 'image', dauer: 1800, ruhe: () => DOWNLOAD_SVG, klasse: 'is-copied' },
+  'poll-share': { field: 'share', duration: 1800, ruhe: () => LINK_SVG, klasse: 'is-copied' },
+  'poll-image': { field: 'image', duration: 1800, ruhe: () => DOWNLOAD_SVG, klasse: 'is-copied' },
 };
 
-/** Kennung -> Zeitgeber, der ihn wieder ausschaltet. */
-const knopfAktiv = new Map();
+/** Identifier -> timer that turns it back off. */
+const buttonActive = new Map();
 
 /**
- * Kennungen, an denen gerade etwas läuft: das Löschen selbst, das Bauen des
- * Bildes.
+ * Identifiers of things currently in progress: the delete itself, building
+ * the image.
  *
- * Auch das hing am Knoten – als btn.disabled, gesetzt vor dem Warten und
- * zurückgenommen danach. Wird die Liste in der Zwischenzeit neu gebaut, ist
- * der neue Knopf wieder bedienbar, und der zweite Klick löst dieselbe Sache
- * ein zweites Mal aus.
+ * This too used to live on the node - as btn.disabled, set before the wait
+ * and cleared afterward. If the list gets rebuilt in the meantime, the new
+ * button is enabled again, and a second click triggers the same thing a
+ * second time.
  */
-const knopfLaeuft = new Set();
+const buttonRunning = new Set();
 
 /**
- * Malt die Knöpfe so, wie ihr Zustand es sagt.
+ * Paints the buttons to match their state.
  *
- * Die Klasse knopf-aktiv am Knoten ist das Gedächtnis für "so sieht er gerade
- * aus". Stimmt sie mit dem Zustand überein, bleibt das Bild unangetastet –
- * sonst schriebe jeder Aufruf innerHTML neu, auch wenn dort schon das
- * Richtige steht. Ein frisch gebauter Knopf hat die Klasse nie, und ein
- * aktiver wird damit von selbst wieder zum Haken.
+ * The knopf-aktiv class on the node is the memory for "this is what it
+ * currently looks like". If it already matches the state, the display is
+ * left untouched - otherwise every call would rewrite innerHTML even when
+ * the right thing is already there. A freshly built button never has the
+ * class, so an armed one turns back into a checkmark on its own.
  *
- * Die Vorgabe ist das ganze Blatt und nicht #poll-list. renderPolls reicht
- * seine frisch gebaute Liste ausdrücklich herein, alle anderen Aufrufer
- * meinen einfach "male, was da ist" – und dürfen nicht davon abhängen, in
- * welchem Kasten die Knöpfe gerade hängen.
+ * The default target is the whole document, not #poll-list. renderPolls
+ * explicitly passes in its freshly built list; every other caller just
+ * means "paint whatever's there" - and must not depend on which container
+ * the buttons currently happen to be in.
  */
-function knoepfeMalen(wurzel = document) {
+function paintButtons(wurzel = document) {
   if (!wurzel) return;
-  for (const [klasse, rolle] of Object.entries(KNOPF_ROLLEN)) {
+  for (const [klasse, rolle] of Object.entries(BUTTON_ROLES)) {
     for (const btn of $$(`.${klasse}`, wurzel)) {
-      const kennung = `${klasse}:${btn.dataset[rolle.feld]}`;
-      btn.disabled = knopfLaeuft.has(kennung);
-      const aktiv = knopfAktiv.has(kennung);
+      const kennung = `${klasse}:${btn.dataset[rolle.field]}`;
+      btn.disabled = buttonRunning.has(kennung);
+      const aktiv = buttonActive.has(kennung);
       if (btn.classList.contains('knopf-aktiv') === aktiv) continue;
       btn.classList.toggle('knopf-aktiv', aktiv);
       btn.innerHTML = aktiv ? CHECK_SVG : rolle.ruhe();
       if (rolle.klasse) btn.classList.toggle(rolle.klasse, aktiv);
       const titel = aktiv ? rolle.aktivTitel : rolle.ruheTitel;
-      // Nur wo es einen gibt: Link und Bild sagen ihre Quittung über den
-      // Hinweis, nicht über einen Beschriftungstext, der mitwandert.
+      // Only where one exists: link and image show their receipt through
+      // the tooltip, not through label text that would shift alongside.
       if (titel) { btn.title = titel; btn.setAttribute('aria-label', titel); }
     }
   }
 }
 
-const knopfIstAn = (klasse, id) => knopfAktiv.has(`${klasse}:${id}`);
+const buttonIsOn = (klasse, id) => buttonActive.has(`${klasse}:${id}`);
 
-function knopfAus(klasse, id) {
-  clearTimeout(knopfAktiv.get(`${klasse}:${id}`));
-  knopfAktiv.delete(`${klasse}:${id}`);
-  knoepfeMalen();
+function buttonOff(klasse, id) {
+  clearTimeout(buttonActive.get(`${klasse}:${id}`));
+  buttonActive.delete(`${klasse}:${id}`);
+  paintButtons();
 }
 
-function knopfAn(klasse, id) {
-  clearTimeout(knopfAktiv.get(`${klasse}:${id}`));
-  knopfAktiv.set(`${klasse}:${id}`,
-    setTimeout(() => knopfAus(klasse, id), KNOPF_ROLLEN[klasse].dauer));
-  knoepfeMalen();
+function buttonOn(klasse, id) {
+  clearTimeout(buttonActive.get(`${klasse}:${id}`));
+  buttonActive.set(`${klasse}:${id}`,
+    setTimeout(() => buttonOff(klasse, id), BUTTON_ROLES[klasse].duration));
+  paintButtons();
 }
 
-/** Sperrt einen Knopf, solange seine Sache läuft. Gibt false zurück, wenn
- *  sie schon läuft – dann ist der Klick ein zweiter und wird verworfen. */
-function knopfBelegen(klasse, id) {
+/** Locks a button while its action is in progress. Returns false if it's
+ *  already in progress - then the click is a second one and is dropped. */
+function buttonClaim(klasse, id) {
   const kennung = `${klasse}:${id}`;
-  if (knopfLaeuft.has(kennung)) return false;
-  knopfLaeuft.add(kennung);
-  knoepfeMalen();
+  if (buttonRunning.has(kennung)) return false;
+  buttonRunning.add(kennung);
+  paintButtons();
   return true;
 }
 
-function knopfFreigeben(klasse, id) {
-  knopfLaeuft.delete(`${klasse}:${id}`);
-  knoepfeMalen();
+function buttonRelease(klasse, id) {
+  buttonRunning.delete(`${klasse}:${id}`);
+  paintButtons();
 }
 
 /**
- * Die Adresse einer einzelnen Abstimmung.
+ * The address of a single poll.
  *
- * Als Pfad /p/12, nicht als Raute.
+ * As a path, /p/12, not a hash.
  *
- * Der Grund ist X. Alles ab dem # wird niemals an einen Server geschickt –
- * das ist keine Einstellung, das ist die Definition eines Fragments. Für den
- * Crawler, der die Vorschaukarte baut, sähen deshalb alle Abstimmungen gleich
- * aus, weil sie dieselbe Adresse hätten. Mit der Nummer im Pfad kann er sie
- * unterscheiden, und /p/12 wird auf eine kleine Seite umgeleitet, die ihm
- * Frage, Zahlen und Bild nennt (supabase/functions/og).
+ * The reason is X. Everything after the # is never sent to a server -
+ * that's not a setting, it's the definition of a fragment. So for the
+ * crawler that builds the preview card, every poll would look identical,
+ * because they'd all have the same address. With the number in the path,
+ * it can tell them apart, and /p/12 redirects to a small page that hands
+ * it the question, the numbers, and an image (supabase/functions/og).
  *
- * Wer den Link im Browser öffnet, wird von dort sofort auf /#poll-12
- * weitergeschickt – die alte Form funktioniert also weiter, sie steht nur
- * nicht mehr in geteilten Links.
+ * Whoever opens the link in a browser gets forwarded from there straight
+ * to /#poll-12 - so the old form still works, it just doesn't appear in
+ * shared left anymore.
  *
- * search wird bewusst weggelassen – dort stehen Parameter, die den Empfänger
- * nichts angehen.
+ * search is deliberately left off - that's where parameters live that are
+ * none of the recipient's business.
  */
 const pollLink = (id) => `${location.origin}/p/${id}`;
 
 /**
- * Link teilen.
+ * Share a link.
  *
- * Auf dem Handy das Systemmenü, sonst die Zwischenablage. Wichtig ist, was bei
- * einem Fehlschlag passiert: copyText() versucht schon zwei Wege, und wenn
- * beide scheitern, steht die Adresse im Hinweis – dann kann man sie wenigstens
- * ablesen. Ein Knopf, der nichts tut und nichts sagt, ist hier das Schlimmste,
- * weil man ihn für kaputt hält und weiterdrückt.
+ * On a phone the system menu, otherwise the clipboard. What matters is
+ * what happens on failure: copyText() already tries two paths, and if both
+ * fail, the URL shows up in the toast - so it can at least be read off.
+ * Here, a button that does nothing and says nothing is the worst outcome,
+ * because people assume it's broken and keep pressing it.
  */
-async function teilePoll(id) {
+async function sharePoll(id) {
   const url = pollLink(id);
-  const frage = state.polls.find((p) => p.id === Number(id))?.question ?? 'Poll';
+  const pollQuestion = state.polls.find((p) => p.id === Number(id))?.question ?? 'Poll';
 
-  // Kopieren, nicht teilen.
+  // Copy, not share.
   //
-  // Hier stand ein Aufruf von navigator.share: Auf dem Handy klappte damit das
-  // Systemmenue mit WhatsApp, Mail und dem Rest hoch. Das ist ein zweiter
-  // Schritt fuer etwas, das man meistens nur in die Zwischenablage will – und
-  // der Knopf traegt ein Kettensymbol, kein Teilen-Symbol. Er verspricht also
-  // ohnehin einen Link und kein Menue.
+  // There used to be a call to navigator.share here: on a phone that
+  // popped up the system menu with WhatsApp, Mail, and the rest. That's an
+  // extra step for something people mostly just want in the clipboard
+  // anyway - and the button carries a chain-link icon, not a share icon.
+  // So it already promises a link, not a menu.
   //
-  // frage wird seitdem nicht mehr gebraucht; sie stand nur im Titel des Menues.
-  void frage;
+  // pollQuestion isn't needed anymore since then; it only appeared in the menu's
+  // title.
+  void pollQuestion;
 
   if (await copyText(url)) {
-    knopfAn('poll-share', id);
+    buttonOn('poll-share', id);
     toast('Link copied');
     return;
   }
@@ -2376,13 +2399,12 @@ async function teilePoll(id) {
 }
 
 /**
- * Einen geteilten Link öffnen.
+ * Open a shared link.
  *
- * Der Empfänger ist beim ersten Aufruf fast nie schon angemeldet – er sieht den
- * Login. Die Raute bleibt dabei in der Adresse stehen, also greift der Sprung
- * nach der Anmeldung von selbst. Deshalb wird sie hinterher auch nicht
- * gelöscht: Wer die Seite neu lädt, soll wieder bei derselben Abstimmung
- * landen.
+ * On the first visit the recipient is almost never signed in yet - they
+ * see the login. The hash stays in the URL the whole time, so the jump
+ * kicks in on its own after signing in. That's also why it's never removed
+ * afterward: reloading the page should land on the same poll again.
  */
 function springeZuPollAusUrl({ ohneRollen = false } = {}) {
   const treffer = /^#poll-(\d+)$/.exec(location.hash);
@@ -2392,14 +2414,14 @@ function springeZuPollAusUrl({ ohneRollen = false } = {}) {
   selectTab('polls');
   const el = document.getElementById(`poll-${id}`);
   if (!el) {
-    // Geladen werden die letzten 50. Eine ältere oder gelöschte Abstimmung
-    // fehlt schlicht – das gehört gesagt, sonst wirkt der Link kaputt.
+    // Only the last 50 get loaded. An older or deleted poll is simply
+    // missing - that needs to be said, or the link looks broken.
     toast('That poll is not in the list anymore', true);
     return;
   }
   el.scrollIntoView({ block: 'center', behavior: ohneRollen ? 'auto' : 'smooth' });
-  // Neu anstoßen, falls dieselbe Abstimmung zweimal hintereinander aufgerufen
-  // wird: Ohne das Entfernen läuft die Animation kein zweites Mal.
+  // Restart it in case the same poll gets opened twice in a row: without
+  // removing the class first, the animation won't play a second time.
   el.classList.remove('is-linked');
   void el.offsetWidth;
   el.classList.add('is-linked');
@@ -2410,31 +2432,32 @@ window.addEventListener('hashchange', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Das Bild einer Abstimmung
+// A poll's image
 //
-// Gezeichnet, nicht abfotografiert. Ein Bildschirmfoto der Karte hätte
-// bedeutet, eine fremde Bibliothek einzubauen (html2canvas & Co.), und es
-// hätte mitgeliefert, was gerade zufällig auf dem Schirm war: den Zeiger auf
-// einem Balken, den eigenen Haken, den Rand einer angeschnittenen Karte, die
-// Breite des jeweiligen Telefons.
+// Drawn, not photographed. A screenshot of the card would have meant
+// pulling in a third-party library (html2canvas and friends), and it would
+// have captured whatever happened to be on screen at that moment: the
+// pointer sitting on a bar, your own checkmark, the edge of a card cut off
+// by the viewport, the width of whichever phone.
 //
-// Hier entsteht stattdessen ein eigenes Bild in fester Größe. "Clean" heißt
-// deshalb konkret: keine Knöpfe, kein eigener Stimmhaken, keine Spuren der
-// Bedienung – nur die Frage, die Antworten und die Zahlen.
+// Instead, a separate image at a fixed size is built here. "Clean"
+// concretely means: no buttons, no vote checkmark of your own, no traces
+// of interacting with it - just the question, the answers, and the
+// numbers.
 //
-// Die Farben werden aus dem Stylesheet gelesen statt hier noch einmal
-// hingeschrieben. Sonst driftet das Bild bei der nächsten Farbänderung
-// unbemerkt von der Seite weg – und genau das ist im Verlauf dieses Projekts
-// schon einmal passiert, als Grün an sechs Stellen fest im Blatt stand.
+// Colors are read from the stylesheet instead of being written down again
+// here. Otherwise the image would silently drift away from the site on the
+// next color change - and that has already happened once in this
+// project's history, when green was hardcoded in six different places.
 // ---------------------------------------------------------------------------
 
 const cssWert = (name) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 
-/* roundRect gibt es erst ab Safari 16.4. Wer ein älteres iPhone hat, soll kein
-   kaputtes Bild bekommen, sondern eines mit eckigen Balken. */
-function rundesRechteck(ctx, x, y, w, h, r) {
+/* roundRect only exists from Safari 16.4 onward. Someone with an older
+   iPhone should get an image with square-cornered bars, not a broken one. */
+function roundedRect(ctx, x, y, w, h, r) {
   if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
   const k = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -2447,53 +2470,54 @@ function rundesRechteck(ctx, x, y, w, h, r) {
 }
 
 /**
- * Text in Zeilen brechen, die in maxW passen. Gibt die Zeilen zurück.
+ * Wraps text into lines that fit within maxW. Returns the lines.
  *
- * Umbrochen wird an Leerzeichen – und WENN ES SEIN MUSS mitten im Wort.
+ * Wrapping happens at spaces - and, IF IT HAS TO, in the middle of a word.
  *
- * Der zweite Teil hat gefehlt, und das war ein echter Fehler mit einem
- * sichtbaren Ergebnis: Hier stand `|| !zeile`, also "ein Wort, das allein schon
- * zu breit ist, kommt trotzdem ganz in seine Zeile". Diese Zeile war dann zu
- * lang, und was danach kam, hat kuerzen() beim Zeichnen abgeschnitten.
+ * That second part was missing, and it was a real bug with a visible
+ * result: this used to be `|| !line`, meaning "a word too wide on its own
+ * still goes entirely on its own line." That line ended up too long, and
+ * whatever came after it got cut off by truncate() at draw time.
  *
- * Bei normalen Saetzen faellt das nie auf. Sichtbar wurde es an einer Frage
- * ohne ein einziges Leerzeichen – "abshridmajabshridmaj..." ueber 100 Zeichen.
- * Fuer diese Funktion war das EIN Wort, also EINE Zeile, also zwei Drittel des
- * Textes weg, obwohl die Karte drei Zeilen dafuer hat und die Verkleinerung
- * bereitstand: Beide greifen erst ab der vierten Zeile, und es gab nur eine.
+ * With ordinary sentences this never shows up. It became visible on a
+ * question with not a single space in it - "abshridmajabshridmaj..." for
+ * over 100 characters. To this function that was ONE word, so ONE line,
+ * so two-thirds of the text gone, even though the card has three lines for
+ * this and the shrink-to-fit was standing by: both only kick in from the
+ * fourth line on, and there was only one.
  *
- * Das ist die Sorte Fehler, die eine Grenze im Formular nicht abfaengt – 100
- * Zeichen waren erlaubt und wurden trotzdem nicht gezeigt. Und die
- * Zufallssaetze, mit denen die Grenze geprueft wurde, hatten alle Leerzeichen.
+ * This is the kind of bug a limit in the form doesn't catch - 100
+ * characters were allowed and still didn't show up. And the random test
+ * sentences used to check that limit all happened to contain spaces.
  */
 function umbrechen(ctx, text, maxW) {
   const worte = String(text).split(/\s+/).filter(Boolean);
-  const zeilen = [];
-  let zeile = '';
+  const lines = [];
+  let line = '';
   for (const wort of worte) {
-    const versuch = zeile ? `${zeile} ${wort}` : wort;
+    const versuch = line ? `${line} ${wort}` : wort;
     if (ctx.measureText(versuch).width <= maxW) {
-      zeile = versuch;
+      line = versuch;
       continue;
     }
-    if (zeile) { zeilen.push(zeile); zeile = ''; }
-    // Passt das Wort auch allein nicht, wird es zerlegt – zeichenweise, so weit
-    // wie jeweils hineingeht.
+    if (line) { lines.push(line); line = ''; }
+    // If the word doesn't fit even on its own, it gets broken up -
+    // character by character, as far as it goes each time.
     let rest = wort;
     while (ctx.measureText(rest).width > maxW) {
       let n = rest.length;
       while (n > 1 && ctx.measureText(rest.slice(0, n)).width > maxW) n -= 1;
-      zeilen.push(rest.slice(0, n));
+      lines.push(rest.slice(0, n));
       rest = rest.slice(n);
     }
-    zeile = rest;
+    line = rest;
   }
-  if (zeile) zeilen.push(zeile);
-  return zeilen;
+  if (line) lines.push(line);
+  return lines;
 }
 
-/** Ein einzelnes Wort, das allein schon zu breit ist, wird hart gekürzt. */
-function kuerzen(ctx, text, maxW) {
+/** A single word too wide on its own gets hard-truncated. */
+function truncate(ctx, text, maxW) {
   if (ctx.measureText(text).width <= maxW) return text;
   let s = text;
   while (s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
@@ -2501,231 +2525,235 @@ function kuerzen(ctx, text, maxW) {
 }
 
 /**
- * Zeichnet die Abstimmung und gibt die Leinwand zurück.
+ * Draws the poll and returns the canvas.
  *
- * Das Bild IST die Karte – es gibt keinen Grund ringsherum. Außerhalb der
- * abgerundeten Ecken bleibt die Leinwand durchsichtig, das PNG trägt also
- * einen Alphakanal.
+ * The image IS the card - there's no background around it. Outside the
+ * rounded corners the canvas stays transparent, so the PNG carries an
+ * alpha channel.
  *
- * Die Größe zielt fest auf 16:9. Der Grund liegt nicht in der Ästhetik: X
- * zeigt ein einzelnes Bild in der Zeitleiste bis 16:9 vollständig und
- * schneidet alles Höhere oben und unten ab. Eine Abstimmung mit zehn Antworten
- * in ein 16:9-Format zu pressen hieße allerdings, die Schrift unlesbar klein
- * zu setzen – deshalb darf das Bild wachsen, aber nur bis 4:5. Das ist die
- * höchste Form, die X noch ungeschnitten zeigt.
+ * The size targets 16:9 as a fixed base. The reason isn't aesthetics: X
+ * shows a single image in the timeline at full size up to 16:9, and crops
+ * anything taller at the top and bottom. But squeezing a poll with ten
+ * answers into a 16:9 frame would mean setting the text at an unreadably
+ * small size - so the image is allowed to grow, but only up to 4:5. That's
+ * the tallest ratio X still shows uncropped.
  */
-const BILD_BREITE = 1600;   // Punkte; die Leinwand ist doppelt so groß
+const IMAGE_WIDTH = 1600;   // points; the canvas is twice as large
 const BILD_SKALA = 2;
 const BILD_ECKE = 28;
 
 /**
- * Die Fassung des Kartenbilds. HOCHZÄHLEN, wenn sich das Aussehen ändert.
+ * The version of the card image. BUMP THIS when the look changes.
  *
- * Der Grund: Die Karte wird genau einmal geschrieben, beim Anlegen der
- * Abstimmung, und nie überschrieben – das ist Absicht, damit unter einem
- * geteilten Link immer dieselbe Einladung steht. Der Preis war, dass eine
- * Änderung am Aussehen die bestehenden Abstimmungen nie erreicht: Sie behalten
- * ihre alte Karte, für immer.
+ * The reason: the card is written exactly once, when the poll is created,
+ * and never overwritten - that's deliberate, so a shared link always shows
+ * the same invite. The price was that a change to the look never reaches
+ * existing polls: they keep their old card, forever.
  *
- * Die Nummer steht im Dateinamen. Wird sie erhöht, sucht ergaenzeFehlendeKarten()
- * beim nächsten Start Ansems nach poll-<id>-v<neu>.png, findet nichts und
- * zeichnet alles neu. Kein Aufräumen von Hand, kein vergessener Rest.
+ * The number sits in the filename. Bump it, and the next time Ansem
+ * starts the app, addMissingCards() looks for poll-<id>-v<new>.png,
+ * finds nothing, and redraws everything. No manual cleanup, nothing left
+ * behind by accident.
  *
- * ACHTUNG: Dieselbe Nummer steht in supabase/functions/og/index.ts. Beide
- * müssen übereinstimmen, sonst zeigt die Karte auf eine Datei, die es nicht
- * gibt, und der Link bekommt die Ersatzkarte.
+ * WARNING: the same number appears in supabase/functions/og/index.ts. Both
+ * have to match, or the card points at a file that doesn't exist, and the
+ * link gets the fallback card instead.
  */
-const KARTEN_VERSION = 9;
+const CARD_VERSION = 9;
 
-/** Der Name des Kartenbilds in der Ablage – an einer Stelle, nicht an drei. */
-const kartenDatei = (id) => `poll-${id}-v${KARTEN_VERSION}.png`;
+/** The card image's filename in storage - defined in one place, not three. */
+const cardFile = (id) => `poll-${id}-v${CARD_VERSION}.png`;
 
 /**
- * Der Anteil der führenden Antwort – oder null, wenn keine markiert wird.
+ * The share of the leading answer - or null if none gets highlighted.
  *
- * Markiert wird erst, wenn die Abstimmung ZU ist. Solange sie läuft, sagen die
- * Balkenlängen schon, wo es steht; die blaue Fläche darüber macht daraus eine
- * Ansage. Und eine Ansage über einen Zwischenstand ist eine Aufforderung: Wer
- * unentschieden hereinkommt und sieht, dass eine Antwort "die" Antwort ist,
- * stimmt eher dafür. Der Rang kann sich bis zur letzten Minute drehen – bei
- * dieser Abstimmung besonders, weil ein einziger großer Halter ihn dreht.
+ * Highlighting only happens once the poll is CLOSED. While it's running,
+ * the bar lengths already show where things stand; a blue fill on top of
+ * that would turn it into an announcement. And an announcement about a
+ * mid-poll standing is an invitation: someone arriving undecided who sees
+ * that one answer is "the" answer is more likely to vote for it. The
+ * ranking can flip up to the last minute - especially in this poll, since
+ * a single large holder can flip it.
  *
- * Geschlossen ist das Blau dagegen genau richtig: Dann ist es kein Hinweis
- * mehr, sondern das Ergebnis.
+ * Once closed, the blue is exactly right, though: at that point it's no
+ * longer a hint, it's the result.
  *
- * EINE Stelle für beide Darstellungen, die Liste im Blatt und das Bild, das
- * nach draußen geht. Liefen die auseinander, zeigte ein geteiltes Bild einen
- * Gewinner, den die Seite daneben nicht kennt – und das fiele niemandem auf,
- * weil beide für sich richtig aussehen.
+ * ONE place for both representations - the list in the app and the image
+ * that goes out into the world. If they drifted apart, a shared image
+ * would show a winner the page next to it doesn't recognize - and nobody
+ * would notice, because each one looks correct on its own.
  *
- * Bei Gleichstand tragen beide die Markierung, und ohne eine einzige Stimme
- * keine: Ohne totalUsd wäre der größte Anteil die 0, und die hätte jede
- * Antwort.
+ * On a tie, both carry the highlight, and with zero votes, neither does:
+ * without totalUsd, the largest share would be 0, and every answer would
+ * have that.
  */
-const fuehrenderAnteil = (p) =>
+const leadingShare = (p) =>
   (p.closed && p.totalUsd > 0) ? Math.max(...p.options.map((o) => o.share), 0) : null;
 
-async function zeichnePoll(p, { fuerKarte = false } = {}) {
-  // Die Karte wird in einfacher Auflösung gezeichnet, das Bild zum
-  // Herunterladen in doppelter.
+async function drawPoll(p, { fuerKarte = false } = {}) {
+  // The card is drawn at 1x resolution, the downloadable image at 2x.
   //
-  // Der Grund ist die Dateigröße, und die ist hier keine Kleinigkeit: Der
-  // schwache Lichtschein im Grund ist ein Verlauf, und PNG rastert Verläufe
-  // mit einem Rauschen, das sich bei doppelter Auflösung vervierfacht. Dasselbe
-  // Bild wiegt bei 3200 px 1,5 MB und bei 1600 px 136 KB – elfmal weniger, ohne
-  // sichtbaren Unterschied. X zeigt eine Kachel ohnehin rund 600 px breit an;
-  // 1600 sind schon das Zweieinhalbfache davon.
-  // Ohne das Warten misst der erste Aufruf mit der Ersatzschrift und der Text
-  // steht hinterher zu breit oder zu schmal im Bild.
-  try { await document.fonts?.ready; } catch { /* dann eben ungewartet */ }
+  // The reason is file size, and here that's not a minor concern: the
+  // faint glow in the background is a gradient, and PNG rasterizes
+  // gradients with noise that quadruples at double resolution. The same
+  // image weighs 1.5MB at 3200px and 136KB at 1600px - eleven times less,
+  // with no visible difference. X displays a timeline tile at roughly
+  // 600px wide anyway; 1600 is already two and a half times that.
+  // Without this wait, the first call measures against the fallback font
+  // and the text ends up too wide or too narrow in the image afterward.
+  try { await document.fonts?.ready; } catch { /* proceed unwaited then */ }
 
   const S = fuerKarte ? 1 : BILD_SKALA;
-  const B = BILD_BREITE;
-  // Die Karte sitzt eingerückt auf der Grundfarbe der Seite. Ohne diesen
-  // Abstand liegt die Rundung genau auf der Bildkante und ist damit unsichtbar
-  // – ein abgerundetes Rechteck erkennt man erst, wenn daneben etwas anderes
-  // steht.
-  // Ringsherum derselbe Abstand. Der freie Platz fuer Xs Titelkasten liegt
-  // deshalb INNERHALB der Karte, nicht darunter – siehe innenUnten.
+  const B = IMAGE_WIDTH;
+  // The card sits inset from the page's background color. Without this
+  // margin, the rounding would sit exactly on the image edge and be
+  // invisible - a rounded rectangle only reads as one once something else
+  // sits next to it.
+  // Same margin all the way around. That's why the free space for X's
+  // title box sits INSIDE the card, not below it - see innerBottom.
   const m = 34;
-  const rand = m + 52;
-  const inhalt = B - rand * 2;
+  const margin = m + 52;
+  const content = B - margin * 2;
 
-  // Eine Schrift, wie auf der Seite. Die Karte war zuletzt die einzige Flaeche
-  // in Grotesk – und ausgerechnet die, die nach draussen geht.
+  // A font that matches the site. The card used to be the only surface
+  // still in the grotesque - the one that goes out into the world, of all
+  // things.
   //
-  // Die Groessen bleiben dabei unveraendert, und das ist eine bewusste
-  // Entscheidung gegen das naheliegende "Mono baut breiter, also kleiner
-  // setzen". Nachgemessen stimmt die Faustregel naemlich nicht verlaesslich:
-  // Bei 12,9 px mager war die Mono hier 19 % breiter als die Grotesk, bei
-  // 54 px fett gleich breit, und eine kurze Antwort wie "Bonk" sogar schmaler.
-  // Die Werte haengen an den tatsaechlich installierten Schriften, und die
-  // sind auf einem Mac andere als auf dem Rechner, auf dem gemessen wurde.
+  // The sizes stay unchanged, and that's a deliberate decision against the
+  // obvious "mono runs wider, so set it smaller." Measured, the rule of
+  // thumb doesn't actually hold reliably: at a light 12.9px, mono here was
+  // 19% wider than the grotesque; at a bold 54px they came out the same
+  // width, and a short answer like "Bonk" was even narrower in mono. The
+  // numbers depend on the fonts actually installed, and those are
+  // different on a Mac than on the machine they were measured on.
   //
-  // Es braucht die Regel aber auch nicht: umbrechen() und kuerzen() messen
-  // beide zur Laufzeit mit der Schrift, die wirklich geladen ist. Der Umbruch
-  // stellt sich also von selbst richtig ein, egal welche Mono der Browser
-  // hergibt. Eine hier eingetragene Ausgleichszahl waere geraten und wuerde
-  // auf der Haelfte der Geraete danebenliegen.
+  // And the rule isn't needed anyway: umbrechen() and truncate() both
+  // measure at runtime against whichever font is actually loaded. So the
+  // wrapping settles itself correctly no matter which mono the browser
+  // hands over. A compensation number hardcoded here would be a guess, and
+  // it would be wrong on half the devices.
   const mono = cssWert('--mono') || 'monospace';
-  const farbe = {
+  const color = {
     grund: cssWert('--bg') || '#0a0b0f',
-    karte: cssWert('--bg-1') || '#101218',
+    card: cssWert('--bg-1') || '#101218',
     balken: cssWert('--bg-3') || '#1d212d',
     linie: cssWert('--line') || '#262b39',
     text: cssWert('--text') || '#e7e9ee',
     dim: cssWert('--dim') || '#8b93a7',
     dimmer: cssWert('--dimmer') || '#5d657a',
     akzent: cssWert('--accent') || '#eceff5',
-    // --accent-rgb stand hier, solange die Fuellung durchscheinendes Weiss war.
-    // Sie ist jetzt deckend, und der Wert wurde sonst nirgends gebraucht.
-    // Die Fuellung der Balken, von X abgemessen. Warum zwei Werte und nicht
-    // einer mit Deckkraft: siehe --fuellung im Blatt.
+    // --accent-rgb used to be here, back when the fill was translucent
+    // white. It's opaque now, and the value wasn't needed anywhere else.
+    // The bar fill, measured off X. Why two values instead of one with an
+    // opacity: see --fuellung in the stylesheet.
     fuellung: cssWert('--fuellung') || '#343639',
     fuellungSpitze: cssWert('--fuellung-spitze') || '#2b5988',
   };
 
-  // Erst rechnen, dann zeichnen: Die Höhe steht erst fest, wenn klar ist, über
-  // wie viele Zeilen die Frage läuft.
-  const mess = document.createElement('canvas').getContext('2d');
-  mess.font = `700 54px ${mono}`;
-  // Die Frage bekommt drei Zeilen. Passt sie nicht hinein, wird die Schrift
-  // kleiner, bis sie es tut – und erst danach, wenn gar nichts mehr hilft,
-  // abgeschnitten.
+  // Compute before drawing: the height isn't settled until it's clear how
+  // many lines the question runs to.
+  const measurer = document.createElement('canvas').getContext('2d');
+  measurer.font = `700 54px ${mono}`;
+  // The question gets three lines. If it doesn't fit, the font shrinks
+  // until it does - and only after that, once nothing else helps, does it
+  // get truncated.
   //
-  // Vorher stand hier nur .slice(0, 3), und das war die unangenehmste Sorte
-  // Fehler: Die vierte Zeile fiel LAUTLOS weg. Im Formular stand die Frage
-  // vollstaendig da, auf dem geposteten Bild hoerte sie mitten im Satz auf,
-  // und gemerkt haette Ansem es erst draussen.
+  // This used to be just .slice(0, 3), and that was the nastiest kind of
+  // bug: the fourth line disappeared SILENTLY. The form showed the full
+  // question, the posted image cut off mid-sentence, and Ansem would only
+  // have found out once it was already out there.
   //
-  // Das Formular begrenzt inzwischen auf MAX_FRAGE Zeichen, und gemessen
-  // passen die in drei Zeilen – aber "gemessen" heisst hier "bei 4000
-  // Zufallssaetzen je Laenge kein einziger zu lang", nicht "unmoeglich". Der
-  // Umbruch haengt nicht an der Zeichenzahl, sondern an den Wortgrenzen: Ein
-  // einzelnes langes Wort am Zeilenende laesst eine halbe Zeile leer. Eine
-  // Grenze, die diesen Fall mit Sicherheit ausschliesst, laege bei etwa 90
-  // Zeichen, und das ist fuer eine Frage zu wenig.
+  // The form now caps input at MAX_QUESTION characters, and measured, that
+  // fits in three lines - but "measured" here means "not one out of 4,000
+  // random test sentences per length came out too long," not
+  // "impossible." Wrapping doesn't depend on character count, it depends
+  // on word boundaries: one single long word at the end of a line leaves
+  // half a line empty. A limit that ruled this case out with certainty
+  // would sit around 90 characters, and that's too few for a question.
   //
-  // Also andersherum: Die Grenze bleibt grosszuegig, und die Karte gibt nach.
+  // So it's handled the other way around: the limit stays generous, and
+  // the card gives way instead.
   //
-  // Untergrenze 40 px, und die ist gegen die SCHRIFT gerechnet, nicht gegen
-  // eine bestimmte: Gezeichnet wird in --mono, und was das ist, entscheidet das
-  // Geraet – auf einem Mac SF Mono, anderswo Menlo, DejaVu, Consolas. Die bauen
-  // verschieden breit. Bei 40 px passen MAX_FRAGE Zeichen selbst dann in drei
-  // Zeilen, wenn die Schrift ein Fuenftel breiter baut als die, an der
-  // gemessen wurde, und dabei noch Woerter bis 16 Zeichen am Zeilenende Platz
-  // verschenken.
-  let frageGroesse = 54;
-  let frageZeilenRoh = umbrechen(mess, p.question, inhalt);
-  while (frageZeilenRoh.length > 3 && frageGroesse > 40) {
-    frageGroesse -= 2;
-    mess.font = `700 ${frageGroesse}px ${mono}`;
-    frageZeilenRoh = umbrechen(mess, p.question, inhalt);
+  // The floor is 40px, and that's computed against the FONT, not against a
+  // specific one: drawing happens in --mono, and what that resolves to is
+  // up to the device - SF Mono on a Mac, Menlo, DejaVu, or Consolas
+  // elsewhere. Those render at different widths. At 40px, MAX_QUESTION
+  // characters still fit in three lines even if the font renders a fifth
+  // wider than the one measurements were taken against, while still
+  // wasting space on words up to 16 characters long at line ends.
+  let questionSize = 54;
+  let questionLinesRaw = umbrechen(measurer, p.question, content);
+  while (questionLinesRaw.length > 3 && questionSize > 40) {
+    questionSize -= 2;
+    measurer.font = `700 ${questionSize}px ${mono}`;
+    questionLinesRaw = umbrechen(measurer, p.question, content);
   }
-  const frageZeilen = frageZeilenRoh.slice(0, 3);
-  // Und wenn selbst 40 px nicht reichen – ein Text, den weder das Formular noch
-  // die Datenbank zulassen, den die Karte aber zeichnen koennte –, dann steht
-  // wenigstens ein Auslassungszeichen da. Ein Satz, der mitten im Wort aufhoert,
-  // sieht aus wie ein Fehler beim Tippen; drei Punkte sagen, dass gekuerzt
-  // wurde.
-  if (frageZeilenRoh.length > 3) frageZeilen[2] = `${frageZeilen[2]}…`;
-  // Der Zeilenabstand geht mit: 66 zu 54 ist das Verhaeltnis der Vorlage.
-  const frageZeile = Math.round(frageGroesse * 66 / 54);
+  const questionLines = questionLinesRaw.slice(0, 3);
+  // And if even 40px isn't enough - text that neither the form nor the
+  // database would allow, but that the card could still be asked to
+  // draw - at least an ellipsis shows up. A sentence that stops mid-word
+  // looks like a typing mistake; three dots say it was truncated on
+  // purpose.
+  if (questionLinesRaw.length > 3) questionLines[2] = `${questionLines[2]}…`;
+  // The line height scales with it: 66 to 54 is the ratio from the
+  // original design.
+  const questionLine = Math.round(questionSize * 66 / 54);
 
-  const luecke = 14;
+  const gap = 14;
   let optH = 82;
-  // Der feste Anteil: Raender aussen, Kopf, Frage, Zahlenzeile – und unten
-  // innerhalb der Karte ein Rest.
+  // The fixed portion: outer margins, header, question, the number line -
+  // and, inside the card at the bottom, some leftover space.
   //
-  // Beim Bild zum Herunterladen traegt dieser Rest die Fusszeile. Beim
-  // Kartenbild bleibt er leer, und zwar mit Absicht: X zeichnet den Titel der
-  // Kachel als schwarzen Kasten unten links INS Bild. Er braucht eine Flaeche,
-  // auf der er nichts verdeckt – waeren die Balken bis nach unten gewachsen,
-  // laege er auf einer Antwort.
-  const innenUnten = fuerKarte ? 78 : 106;
-  const fest = m * 2 + 146 + frageZeilen.length * frageZeile + 54 + innenUnten;
+  // For the downloadable image, that leftover space carries the footer.
+  // For the card image it stays empty, deliberately: X draws the tile's
+  // title as a black box in the bottom left, INTO the image. It needs a
+  // surface where it isn't covering anything - if the bars had grown all
+  // the way to the bottom, it would sit on top of an answer.
+  const innerBottom = fuerKarte ? 78 : 106;
+  const fest = m * 2 + 146 + questionLines.length * questionLine + 54 + innerBottom;
 
-  // Das Format hängt daran, wozu das Bild dient.
+  // The aspect ratio depends on what the image is for.
   //
-  // Zum Herunterladen darf es wachsen: Wer es als Bild postet, sieht es ganz,
-  // und zehn Antworten in 16:9 zu quetschen hieße, die Schrift unlesbar klein
-  // zu setzen. Grenze ist 4:5, mehr zeigt X in der Zeitleiste nicht ungekürzt.
+  // For downloading it's allowed to grow: whoever posts it as an image
+  // sees it in full, and squeezing ten answers into 16:9 would mean
+  // setting the text unreadably small. The limit is 4:5; X doesn't show
+  // anything taller uncropped in the timeline.
   //
-  // Als Vorschaukarte gilt etwas anderes: Eine Linkkarte schneidet X auf rund
-  // 1,91:1 zu, und zwar mittig. Ein höheres Bild verliert dabei oben und unten
-  // je einen Streifen – und der Erste, der wegfällt, ist der Rahmen, den wir
-  // gerade erst sichtbar gemacht haben. Deshalb wird die Karte von vornherein
-  // in diesem Verhältnis gezeichnet, und wenn die Antworten nicht hineinpassen,
-  // werden sie gekürzt statt das Bild zu strecken.
+  // For the preview card, something different applies: X crops a link
+  // card to roughly 1.91:1, centered. A taller image loses a strip off the
+  // top and bottom in that crop - and the first thing to go is the border
+  // we just made visible. So the card is drawn in this ratio from the
+  // start, and if the answers don't fit, they get truncated instead of
+  // stretching the image.
   const zielV = fuerKarte ? 1.91 : 16 / 9;
   const maxH = fuerKarte ? Math.round(B / 1.91) : Math.round(B * 5 / 4);
   const minH = Math.round(B / zielV);
 
-  let zeigen = p.options;
+  let show = p.options;
   let ausgelassen = 0;
   if (fuerKarte) {
-    // Wie viele Antworten passen in die feste Höhe? Mindestens zwei, sonst
-    // wäre es keine Abstimmung mehr. Der Hinweis auf die ausgelassenen kostet
-    // selbst eine Zeile, also erst rechnen, dann kürzen.
+    // How many answers fit in the fixed height? At least two, or it
+    // wouldn't be a poll anymore. The note about the omitted ones costs a
+    // line of its own, so compute first, then truncate.
     const platz = maxH - fest;
-    let passt = Math.max(2, Math.floor(platz / (optH + luecke)));
-    if (passt < p.options.length) passt = Math.max(2, Math.floor((platz - 40) / (optH + luecke)));
+    let passt = Math.max(2, Math.floor(platz / (optH + gap)));
+    if (passt < p.options.length) passt = Math.max(2, Math.floor((platz - 40) / (optH + gap)));
     if (passt < p.options.length) {
-      zeigen = p.options.slice(0, passt);
+      show = p.options.slice(0, passt);
       ausgelassen = p.options.length - passt;
     }
   }
 
-  const n = Math.max(1, zeigen.length);
+  const n = Math.max(1, show.length);
   const hinweisH = ausgelassen ? 40 : 0;
-  const H = Math.max(minH, Math.min(maxH, fest + hinweisH + n * (optH + luecke)));
+  const H = Math.max(minH, Math.min(maxH, fest + hinweisH + n * (optH + gap)));
 
-  // Bleibt im Rahmen Platz übrig, wachsen die Balken hinein, statt unten ein
-  // Loch zu lassen. Gedeckelt, weil ein 200 px hoher Balken für eine
-  // dreiwortige Antwort albern aussieht.
-  const frei = H - fest - hinweisH - n * (optH + luecke);
+  // If there's leftover space in the frame, the bars grow into it instead
+  // of leaving a gap at the bottom. Capped, because a 200px-tall bar for a
+  // three-word answer looks ridiculous.
+  const frei = H - fest - hinweisH - n * (optH + gap);
   if (frei > 0) optH = Math.min(132, optH + frei / n);
-  const rest = Math.max(0, H - fest - hinweisH - n * (optH + luecke));
+  const rest = Math.max(0, H - fest - hinweisH - n * (optH + gap));
 
   const leinwand = document.createElement('canvas');
   leinwand.width = B * S;
@@ -2734,351 +2762,358 @@ async function zeichnePoll(p, { fuerKarte = false } = {}) {
   ctx.scale(S, S);
   ctx.textBaseline = 'alphabetic';
 
-  // Das Bild ist deckend, nicht durchsichtig. Durchsichtig wäre die sauberere
-  // Datei, aber sie überlebt den Weg nicht: X rechnet PNGs häufig in JPEG um,
-  // und JPEG kennt keine Durchsichtigkeit – aus den freien Ecken würden dabei
-  // schwarze. So sieht es überall gleich aus, egal was unterwegs mit der Datei
-  // passiert.
-  ctx.fillStyle = farbe.grund;
+  // The image is opaque, not transparent. Transparent would be the
+  // cleaner file, but it doesn't survive the trip: X often re-encodes PNGs
+  // as JPEG, and JPEG has no concept of transparency - the free corners
+  // would turn black in the process. This way it looks the same everywhere,
+  // no matter what happens to the file along the way.
+  ctx.fillStyle = color.grund;
   ctx.fillRect(0, 0, B, H);
 
-  // Alles ab hier liegt in der abgerundeten Karte – auch der Lichtschein und
-  // die Balken laufen an den Ecken sauber mit der Rundung aus.
-  const karteH = H - m * 2;
+  // Everything from here on sits inside the rounded card - the glow and
+  // the bars both cleanly follow the rounding at the corners too.
+  const cardH = H - m * 2;
   ctx.save();
-  rundesRechteck(ctx, m, m, B - m * 2, karteH, BILD_ECKE);
+  roundedRect(ctx, m, m, B - m * 2, cardH, BILD_ECKE);
   ctx.clip();
 
-  ctx.fillStyle = farbe.karte;
-  ctx.fillRect(m, m, B - m * 2, karteH);
+  ctx.fillStyle = color.card;
+  ctx.fillRect(m, m, B - m * 2, cardH);
 
-  // Hier lag ein sehr schwacher Lichtschein unten rechts, mit der Begruendung:
-  // Ohne ihn sei die Flaeche vollkommen flach, und zwischen lauter anderen
-  // dunklen Kacheln in der Zeitleiste verschwinde eine flache Flaeche.
+  // A very faint glow used to sit in the bottom right here, with the
+  // reasoning: without it the surface is completely flat, and a flat
+  // surface disappears among all the other dark tiles in the timeline.
   //
-  // Das Problem stimmt, der Verlauf ist trotzdem raus – die Seite hat auch
-  // keinen mehr, und eine Karte, die als einzige einen traegt, faellt aus der
-  // Reihe. Die Aufgabe uebernimmt jetzt der Rand weiter unten: kraeftiger und
-  // heller statt einer Haarlinie.
+  // The problem is real, but the gradient is gone anyway - the site
+  // doesn't have one anymore either, and a card that's the only thing
+  // still carrying one would stand out from the rest. The border further
+  // down now does that job instead: bolder and brighter than a hairline.
   //
-  // Der Rand ist dafuer sogar das bessere Mittel. X rechnet PNGs haeufig in
-  // JPEG um, und dabei kann ein feiner Flaechenunterschied in seiner Umgebung
-  // untergehen. Ein Strich bleibt ein Strich.
+  // The border is actually the better tool for this too. X often
+  // re-encodes PNGs as JPEG, and a subtle difference in a flat area can
+  // get lost against its surroundings in that process. A line stays a
+  // line.
   //
-  // Nebeneffekt, gemessen: Das Bild zum Herunterladen wiegt 294 statt 1086 KB,
-  // die Vorschaukarte 110 statt 358 KB. PNG packt Flaechen, aber keine weichen
-  // Uebergaenge – die werden gerastert, und das Rastern war der teuerste Teil
-  // der Datei. Genau daran lag es damals, dass X ein kaputtes Bild zeigte.
+  // Side effect, measured: the downloadable image weighs 294 instead of
+  // 1086KB, the preview card 110 instead of 358KB. PNG compresses flat
+  // areas well but not soft transitions - those get rasterized with noise,
+  // and that rasterization was the most expensive part of the file. This
+  // was exactly what caused X to show a broken image, back then.
 
   let y = m + 46;
 
-  // --- Kopf: die Marke ------------------------------------------------------
-  // Dieselben zwei Balken wie im Logo, nur in Bildgröße nachgerechnet: Das
-  // Original steht in einem viewBox-Ausschnitt von 42 auf 64 Einheiten.
+  // --- Header: the logo -----------------------------------------------------
+  // The same two bars as in the logo, just recomputed at image scale: the
+  // original sits in a viewBox of 42 by 64 units.
   const logoH = 30;
   const e = logoH / 64;
-  ctx.fillStyle = farbe.akzent;
-  rundesRechteck(ctx, rand, y + 38 * e, 18 * e, 26 * e, 9 * e);
+  ctx.fillStyle = color.akzent;
+  roundedRect(ctx, margin, y + 38 * e, 18 * e, 26 * e, 9 * e);
   ctx.fill();
-  rundesRechteck(ctx, rand + 24 * e, y, 18 * e, 64 * e, 9 * e);
+  roundedRect(ctx, margin + 24 * e, y, 18 * e, 64 * e, 9 * e);
   ctx.fill();
 
   ctx.font = `700 26px ${mono}`;
-  ctx.fillStyle = farbe.text;
-  // letterSpacing gibt es nicht überall; ohne die Sperrung sieht der Schriftzug
-  // nur etwas enger aus, das Bild bleibt richtig.
-  try { ctx.letterSpacing = '3px'; } catch { /* egal */ }
-  ctx.fillText('SIZED', rand + 42 * e + 12, y + 23);
-  try { ctx.letterSpacing = '0px'; } catch { /* egal */ }
+  ctx.fillStyle = color.text;
+  // letterSpacing isn't supported everywhere; without the tracking, the
+  // logotype just looks a bit tighter, the image stays correct either way.
+  try { ctx.letterSpacing = '3px'; } catch { /* doesn't matter */ }
+  ctx.fillText('SIZED', margin + 42 * e + 12, y + 23);
+  try { ctx.letterSpacing = '0px'; } catch { /* doesn't matter */ }
 
   ctx.font = `400 20px ${mono}`;
-  ctx.fillStyle = farbe.dimmer;
+  ctx.fillStyle = color.dimmer;
   ctx.textAlign = 'right';
-  ctx.fillText('sized.gg', B - rand, y + 23);
+  ctx.fillText('sized.gg', B - margin, y + 23);
   ctx.textAlign = 'left';
   y += 92;
 
   // --- Die Frage ------------------------------------------------------------
-  ctx.font = `700 ${frageGroesse}px ${mono}`;
-  ctx.fillStyle = farbe.text;
-  for (const zeile of frageZeilen) {
-    ctx.fillText(kuerzen(ctx, zeile, inhalt), rand, y + Math.round(frageGroesse * 46 / 54));
-    y += frageZeile;
+  ctx.font = `700 ${questionSize}px ${mono}`;
+  ctx.fillStyle = color.text;
+  for (const line of questionLines) {
+    ctx.fillText(truncate(ctx, line, content), margin, y + Math.round(questionSize * 46 / 54));
+    y += questionLine;
   }
 
   // --- Die Zahlen darunter --------------------------------------------------
   ctx.font = `400 21px ${mono}`;
-  ctx.fillStyle = farbe.dim;
-  const gesamt = `${vollUsd(p.totalUsd)} in $${state.cfg.symbol}`;
-  ctx.fillText(gesamt, rand, y + 26);
+  ctx.fillStyle = color.dim;
+  const gesamt = `${fullUsd(p.totalUsd)} in $${state.cfg.symbol}`;
+  ctx.fillText(gesamt, margin, y + 26);
 
   if (p.closed) {
-    const x = rand + ctx.measureText(gesamt).width + 20;
+    const x = margin + ctx.measureText(gesamt).width + 20;
     ctx.font = `600 15px ${mono}`;
     const w = ctx.measureText('CLOSED').width + 18;
-    ctx.fillStyle = farbe.balken;
-    rundesRechteck(ctx, x, y + 8, w, 26, 5);
+    ctx.fillStyle = color.balken;
+    roundedRect(ctx, x, y + 8, w, 26, 5);
     ctx.fill();
-    ctx.strokeStyle = farbe.linie;
+    ctx.strokeStyle = color.linie;
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.fillStyle = farbe.dim;
+    ctx.fillStyle = color.dim;
     ctx.fillText('CLOSED', x + 9, y + 26);
   }
   y += 54 + rest * .55;
 
-  // --- Die Antworten --------------------------------------------------------
+  // --- The answers ------------------------------------------------------------
   //
-  // Die Breite der gefüllten Fläche ist der ANTEIL am Gesamtbetrag, nicht ein
-  // eigenes Maß: p.options[i].share kommt aus usd_i / totalUsd, und totalUsd
-  // ist die Summe genau dieser Beträge. Die Anteile ergeben also zusammen 1,
-  // und die gefüllten Stücke aneinandergelegt ergeben genau einen vollen
-  // Balken. test-poll-bild.mjs rechnet das nach, damit es so bleibt.
-  const fuehrt = fuehrenderAnteil(p);
+  // The width of the filled area is the SHARE of the total amount, not a
+  // measurement of its own: p.options[i].share comes from usd_i /
+  // totalUsd, and totalUsd is the sum of exactly those amounts. So the
+  // shares add up to 1, and the filled segments placed side by side add up
+  // to exactly one full bar. test-poll-bild.mjs checks that this holds, to
+  // keep it that way.
+  const leads = leadingShare(p);
 
-  // Die breiteste Dollarzahl bestimmt, wie viel Platz die Antworten haben.
-  // Ohne diese gemeinsame Spalte begänne der Text in jeder Zeile woanders.
+  // The widest dollar amount decides how much room the answers get.
+  // Without this shared column, the text would start at a different
+  // position on every line.
   ctx.font = `700 36px ${mono}`;
-  const geldBreite = zeigen.length
-    ? Math.max(...zeigen.map((o) => ctx.measureText(vollUsd(o.usd)).width))
+  const moneyWidth = show.length
+    ? Math.max(...show.map((o) => ctx.measureText(fullUsd(o.usd)).width))
     : 0;
 
-  // Und wie viel Platz bleibt dann fuer die Antwort selbst.
-  const textBreite = inhalt - 50 - geldBreite - 36;
+  // And how much room is left over for the answer text itself.
+  const textWidth = content - 50 - moneyWidth - 36;
 
-  // Die Antworten werden kleiner gesetzt, wenn die laengste sonst nicht passt –
-  // dasselbe Zugestaendnis wie oben bei der Frage, und aus demselben Grund.
+  // Answers are set smaller if the longest one wouldn't fit otherwise -
+  // the same concession made above for the question, for the same reason.
   //
-  // Der Grund ist hier aber schaerfer, und er ist ein Fehler, den ich gemacht
-  // habe: MAX_ANTWORT ist 60 Zeichen, und diese 60 sind gegen EINE Schrift
-  // gemessen worden – die, die auf dem Rechner stand, auf dem gemessen wurde.
-  // Gezeichnet wird die Karte aber in --mono, und was das ist, entscheidet das
-  // Geraet: auf einem Mac SF Mono, anderswo Menlo, DejaVu, Consolas. Die bauen
-  // unterschiedlich breit. Eine feste Zeichenzahl und eine gemessene Breite
-  // koennen deshalb gar nicht dauerhaft uebereinstimmen – irgendwo passt es,
-  // und woanders steht ploetzlich ein Auslassungszeichen hinter einem Text,
-  // den das Formular ausdruecklich erlaubt hat.
+  // But the reason here is sharper, and it's a mistake I made: MAX_ANSWER
+  // is 60 characters, and those 60 were measured against ONE font - the
+  // one that happened to be on the machine measurements were taken on. But
+  // the card is drawn in --mono, and what that resolves to is up to the
+  // device: SF Mono on a Mac, Menlo, DejaVu, or Consolas elsewhere. Those
+  // render at different widths. A fixed character count and a measured
+  // width can therefore never stay in agreement for good - it fits
+  // somewhere, and elsewhere an ellipsis suddenly shows up after text the
+  // form explicitly allowed.
   //
-  // Also misst auch hier die Karte und nicht die Grenze. Die 60 Zeichen sagen
-  // nur noch, wie lang eine Antwort sein DARF; ob sie in voller Groesse
-  // dasteht, entscheidet die Messung.
+  // So here too, the card measures instead of trusting the limit. The 60
+  // characters now only say how long an answer is ALLOWED to be; whether
+  // it shows up at full size is decided by measurement.
   //
-  // Untergrenze 21 px: Darunter steht die Antwort kleiner da als der Betrag
-  // daneben, und dann sieht die Zeile aus, als sei die Zahl die Hauptsache.
-  let optGroesse = 27;
+  // Floor of 21px: below that the answer text sits smaller than the amount
+  // next to it, and the row starts looking like the number is the main
+  // point.
+  let optSize = 27;
   const passtAlles = (groesse) => {
     ctx.font = `650 ${groesse}px ${mono}`;
-    return zeigen.every((o) => ctx.measureText(o.label).width <= textBreite);
+    return show.every((o) => ctx.measureText(o.label).width <= textWidth);
   };
-  while (optGroesse > 21 && !passtAlles(optGroesse)) optGroesse -= 1;
+  while (optSize > 21 && !passtAlles(optSize)) optSize -= 1;
 
-  let antwortenGekuerzt = 0;
-  for (const o of zeigen) {
-    const spitze = fuehrt !== null && o.share === fuehrt;
+  let answersTruncated = 0;
+  for (const o of show) {
+    const spitze = leads !== null && o.share === leads;
 
-    // Die Zeile hat KEINE eigene Fläche, nur einen Umriss – wie auf der Seite,
-    // wo .opt-bar seit dem Flachlegen des Tabs ebenfalls keine hat.
+    // The row has NO fill of its own, just an outline - same as on the
+    // site, where .opt-bar has had none either since the tab was flattened.
     //
-    // Hier stand --bg-3 gefüllt, und das ging so lange gut, wie die Füllung
-    // durchscheinendes Weiss darüber war: Beide waren blaustichig, der
-    // Übergang las sich als eine Fläche in zwei Helligkeiten. Xs Grau ist
-    // neutral. Neben --bg-3 sah der leere Teil dadurch aus wie ein zweiter,
-    // blau angelaufener Balken hinter dem ersten – zwei Kästen statt eines
-    // Balkens in einer Rinne.
-    rundesRechteck(ctx, rand, y, inhalt, optH, 13);
-    // Der führende Balken hatte hier einen zweiten, helleren Rahmen in 2 px.
-    // Der ist weg, seit die Füllung farbig ist: Vorn zu liegen wird jetzt
-    // durch das Blau gesagt, und zweimal dasselbe zu sagen macht es nicht
-    // deutlicher, sondern unruhig. Ein Strich für alle Zeilen.
-    ctx.strokeStyle = farbe.linie;
+    // This used to be filled with --bg-3, and that worked fine as long as
+    // the fill on top was translucent white: both had a blue cast, so the
+    // transition read as one surface in two brightness levels. X's gray is
+    // neutral. Next to --bg-3, the empty part then looked like a second,
+    // blue-tinted bar sitting behind the first - two boxes instead of one
+    // bar in a track.
+    roundedRect(ctx, margin, y, content, optH, 13);
+    // The leading bar used to have a second, brighter 2px border here.
+    // That's gone since the fill became a color: being in the lead is now
+    // communicated by the blue, and saying the same thing twice doesn't
+    // make it clearer, it makes it noisy. One stroke for every row.
+    ctx.strokeStyle = color.linie;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Einfarbig und mit harter Kante – auf der Seite läuft dieselbe Füllung
-    // weich aus.
+    // Solid color with a hard edge - on the site the same fill fades out
+    // softly.
     //
-    // Der Unterschied ist Absicht, nicht Nachlässigkeit. Auf der Seite ist der
-    // Balken anklickbar und ändert sich beim Abstimmen; eine harte Kante, die
-    // beim Klick durch ein Wort springt, liest sich dort als Fehler. Das Bild
-    // ist starr. Eine Kante, die nicht wandert, wirkt gesetzt – und sie sagt
-    // etwas, was der weiche Verlauf verschluckt: genau hier endet der Anteil.
+    // The difference is deliberate, not an oversight. On the site the bar
+    // is clickable and changes as people vote; a hard edge jumping through
+    // a word on click reads as a bug there. The image is static. An edge
+    // that doesn't move reads as settled - and it says something the soft
+    // gradient swallows: the share ends exactly here.
     //
-    // Der Antworttext liegt auch hier über dem Balken und wird von der Kante
-    // gekreuzt. Die Füllung ist deckend statt durchscheinend, seit sie Xs
-    // Werte hat; nachgemessen steht der Text auf beiden Seiten der Kante gut
-    // lesbar da (10,0:1 auf dem Grau, 6,0:1 auf dem Blau, 16,2:1 daneben).
+    // The answer text sits over the bar here too and gets crossed by the
+    // edge. The fill is opaque instead of translucent since it took on X's
+    // color values; measured, the text stays readable on both sides of the
+    // edge (10.0:1 on the gray, 6.0:1 on the blue, 16.2:1 next to it).
     //
-    // Dieselben zwei Farben wie auf der Seite, aus demselben Blatt geholt –
-    // sonst sieht das Bild, das nach draußen geht, anders aus als die Seite,
-    // von der es stammt.
-    const fuellB = Math.max(0, Math.min(1, o.share)) * inhalt;
-    if (fuellB > 1) {
+    // Same two colors as on the site, pulled from the same stylesheet -
+    // otherwise the image that goes out into the world would look
+    // different from the site it came from.
+    const fillB = Math.max(0, Math.min(1, o.share)) * content;
+    if (fillB > 1) {
       ctx.save();
-      rundesRechteck(ctx, rand, y, inhalt, optH, 13);
+      roundedRect(ctx, margin, y, content, optH, 13);
       ctx.clip();
-      ctx.fillStyle = spitze ? farbe.fuellungSpitze : farbe.fuellung;
-      ctx.fillRect(rand, y, fuellB, optH);
+      ctx.fillStyle = spitze ? color.fuellungSpitze : color.fuellung;
+      ctx.fillRect(margin, y, fillB, optH);
       ctx.restore();
     }
 
-    // Der Betrag rechts, ALLEIN und mittig in der Zeile.
+    // The amount on the right, ALONE and centered on the row.
     //
-    // An dieser Stelle standen nacheinander drei Dinge: die Stimmenzahl unter
-    // dem Betrag, dann nichts, dann der Prozentsatz, jetzt wieder nichts. Der
-    // Prozentsatz war ein Angebot und ist wieder herausgeflogen – er sagte
-    // dasselbe wie die Balkenlaenge, nur eine Zeile lauter.
+    // Three different things have occupied this spot, one after another:
+    // the vote count under the amount, then nothing, then the percentage,
+    // now nothing again. The percentage was tried and got pulled again -
+    // it said the same thing as the bar length, just one line louder.
     //
-    // Zurueckkommen darf davon nur der Anteil, nie die STIMMENZAHL: Sie liess
-    // sich aufblasen, indem jemand sein Guthaben kurz vor Schluss auf viele
-    // Wallets verteilt und mit jeder abstimmt. Betrag und Anteil koennen das
-    // nicht, weil beide aus den Betraegen kommen und nicht aus einer Zaehlung.
+    // Only the share is allowed to come back from that list, never the
+    // VOTE COUNT: it could be inflated by someone splitting their balance
+    // across many wallets right before closing and voting with each one.
+    // Amount and share can't be gamed that way, because both come from the
+    // dollar amounts, not from a count.
     //
-    // 13 ist keine gewaehlte Zahl: Der Betrag steht auf der Grundlinie, seine
-    // Versalhoehe ist 26 px, die Haelfte davon liegt ueber der Mitte.
-    const mitte = y + optH / 2;
+    // 13 isn't an arbitrary number: the amount sits on the baseline, its
+    // cap height is 26px, half of that sits above the center.
+    const center = y + optH / 2;
     ctx.textAlign = 'right';
     ctx.font = `700 36px ${mono}`;
-    ctx.fillStyle = spitze ? farbe.akzent : farbe.text;
-    ctx.fillText(vollUsd(o.usd), B - rand - 26, mitte + 13);
+    ctx.fillStyle = spitze ? color.akzent : color.text;
+    ctx.fillText(fullUsd(o.usd), B - margin - 26, center + 13);
     ctx.textAlign = 'left';
 
-    // Die Antwort selbst. Bewusst OHNE den eigenen Haken: Das Bild geht nach
-    // draußen, und wie der Absender abgestimmt hat, gehört nicht hinein.
-    ctx.font = `${spitze ? '650' : '500'} ${optGroesse}px ${mono}`;
-    ctx.fillStyle = farbe.text;
-    const beschriftung = kuerzen(ctx, o.label, textBreite);
-    if (beschriftung !== o.label) antwortenGekuerzt++;
-    ctx.fillText(beschriftung, rand + 26, mitte + 10);
+    // The answer text itself. Deliberately WITHOUT your own checkmark: the
+    // image goes out into the world, and how the sender voted doesn't
+    // belong in it.
+    ctx.font = `${spitze ? '650' : '500'} ${optSize}px ${mono}`;
+    ctx.fillStyle = color.text;
+    const caption = truncate(ctx, o.label, textWidth);
+    if (caption !== o.label) answersTruncated++;
+    ctx.fillText(caption, margin + 26, center + 10);
 
-    y += optH + luecke;
+    y += optH + gap;
   }
 
-  // Weggelassene Antworten werden genannt, nicht verschwiegen. Eine Karte, die
-  // stillschweigend die Hälfte zeigt, behauptet etwas über das Ergebnis.
+  // Omitted answers are named, not hidden. A card that silently shows half
+  // the answers implies something about the result.
   if (ausgelassen) {
     ctx.font = `400 20px ${mono}`;
-    ctx.fillStyle = farbe.dimmer;
+    ctx.fillStyle = color.dimmer;
     ctx.fillText(`+ ${ausgelassen} more option${ausgelassen === 1 ? '' : 's'} on sized.gg`,
-      rand, y + 22);
+      margin, y + 22);
   }
 
-  // --- Fuß ------------------------------------------------------------------
+  // --- Footer -----------------------------------------------------------------
   //
-  // Beim Kartenbild bleibt der Streifen unten LEER.
+  // For the card image, the strip at the bottom stays EMPTY.
   //
-  // X zeichnet den Titel der Kachel als schwarzen Kasten unten links ins Bild.
-  // Weglassen geht nicht – ohne Titel baut X gar keine Kachel mehr, sondern
-  // zeigt den nackten Link. Also bekommt der Kasten eine Fläche, auf der er
-  // nichts verdeckt.
+  // X draws the tile's title as a black box in the bottom left, into the
+  // image. It can't be left out - without a title X doesn't build a tile
+  // at all, but shows the bare link instead. So the box gets a surface
+  // where it isn't covering anything.
   //
-  // Der Platz wird trotzdem freigehalten und nicht von den Balken gefüllt:
-  // Sonst läge der Kasten auf einer Antwort.
+  // The space is kept clear regardless, not filled by the bars: otherwise
+  // the box would sit on top of an answer.
   //
-  // Im Bild zum Herunterladen steht die Zeile weiterhin – dort gibt es keinen
-  // Kasten, und "sized.gg" gehört auf ein Bild, das gepostet wird.
+  // In the downloadable image, the line still appears - there's no box
+  // there, and "sized.gg" belongs on an image that gets posted.
   if (!fuerKarte) {
     ctx.font = `400 19px ${mono}`;
-    ctx.fillStyle = farbe.dimmer;
-    // Ohne "sized.gg": Das steht schon oben rechts. Zweimal dieselbe Adresse
-    // auf einem Bild ist keine Betonung, sondern eine Wiederholung.
+    ctx.fillStyle = color.dimmer;
+    // Without "sized.gg": that's already in the top right. The same
+    // address twice on one image isn't emphasis, it's repetition.
     ctx.fillText(p.closed
       ? 'This vote is closed'
-      : `Hold $${state.cfg.symbol} to vote`, rand, H - m - 38);
+      : `Hold $${state.cfg.symbol} to vote`, margin, H - m - 38);
   }
 
   ctx.restore();
 
-  // Der Rand zum Schluss obendrauf. Er ist das Einzige, was die Rundung
-  // wirklich zeigt: Karte und Grund unterscheiden sich nur um wenige
-  // Helligkeitsstufen, und nach der Umrechnung durch X kann dieser Unterschied
-  // fast verschwinden. Der Strich überlebt sie.
+  // The border goes on last, on top. It's the only thing that actually
+  // shows the rounding: card and background differ by only a few
+  // brightness steps, and after X's re-encoding that difference can nearly
+  // disappear. The stroke survives it.
   //
-  // Seit der Lichtschein weg ist, traegt er ausserdem allein die Aufgabe, die
-  // Karte von der Zeitleiste abzusetzen. Deshalb --dimmer statt --line und
-  // 3 px statt 1,5: Auf schwarzem Grund sieht auch die Haarlinie gut aus,
-  // aber dort steht die Kachel spaeter nicht.
-  ctx.strokeStyle = farbe.dimmer;
+  // Since the glow is gone, it also carries the entire job of setting the
+  // card apart from the timeline on its own. Hence --dimmer instead of
+  // --line, and 3px instead of 1.5: the hairline looks fine too on a black
+  // background, but that's not where the tile ends up living.
+  ctx.strokeStyle = color.dimmer;
   ctx.lineWidth = 3;
-  rundesRechteck(ctx, m, m, B - m * 2, karteH, BILD_ECKE);
+  roundedRect(ctx, m, m, B - m * 2, cardH, BILD_ECKE);
   ctx.stroke();
 
-  // Die tatsächlich gezeichnete Geometrie hängt am Bild.
+  // The geometry actually drawn hangs off the image.
   //
-  // Das ist für den Test da, und zwar aus einem bestimmten Grund: Rechnet er
-  // die Balkenbreiten selbst nach, prüft er seine eigene Kopie der Formel und
-  // nicht das, was hier passiert ist. Genau so ist er schon einmal grün
-  // geblieben, nachdem sich der Seitenrand geändert hatte. Ein paar Zahlen an
-  // die Leinwand zu hängen kostet nichts und macht die Prüfung ehrlich.
+  // This exists for the test, for a specific reason: if the test
+  // recomputed the bar widths itself, it would be checking its own copy of
+  // the formula, not what actually happened here. That's exactly how it
+  // once stayed green after the page margin had changed. Attaching a few
+  // numbers to the canvas costs nothing and keeps the check honest.
   leinwand.geometrie = {
-    inhalt,
-    verhaeltnis: B / H,
-    gezeigt: zeigen.length,
+    content,
+    ratio: B / H,
+    gezeigt: show.length,
     ausgelassen,
-    // Die beiden Stellen, an denen Text still verschwindet: eine Frage ueber
-    // drei Zeilen und eine Antwort, an die kuerzen() drei Punkte gehaengt hat.
-    // Sie stehen hier, damit MAX_FRAGE und MAX_ANTWORT gegen das GEZEICHNETE
-    // Bild geprueft werden koennen und nicht gegen eine nachgerechnete Formel.
-    frageZeilenRoh: frageZeilenRoh.length,
-    frageGroesse,
-    frageGekuerzt: frageZeilenRoh.length > 3,
-    optGroesse,
-    antwortenGekuerzt,
-    fuellungen: zeigen.map((o) => Math.max(0, Math.min(1, o.share)) * inhalt),
+    // The two places where text silently disappears: a question spanning
+    // three lines, and an answer that truncate() appended three dots to.
+    // They're recorded here so MAX_QUESTION and MAX_ANSWER can be checked
+    // against the DRAWN image, not against a recomputed formula.
+    questionLinesRaw: questionLinesRaw.length,
+    questionSize,
+    frageGekuerzt: questionLinesRaw.length > 3,
+    optSize,
+    answersTruncated,
+    fuellungen: show.map((o) => Math.max(0, Math.min(1, o.share)) * content),
   };
 
   return leinwand;
 }
 
 /**
- * Das Vorschaubild einer Abstimmung in die öffentliche Ablage legen.
+ * Puts a poll's preview image into public storage.
  *
- * Der Grund, warum es überhaupt hochgeladen wird: Der Erste, der einen
- * geposteten Link öffnet, ist nicht der Leser, sondern Xs Crawler – und der
- * führt kein JavaScript aus. Was hier im Browser gezeichnet wird, sieht er
- * nie. Das Bild muss fertig unter einer Adresse liegen, bevor der Link
- * gepostet wird.
+ * Why it gets uploaded at all: the first one to open a posted link isn't
+ * the reader, it's X's crawler - and it doesn't run JavaScript. Whatever
+ * gets drawn here in the browser, it never sees. The image has to sit
+ * ready at a URL before the link gets posted.
  *
- * WIRD GENAU EINMAL AUFGERUFEN: beim Anlegen der Abstimmung.
+ * CALLED EXACTLY ONCE: when the poll is created.
  *
- * Das ist eine Entscheidung, keine Nachlässigkeit. Die Linkkarte zeigt die
- * Abstimmung so, wie sie beim Start aussah – überall Null. Sie ist die
- * Einladung zum Abstimmen, kein Ergebnisbericht: Wer die aktuellen Zahlen
- * posten will, lädt das Bild mit dem Ladeknopf und hängt es als Bild an.
+ * That's a decision, not an oversight. The link card shows the poll the
+ * way it looked at launch - zero everywhere. It's the invitation to vote,
+ * not a results report: whoever wants to post the current numbers
+ * downloads the image with the download button and attaches it as a
+ * picture.
  *
- * Dass der Text der Karte dabei aktuell ist und das Bild nicht, ist bewusst
- * hingenommen. Auf X fällt es nicht auf – dort wird bei Linkkarten nur das
- * Bild gezeigt. In Slack oder Telegram steht darunter der aktuelle Stand und
- * widerspricht dem Bild; das ist der Preis dafür, dass die Karte sonst bei
- * jedem Teilen neu erzeugt werden müsste.
+ * That the card's text stays current while the image doesn't is accepted
+ * on purpose. On X it goes unnoticed - link cards there only show the
+ * image. In Slack or Telegram the current state appears below it and
+ * contradicts the image; that's the price for not having to regenerate the
+ * card on every single share.
  *
- * Die einzige Ausnahme ist ergaenzeFehlendeKarten(): Abstimmungen von vor
- * diesem Mechanismus haben gar kein Bild, und ein Bild mit dem heutigen Stand
- * ist dort besser als die Ersatzkarte.
+ * The only exception is addMissingCards(): polls from before this
+ * mechanism existed have no image at all, and an image with today's
+ * numbers is better there than the fallback card.
  *
- * Fehler werden bewusst nur ins Protokoll geschrieben. Das Hochladen hängt an
- * einer Handlung, die etwas anderes bezweckt – eine Abstimmung anlegen. Sie
- * deshalb scheitern zu lassen oder mit einer Meldung zu stören wäre falsch
- * herum: Die Abstimmung steht, nur ihre Karte fehlt.
+ * Errors are deliberately only logged. The upload hangs off an action
+ * meant to do something else - create a poll. Letting that action fail, or
+ * interrupting it with an error message, would be backward: the poll
+ * exists, only its card is missing.
  */
 async function ladeOgBildHoch(p) {
   if (!state.me?.isAdmin || !state.db?.storage) return false;
   try {
-    const leinwand = await zeichnePoll(p, { fuerKarte: true });
+    const leinwand = await drawPoll(p, { fuerKarte: true });
     const blob = await new Promise((r) => leinwand.toBlob(r, 'image/png'));
     if (!blob) return false;
     const { error } = await state.db.storage.from('og')
-      .upload(kartenDatei(p.id), blob, {
+      .upload(cardFile(p.id), blob, {
         upsert: true,
         contentType: 'image/png',
-        // Ein Jahr, unveraenderlich – und das ist keine Schaetzung: Der
-        // Dateiname traegt die Fassungsnummer (poll-12-v9.png). Unter DIESEM
-        // Namen aendert sich das Bild nie; aendert sich die Karte, steigt
-        // KARTEN_VERSION und der Name ist ein anderer.
+        // One year, immutable - and that isn't a guess: the filename
+        // carries the version number (poll-12-v9.png). Under THIS name the
+        // image never changes; if the card design changes, CARD_VERSION
+        // goes up and the name is a different one.
         //
-        // Vorher standen hier 300 Sekunden. Danach holte jeder Abruf das Bild
-        // wieder von der Quelle – auch der von X, wenn jemand den Link Stunden
-        // spaeter noch einmal teilt. Fuenf Minuten Vorsicht fuer eine Datei,
-        // die sich per Definition nicht aendert.
+        // This used to say 300 seconds. After that, every request
+        // fetched the image from the source again - X's included, if
+        // someone shared the link again hours later. Five minutes of
+        // caution for a file that by definition never changes.
         cacheControl: '31536000, immutable',
       });
     if (error) throw new Error(error.message);
@@ -3090,24 +3125,24 @@ async function ladeOgBildHoch(p) {
 }
 
 /**
- * Fehlende Vorschaukarten nachtragen.
+ * Backfill missing preview cards.
  *
- * Läuft einmal beim Start, nur bei Ansem. Der Grund: Ein geteilter Link soll
- * eine Karte zeigen, ohne dass vorher jemand einen Knopf gedrückt hat –
- * Abstimmungen aus der Zeit vor diesem Mechanismus haben aber keine.
+ * Runs once at startup, only for Ansem. The reason: a shared link should
+ * show a card without anyone having pressed a button first - but polls
+ * from before this mechanism existed don't have one.
  *
- * Es wird EIN Verzeichnis-Aufruf gemacht und daraus gelesen, was schon da ist.
- * Die Alternative wäre, für jede Abstimmung einzeln nachzusehen; das wären bei
- * fünfzig Abstimmungen fünfzig Anfragen für eine Auskunft, die in einer Antwort
- * passt.
+ * ONE directory listing call is made, and what already exists is read from
+ * that. The alternative would be checking each poll individually; with
+ * fifty polls that's fifty requests for information that fits in one
+ * response.
  *
- * Gedeckelt auf ein paar Stück pro Start. Jedes Bild ist rund 400 KB, und
- * fünfzig davon beim Öffnen der Seite hochzuladen wäre ein Missverhältnis –
- * die restlichen kommen beim nächsten Start dran oder beim Teilen.
+ * Capped at a handful per startup. Each image is roughly 400KB, and
+ * uploading fifty of them when the page opens would be disproportionate -
+ * the rest get picked up on the next startup, or when shared.
  */
-const MAX_KARTEN_PRO_START = 6;
+const MAX_CARDS_PER_START = 6;
 
-async function ergaenzeFehlendeKarten() {
+async function addMissingCards() {
   if (!state.me?.isAdmin || !state.db?.storage || !state.polls?.length) return;
   try {
     const { data, error } = await state.db.storage.from('og').list('', { limit: 1000 });
@@ -3115,12 +3150,12 @@ async function ergaenzeFehlendeKarten() {
     const vorhanden = new Set((data ?? []).map((d) => d.name));
 
     const fehlend = state.polls
-      .filter((p) => !vorhanden.has(kartenDatei(p.id)))
-      .slice(0, MAX_KARTEN_PRO_START);
+      .filter((p) => !vorhanden.has(cardFile(p.id)))
+      .slice(0, MAX_CARDS_PER_START);
     if (!fehlend.length) return;
 
-    // Nacheinander, nicht gleichzeitig: Sechs Leinwände parallel zu zeichnen
-    // lässt auf einem Telefon die Oberfläche stocken, und Eile ist hier keine.
+    // One at a time, not all at once: drawing six canvases in parallel
+    // makes the UI stutter on a phone, and there's no rush here.
     for (const p of fehlend) await ladeOgBildHoch(p);
     console.info(`[og] ${fehlend.length} Vorschaukarte(n) nachgetragen`);
   } catch (e) {
@@ -3129,34 +3164,34 @@ async function ergaenzeFehlendeKarten() {
 }
 
 /**
- * Bild bauen und ausliefern.
+ * Build the image and deliver it.
  *
- * Zwei Wege, und der Grund für den zweiten ist iOS: Ein a[download] auf eine
- * blob-Adresse tut dort mal etwas und mal nichts. Das Systemmenü dagegen
- * funktioniert dort zuverlässig und ist für den eigentlichen Zweck ohnehin
- * besser – aus ihm heraus geht das Bild direkt nach X, ohne Umweg über die
- * Fotos.
+ * Two paths, and the reason for the second one is iOS: an a[download] to a
+ * blob URL sometimes does something there and sometimes does nothing. The
+ * system share menu, on the other hand, works reliably there and is
+ * actually the better fit for the real purpose anyway - from it the image
+ * goes straight to X, with no detour through Photos.
  */
 async function ladePollBild(id) {
   const p = state.polls.find((x) => x.id === Number(id));
   if (!p) return toast('That poll is not in the list anymore', true);
 
-  if (!knopfBelegen('poll-image', id)) return;
+  if (!buttonClaim('poll-image', id)) return;
   try {
-    const leinwand = await zeichnePoll(p);
+    const leinwand = await drawPoll(p);
     const blob = await new Promise((r) => leinwand.toBlob(r, 'image/png'));
     if (!blob) throw new Error('Could not build the image');
 
     const name = `sized-poll-${p.id}.png`;
-    const datei = new File([blob], name, { type: 'image/png' });
+    const file = new File([blob], name, { type: 'image/png' });
 
-    if (navigator.canShare?.({ files: [datei] }) && matchMedia('(pointer: coarse)').matches) {
+    if (navigator.canShare?.({ files: [file] }) && matchMedia('(pointer: coarse)').matches) {
       try {
-        await navigator.share({ files: [datei] });
+        await navigator.share({ files: [file] });
         return;
       } catch (e) {
         if (e?.name === 'AbortError') return;
-        // Alles andere: unten weiter mit dem Herunterladen.
+        // Anything else: fall through to the download below.
       }
     }
 
@@ -3167,52 +3202,56 @@ async function ladePollBild(id) {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    // Nicht sofort: Manche Browser lesen die Adresse erst nach dem Klick aus.
+    // Not immediately: some browsers only read the URL after the click.
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
 
-    knopfAn('poll-image', id);
+    buttonOn('poll-image', id);
   } catch (e) {
     console.error('[poll] image failed:', e);
     toast(e.message || 'Could not build the image', true);
   } finally {
-    knopfFreigeben('poll-image', id);
+    buttonRelease('poll-image', id);
   }
 }
 
 function pollHtml(p) {
-  // Ansem stimmt nicht mit: Er stellt die Frage, legt die Antworten fest und
-  // schließt ab – zusätzlich das schwerste Gewicht im Raum einzubringen wäre
-  // keine Abstimmung mehr. Die Datenbank weist seine Stimme ohnehin ab; hier
-  // sehen die Möglichkeiten deshalb gar nicht erst anklickbar aus.
-  const stimmberechtigt = !state.me.isAdmin;
+  // Ansem doesn't vote: he asks the question, sets the answers, and closes
+  // the poll - adding the heaviest holder in the room on top of that would
+  // stop this from being a poll at all. The database rejects his vote
+  // anyway; here the options are made to not even look clickable to begin
+  // with.
+  const eligibleToVote = !state.me.isAdmin;
 
-  // Die führende Antwort steht blau und fetter da – dieselbe Auszeichnung wie
-  // im Bild, das der Ladeknopf erzeugt, und aus derselben Rechnung. Erst nach
-  // dem Schliessen: warum, steht bei fuehrenderAnteil().
-  const fuehrt = fuehrenderAnteil(p);
+  // The leading answer shows in blue and bolder - the same treatment as in
+  // the image the download button generates, and from the same
+  // computation. Only after closing: why, is explained at
+  // leadingShare().
+  const leads = leadingShare(p);
 
-  // Abstimmen mit der Tastatur.
+  // Voting with the keyboard.
   // -------------------------------------------------------------------------
-  // Hier stand ein nacktes <div>. Damit war die zentrale Handlung der ganzen
-  // Seite fuer eine Tastatur nicht erreichbar: Die gemessene Reihenfolge lief
-  // Marke, Reiter, Abmelden, Link, Bild – und dann von vorn, ohne je eine
-  // Antwort zu beruehren. Eine Vorlesestimme meldete die Zeilen als Text.
+  // This used to be a bare <div>. That made the central action of the
+  // whole site unreachable by keyboard: the measured tab order went logo,
+  // tabs, log out, link, image - and then back to the start, never
+  // touching a single answer. A screen reader announced the rows as plain
+  // text.
   //
-  // Kein <button>, obwohl es naheliegt: Ein Knopf bringt eigene Innenabstaende,
-  // eigene Schriftvererbung und in Safari eine eigene Mindesthoehe mit, und das
-  // Blatt darum herum ist auf ein div gebaut. Ein role="button" mit tabindex
-  // sagt derselben Vorlesestimme dasselbe, ohne das Aussehen anzufassen.
+  // Not a <button>, even though that seems obvious: a button brings its
+  // own padding, its own font inheritance, and in Safari its own minimum
+  // height, and the surrounding stylesheet is built around a div. A
+  // role="button" with tabindex tells the same screen reader the same
+  // thing, without touching the appearance.
   //
-  // aria-disabled statt disabled, weil ein div kein disabled kennt – und weil
-  // eine geschlossene Abstimmung SICHTBAR bleiben soll, auch fuer den, der
-  // sie sich vorlesen laesst.
+  // aria-disabled instead of disabled, because a div has no concept of
+  // disabled - and because a closed poll should stay VISIBLE, including to
+  // someone having it read aloud.
   //
-  // aria-pressed sagt, welche Antwort die eigene ist. Ohne das ist der Haken
-  // nur ein Bild.
+  // aria-pressed says which answer is your own. Without it, the checkmark
+  // is just a picture.
   const opts = p.options.map((o) => {
-    const zu = p.closed || !stimmberechtigt;
+    const zu = p.closed || !eligibleToVote;
     return `
-    <div class="opt ${zu ? 'locked' : ''} ${p.myOptionId === o.id ? 'mine' : ''}${fuehrt !== null && o.share === fuehrt ? ' leads' : ''}"
+    <div class="opt ${zu ? 'locked' : ''} ${p.myOptionId === o.id ? 'mine' : ''}${leads !== null && o.share === leads ? ' leads' : ''}"
          data-poll="${p.id}" data-option="${o.id}"
          role="button" tabindex="${zu ? -1 : 0}"
          aria-disabled="${zu}" aria-pressed="${p.myOptionId === o.id}">
@@ -3220,12 +3259,12 @@ function pollHtml(p) {
         <div class="opt-fill" style="width:${(o.share * 100).toFixed(1)}%"></div>
         <div class="opt-text">
           <span class="opt-label">${esc(o.label)}${p.myOptionId === o.id
-            // Das Bild ist fuer das Auge, der Satz fuer die Vorlesestimme. Vorher
-            // stand hier ein ✓ als Buchstabe – das wurde als "Haken" mitgelesen
-            // und sagte nicht, was es bedeutet.
-            ? `${STIMME_SVG}<span class="nur-vorlesen"> — your vote</span>` : ''}</span>
+            // The icon is for the eye, the sentence is for the screen
+            // reader. This used to be a ✓ character - it got read aloud as
+            // "check mark" and didn't say what it meant.
+            ? `${VOTE_SVG}<span class="nur-vorlesen"> — your vote</span>` : ''}</span>
           <span class="opt-num">
-            <span class="held">${vollUsd(o.usd)}</span>
+            <span class="held">${fullUsd(o.usd)}</span>
           </span>
         </div>
       </div>
@@ -3246,8 +3285,8 @@ function pollHtml(p) {
       </span>
     </div>
     <div class="poll-meta">
-      <span>${vollUsd(p.totalUsd)} in $${esc(state.cfg.symbol)} total</span>
-      ${!p.closed && p.closesAt ? fristZeile(p) : ''}
+      <span>${fullUsd(p.totalUsd)} in $${esc(state.cfg.symbol)} total</span>
+      ${!p.closed && p.closesAt ? deadlineLine(p) : ''}
       ${p.closed ? '<span class="closed-tag">CLOSED</span>' : ''}
       ${state.me.isAdmin && !p.closed ? '<span class="dim">· you do not vote in your own polls</span>' : ''}
       ${state.me.isAdmin && !p.closed ? `<button class="btn btn-ghost btn-close-poll" data-poll="${p.id}">Close poll</button>` : ''}
@@ -3257,74 +3296,74 @@ function pollHtml(p) {
 }
 
 /**
- * Eine Abstimmung löschen. Nur Ansem.
+ * Delete a poll. Ansem only.
  *
- * Zwei Tipper, nicht einer. Der erste macht aus dem Papierkorb ein Häkchen,
- * der zweite löscht. Kein Hinweis, der aufpoppt, keine Warnfarbe – das
- * Symbol selbst ist die Rückfrage, und die Antwort ist derselbe Knopf.
+ * Two taps, not one. The first turns the trash can into a checkmark, the
+ * second deletes. No popup warning, no warning color - the icon itself is
+ * the confirmation prompt, and the answer is the same button.
  *
- * Der Grund für die zwei Schritte bleibt: Es gibt kein Zurück. Die Stimmen
- * hängen per Fremdschlüssel an der Abstimmung und werden von der Datenbank
- * mitgelöscht; niemand kann sie wiederherstellen, und die Leute, die
- * abgestimmt haben, haben dafür Token gehalten. Der Knopf sitzt außerdem
- * direkt neben zwei harmlosen – Link kopieren und Bild laden – und in einer
- * Reihe gleich aussehender Symbole trifft man irgendwann daneben.
+ * The reason for the two steps still holds: there's no undo. Votes hang
+ * off the poll by foreign key and get deleted along with it by the
+ * database; nobody can restore them, and the people who voted held tokens
+ * to do so. The button also sits right next to two harmless ones - copy
+ * link and download image - and in a row of similar-looking icons, you
+ * eventually miss.
  *
- * Nach fünf Sekunden wird aus dem Häkchen wieder ein Papierkorb. Ohne das
- * bliebe ein scharfer Knopf im Blatt stehen, von dem niemand mehr weiß – und
- * der nächste beiläufige Tipper löscht.
+ * After five seconds the checkmark turns back into a trash can. Without
+ * that, an armed button would just sit there in the app, forgotten by
+ * everyone - and the next casual tap deletes.
  *
- * "Scharf" steht bei knopfAktiv und nicht am Knopf. Der Grund steht dort
- * ausführlich: Die Liste wird bei jeder fremden Stimme neu gebaut, und ein
- * Zustand am DOM-Knoten überlebt das nicht. Genau das war der Fehler, bei dem
- * der zweite Tipper manchmal nichts tat.
+ * "Armed" lives in buttonActive, not on the button. The reason is explained
+ * in detail there: the list gets rebuilt on every vote from anyone, and
+ * state on the DOM node doesn't survive that. That's exactly the bug
+ * behind the second tap sometimes doing nothing.
  */
-async function loeschePoll(id) {
+async function deletePoll(id) {
   const p = state.polls.find((x) => x.id === Number(id));
   if (!p) return toast('That poll is not in the list anymore', true);
 
-  if (!knopfIstAn('poll-delete', id)) {
-    knopfAn('poll-delete', id);
+  if (!buttonIsOn('poll-delete', id)) {
+    buttonOn('poll-delete', id);
     return;
   }
 
-  knopfAus('poll-delete', id);
-  if (!knopfBelegen('poll-delete', id)) return;
-  // Antworten und Stimmen hängen per "on delete cascade" daran und gehen
-  // mit – das erledigt die Datenbank, nicht der Browser. Ein Löschen in drei
-  // Schritten von hier aus könnte auf halber Strecke abbrechen und eine
-  // Abstimmung ohne Antworten hinterlassen.
+  buttonOff('poll-delete', id);
+  if (!buttonClaim('poll-delete', id)) return;
+  // Answers and votes hang off it via "on delete cascade" and get removed
+  // along with it - the database handles that, not the browser. Deleting
+  // in three steps from here could abort halfway through and leave behind
+  // a poll with no answers.
   const { error } = await state.db.from('polls').delete().eq('id', p.id);
-  knopfFreigeben('poll-delete', id);
+  buttonRelease('poll-delete', id);
 
-  // Nur der Fehlerfall meldet sich. Dass es geklappt hat, sieht man daran,
-  // dass die Abstimmung weg ist – eine Meldung obendrauf sagt dasselbe noch
-  // einmal. Dass es NICHT geklappt hat, sieht man dagegen nirgends: Die
-  // Abstimmung stünde einfach weiter da, und das läse sich als klemmender
-  // Knopf.
+  // Only the failure case announces itself. That it worked is visible
+  // from the poll being gone - a message on top would just say the same
+  // thing twice. That it did NOT work, on the other hand, is invisible
+  // anywhere else: the poll would simply still be sitting there, and that
+  // reads as a stuck button.
   if (error) return toast(error.message, true);
 
-  // Das Vorschaubild hängt nicht per Fremdschlüssel an der Abstimmung, die
-  // Datenbank räumt es also nicht mit weg. Es zu lassen wäre kein Beinbruch,
-  // aber ein alter Link zeigte dann weiter eine gültig aussehende Karte für
-  // etwas, das es nicht mehr gibt.
-  // Alle Fassungen mitnehmen, nicht nur die aktuelle: Nach einem Versionswechsel
-  // liegen die alten noch da, und ein Link auf eine geloeschte Abstimmung soll
-  // keine gueltig aussehende Karte mehr finden.
+  // The preview image doesn't hang off the poll by foreign key, so the
+  // database doesn't clean it up along with it. Leaving it wouldn't be a
+  // disaster, but an old link would then keep showing a card that looks
+  // valid for something that no longer exists.
+  // Take every version along, not just the current one: after a version
+  // bump, the old ones are still sitting there, and a link to a deleted
+  // poll shouldn't find a card that still looks valid.
   state.db.storage?.from('og')
-    .remove(Array.from({ length: KARTEN_VERSION }, (_, i) => `poll-${p.id}-v${i + 1}.png`)
+    .remove(Array.from({ length: CARD_VERSION }, (_, i) => `poll-${p.id}-v${i + 1}.png`)
       .concat(`poll-${p.id}.png`))
     .catch((e) => console.warn('[og] preview image not deleted:', e.message));
 
-  // Die anderen Browser holen sich das über Realtime; der eigene wartet nicht
-  // darauf, damit der Knopf nicht ins Leere zu zeigen scheint.
+  // Other browsers pick this up via realtime; our own doesn't wait for
+  // that, so the button doesn't seem to point at nothing.
   loadPolls().catch((e) => console.warn('[poll] reload after delete:', e.message));
 }
 
 async function vote(pollId, optionId) {
-  // Doppelt: Der Klick kommt hier gar nicht mehr an, weil die Möglichkeiten
-  // für ihn gesperrt sind – aber wer die Funktion anders erreicht, soll
-  // dieselbe Antwort bekommen wie von der Datenbank.
+  // Belt and suspenders: the click never even reaches here, because the
+  // options are locked against it - but whoever reaches this function some
+  // other way should get the same answer the database would give.
   if (state.me.isAdmin) return toast('You cannot vote in your own polls', true);
 
   const { error } = await state.db.from('votes')
@@ -3336,362 +3375,376 @@ async function vote(pollId, optionId) {
 }
 
 /**
- * Die Antwortfelder und der Knopf darunter.
+ * The answer fields and the button below them.
  *
- * Zwei ist die Untergrenze – mit einer Antwort wäre es keine Abstimmung mehr.
+ * Two is the floor - with one answer it wouldn't be a poll anymore.
  *
- * Vier ist die Obergrenze, und die Zahl ist gemessen. Der Maßstab ist wieder
- * das Bild, das nach draußen geht, diesmal aber nicht sein Inhalt, sondern sein
- * FORMAT: X zeigt in der Zeitleiste ein Bild bis 16:9 ungeschnitten und
- * beschneidet alles Höhere oben und unten. Die Karte wächst mit jeder Antwort.
- * Gemessen (bei einzeiliger Frage; mehrzeilige Fragen drücken die Zahl weiter):
+ * Four is the ceiling, and that number is measured. The yardstick is again
+ * the image that goes out into the world, but this time not its content,
+ * its ASPECT RATIO: X shows an image in the timeline uncropped up to 16:9
+ * and crops anything taller at the top and bottom. The card grows with
+ * every answer. Measured (with a single-line question; multi-line
+ * questions push the number down further):
  *
- *        4 Antworten   1,78 – genau 16:9, nichts fällt weg
- *        5 Antworten   1,74 – ein schmaler Streifen
- *        6 Antworten   1,58
- *       10 Antworten   1,14 – fast quadratisch, ein gutes Stück ist weg
+ *        4 answers   1.78 - exactly 16:9, nothing gets cropped
+ *        5 answers   1.74 - a narrow strip
+ *        6 answers   1.58
+ *       10 answers   1.14 - nearly square, a good chunk is gone
  *
- * Vier ist damit die letzte Zahl, bei der das gepostete Bild vollständig
- * ankommt. Dass X in seiner eigenen Umfrage genau vier erlaubt, ist derselbe
- * Grund und keine Nachahmung.
+ * Four is therefore the last number at which the posted image arrives
+ * intact. That X allows exactly four in its own native polls is the same
+ * reason, not imitation.
  *
- * Die kleine Linkvorschau (1,91:1) ist davon unberührt: Sie hat eine feste Höhe
- * und zeigt je nach Länge der Frage drei oder vier Antworten, den Rest nennt
- * sie als "+ N more options on sized.gg". Dieses Feld bleibt bestehen – es
- * greift jetzt nur noch bei einer dreizeiligen Frage.
+ * The small link preview (1.91:1) is unaffected by this: it has a fixed
+ * height and shows three or four answers depending on how long the
+ * question is, naming the rest as "+ N more options on sized.gg". That
+ * fallback stays in place - it now only kicks in for a three-line
+ * question.
  *
- * Die Datenbank kennt dieselbe Grenze (Migration 20260830020000_antwortzahl.sql).
- * Ein einfaches check reicht dafür nicht: Die Zahl der Antworten steht nicht in
- * der Zeile, die geprüft wird, sondern ergibt sich aus den anderen Zeilen. Also
- * ein Trigger, der zählt.
+ * The database enforces the same limit (migration
+ * 20260830020000_antwortzahl.sql). A simple check constraint isn't enough
+ * for this: the answer count isn't stored in the row being checked, it
+ * results from the other rows. So it's a trigger that counts.
  *
  * ---------------------------------------------------------------------------
- * Warum es kein "− Option" mehr gibt
+ * Why there's no "- Option" button anymore
  *
- * Es gab einen zweiten Knopf, der die letzte Antwort wieder entfernte. Er ist
- * weg, und an seine Stelle tritt ein Wort im Platzhalter: Ab der dritten
- * Antwort steht dort "Option 3 (optional)".
+ * There used to be a second button that removed the last answer again.
+ * It's gone, and a word in the placeholder takes its place: from the
+ * third answer on, it reads "Option 3 [optional]".
  *
- * Das ist kein Verzicht, sondern die ehrlichere Auskunft. Ein leeres Feld war
- * schon immer keine Antwort – beim Anlegen fällt es durch den filter(Boolean)
- * heraus, ganz gleich ob es dasteht oder nicht. Der Minusknopf hat also etwas
- * aufgeräumt, das ohnehin folgenlos war, und dafür so ausgesehen, als müsste
- * man aufräumen. Wer eine Antwort doch nicht will, lässt das Feld einfach
- * leer.
+ * This isn't giving something up, it's the more honest information. An
+ * empty field was never an answer to begin with - when the poll is
+ * created it gets dropped by filter(Boolean) regardless of whether it's
+ * there or not. So the minus button was cleaning up something that had no
+ * consequences either way, while looking like cleanup was required.
+ * Whoever doesn't want an answer just leaves the field empty.
  *
- * Was das Wort zusätzlich sagt und der Knopf nie gesagt hat: dass die ersten
- * beiden Felder eben NICHT optional sind. Vorher stand dort dreimal dasselbe
- * "Option N", und dass zwei davon Pflicht sind, erfuhr man erst aus der roten
- * Meldung beim Absenden.
+ * What the word additionally says, and the button never did, is that the
+ * first two fields are NOT optional. It used to say the same "Option N"
+ * three times, and that two of those were required only showed up in the
+ * red error message on submit.
  */
 const MIN_OPTIONEN = 2;
 const MAX_OPTIONEN = 4;
 
 /**
- * Wie lang eine Frage und eine Antwort sein duerfen.
+ * How long a question and an answer are allowed to be.
  *
- * Die beiden Zahlen sind NACHGEMESSEN und nicht gegriffen, und der Massstab ist
- * nicht das Formular, sondern das Bild, das nach draussen geht:
+ * Both numbers are MEASURED, not picked, and the yardstick isn't the
+ * form - it's the image that goes out into the world:
  *
- *   Die Frage steht auf der Karte fett und bekommt DREI Zeilen. Bei 54 px und
- *   1428 px Inhaltsbreite passen 43 Zeichen in eine Zeile, also 129 ueber drei
- *   – aber nur, wenn kein Wortumbruch Platz kostet. Er kostet welchen, und wie
- *   viel, haengt an den Woertern und nicht an der Zeichenzahl: Ein langes Wort
- *   am Zeilenende laesst eine halbe Zeile leer.
+ *   The question sits on the card in bold and gets THREE lines. At 54px
+ *   and a content width of 1428px, 43 characters fit on one line, so 129
+ *   across three - but only if no word wrap wastes space. It does waste
+ *   some, and how much depends on the words, not the character count: one
+ *   long word at the end of a line leaves half a line empty.
  *
- *   Gemessen (scripts/mess-frage-laenge.mjs, 4000 Zufallssaetze je Laenge, bei
- *   fester Schriftgroesse; "zu lang" heisst: braucht eine vierte Zeile):
+ *   Measured (scripts/mess-frage-laenge.mjs, 4,000 random test sentences
+ *   per length, at a fixed font size; "too long" means: needs a fourth
+ *   line):
  *
- *          Wortlaengen   englische Prosa   bis 13   bis 16   bis 20
- *          100 Zeichen                 0        0        0       28
- *          110 Zeichen                 6       23      185      551
- *          120 Zeichen               518     1160     1729     2356
+ *          word lengths   English prose   up to 13   up to 16   up to 20
+ *          100 characters              0          0          0        28
+ *          110 characters              6         23        185       551
+ *          120 characters            518       1160       1729      2356
  *
- *   Genommen sind 100: die groesste der geprueften Laengen, bei der auch mit
- *   ueberdurchschnittlich langen Woertern nichts umbricht.
+ *   100 was chosen: the largest of the tested lengths at which nothing
+ *   wraps even with above-average-length words.
  *
- *   Eine Antwort steht in einer Zeile neben ihrem Betrag. Bleibt sie zu lang,
- *   haengt kuerzen() ein Auslassungszeichen an. Gemessen passen 70 Zeichen
- *   selbst neben den breitesten Betrag ($12,345,678), 75 neben einen kleinen.
- *   Genommen sind 60.
+ *   An answer sits on one line next to its dollar amount. If it's still
+ *   too long, truncate() appends an ellipsis. Measured, 70 characters fit
+ *   even next to the widest amount ($12,345,678), 75 next to a small one.
+ *   60 was chosen.
  *
- * Warum ueberhaupt eine Grenze, wo die Karte doch nachgibt:
+ * Why have a limit at all, when the card gives way anyway:
  * ---------------------------------------------------------------------------
- * zeichnePoll() verkleinert die Schrift, bis die Frage in drei Zeilen passt –
- * es geht hier also nicht mehr darum, dass Text verschwindet. Es geht um die
- * Groesse, in der er ankommt. Eine Frage, die die Karte auf 44 px druecken
- * wuerde, ist in der Zeitleiste zwischen anderen Beitraegen nicht mehr die
- * Ueberschrift, als die sie gedacht war.
+ * drawPoll() shrinks the font until the question fits in three lines -
+ * so this isn't about text disappearing anymore. It's about the size it
+ * arrives at. A question that would force the card down to 44px isn't the
+ * headline it was meant to be anymore, sitting in the timeline between
+ * other posts.
  *
- * Die Datenbank kennt dieselben Werte (siehe die Migration
- * 20260830010000_laengen.sql). Sie ist die eigentliche Sperre; was hier steht,
- * sorgt nur dafuer, dass niemand erst tippt und dann eine Absage bekommt.
+ * The database enforces the same values (see migration
+ * 20260830010000_laengen.sql). That's the real gate; what's here only
+ * makes sure nobody types first and gets a rejection after.
  */
-const MAX_FRAGE = 100;
-const MAX_ANTWORT = 60;
+const MAX_QUESTION = 100;
+const MAX_ANSWER = 60;
 
 /**
- * Der Platzhalter einer Antwortzeile.
+ * The placeholder for an answer row.
  *
- * Eine Funktion und keine Zeichenkette an drei Stellen: Die ersten beiden
- * Felder stehen im Blatt, alle weiteren entstehen hier, und das Zurücksetzen
- * nach dem Anlegen geht noch einmal darüber. Drei Orte für denselben Text
- * wären zwei Orte zu viel.
+ * A function, not a string repeated in three places: the first two fields
+ * sit in the markup, every field after that gets created here, and
+ * resetting after poll creation runs over it once more too. Three places
+ * for the same text would be two too many.
  *
- * Eckige Klammern und keine runden, und der Grund ist die Schrift:
+ * Square brackets, not round ones, and the reason is the font:
  * ---------------------------------------------------------------------------
- * Die Seite ist durchgehend in Schreibmaschinenschrift gesetzt, und dort belegt
- * JEDES Zeichen dieselbe Zellenbreite. Eine runde Klammer ist ein schmales
- * Zeichen in einer breiten Zelle – gemessen 4 px Glyphe in 9 px Zelle. Aus
- * "(optional)" wird damit für das Auge "( optional )", obwohl im Text kein
- * einziges Leerzeichen steht. Eine eckige Klammer füllt ihre Zelle fast ganz
- * aus und sitzt deshalb von selbst eng am Wort.
+ * The site is set entirely in a monospace font, where EVERY character
+ * occupies the same cell width. A round parenthesis is a narrow glyph in a
+ * wide cell - measured at a 4px glyph in a 9px cell. That turns
+ * "(optional)" into what reads to the eye as "( optional )", even though
+ * there isn't a single space in the actual text. A square bracket fills
+ * its cell almost completely and so sits tight against the word on its
+ * own.
  *
- * Hier lag eine Weile eine ganze Maschinerie dafür: eine zweite Beschriftung
- * aus echtem Markup über dem Feld, in der die runden Klammern eine eigene,
- * schmalere Zelle bekamen, samt Messwerkzeug gegen Xs Formular. Sie ist wieder
- * raus. Ein Zeichen zu tauschen tut dasselbe und kostet nichts.
+ * There used to be a whole apparatus for this: a second label made of real
+ * markup laid over the field, where the parentheses got their own,
+ * narrower cell, plus a measuring tool run against X's form. It's gone
+ * now. Swapping one character does the same thing and costs nothing.
  */
-const optionPlatzhalter = (nr) =>
+const optionPlaceholder = (nr) =>
   nr > MIN_OPTIONEN ? `Option ${nr} [optional]` : `Option ${nr}`;
 
 /**
- * Haengt einen Zeichenzaehler an ein Feld.
+ * Attaches a character counter to a field.
  *
- * Er steht IM Feld rechts, wie bei X. Sichtbar ist er nicht immer: solange man
- * darin tippt, und ausserdem, sobald es eng wird. Der zweite Fall ist der
- * wichtigere – wer einen langen Text hineinkopiert und wegklickt, soll sehen,
- * dass er an der Grenze steht, ohne noch einmal hineinzuklicken.
+ * It sits INSIDE the field, on the right, like on X. It isn't always
+ * visible: it shows while typing in the field, and also once space gets
+ * tight. The second case is the important one - someone who pastes in a
+ * long text and clicks away should see that they're at the limit without
+ * having to click back in.
  *
- * Der Platz rechts wird IMMER freigehalten, auch wenn der Zaehler gerade nicht
- * dasteht. Sonst spraenge der Text unter dem Zeiger weg, sobald man das Feld
- * betritt. Die Breite kommt aus der laengsten Zahl, die dort je stehen kann –
- * "110 / 110" –, gerechnet in ch: In einer Schreibmaschinenschrift ist ein ch
- * genau eine Zelle, die Rechnung geht also auf.
+ * The space on the right is ALWAYS reserved, even when the counter isn't
+ * currently showing. Otherwise the text under the cursor would jump as
+ * soon as you enter the field. The width comes from the longest number
+ * that could ever appear there - "110 / 110" - computed in ch: in a
+ * monospace font, one ch is exactly one cell, so the math works out
+ * exactly.
  *
- * maxlength macht die eigentliche Arbeit; der Zaehler sagt nur, warum das
- * Tippen aufhoert. Ohne ihn waere es eine Tastatur, die stumm nicht mehr
- * reagiert.
+ * maxlength does the actual work; the counter just explains why typing
+ * stops. Without it, it would look like a keyboard that silently stopped
+ * responding.
  */
-function zaehlerAnhaengen(feld, max) {
-  const kasten = feld.closest('.zaehl-feld');
-  const zaehler = kasten?.querySelector('.zaehler');
+function appendCounter(field, max) {
+  const panel = field.closest('.zaehl-feld');
+  const zaehler = panel?.querySelector('.zaehler');
   if (!zaehler) return;
-  feld.maxLength = max;
-  const laengste = `${max} / ${max}`;
-  feld.style.paddingRight = `calc(${laengste.length}ch + 1.4rem)`;
-  const zeige = () => {
-    const n = feld.value.length;
+  field.maxLength = max;
+  const longest = `${max} / ${max}`;
+  field.style.paddingRight = `calc(${longest.length}ch + 1.4rem)`;
+  const reveal = () => {
+    const n = field.value.length;
     zaehler.textContent = `${n} / ${max}`;
-    // Knapp heisst: die letzten zehn Zeichen. Voll heisst: keins mehr.
-    kasten.classList.toggle('ist-knapp', max - n <= 10);
-    kasten.classList.toggle('ist-voll', n >= max);
+    // Close means: the last ten characters. Full means: none left.
+    panel.classList.toggle('ist-knapp', max - n <= 10);
+    panel.classList.toggle('ist-voll', n >= max);
   };
-  feld.addEventListener('input', zeige);
-  zeige();
+  field.addEventListener('input', reveal);
+  reveal();
 }
 
-function renderOptionKnoepfe() {
+function renderOptionButtons() {
   $('#btn-add-option').hidden = $('#poll-options').children.length >= MAX_OPTIONEN;
 }
 
-/** Eine Antwortzeile: Feld plus Zaehler, wie die ersten beiden im Blatt. */
-function optionFeld(nr) {
-  const kasten = document.createElement('label');
-  kasten.className = 'zaehl-feld';
-  kasten.innerHTML = `<input class="poll-option" type="text"`
-    + ` placeholder="${esc(optionPlatzhalter(nr))}">`
+/** An answer row: field plus counter, same as the first two in the markup. */
+function optionField(nr) {
+  const panel = document.createElement('label');
+  panel.className = 'zaehl-feld';
+  panel.innerHTML = `<input class="poll-option" type="text"`
+    + ` placeholder="${esc(optionPlaceholder(nr))}">`
     + '<span class="zaehler" aria-hidden="true"></span>';
-  zaehlerAnhaengen(kasten.querySelector('.poll-option'), MAX_ANTWORT);
-  return kasten;
+  appendCounter(panel.querySelector('.poll-option'), MAX_ANSWER);
+  return panel;
 }
 
 $('#btn-add-option').addEventListener('click', () => {
   const box = $('#poll-options');
   if (box.children.length >= MAX_OPTIONEN) return;
-  const kasten = optionFeld(box.children.length + 1);
-  box.appendChild(kasten);
-  renderOptionKnoepfe();
-  kasten.querySelector('.poll-option').focus();
+  const panel = optionField(box.children.length + 1);
+  box.appendChild(panel);
+  renderOptionButtons();
+  panel.querySelector('.poll-option').focus();
 });
 
-renderOptionKnoepfe();
-// Die beiden Felder, die schon im Blatt stehen, und die Frage darueber.
-zaehlerAnhaengen($('#poll-question'), MAX_FRAGE);
-for (const feld of $$('.poll-option')) zaehlerAnhaengen(feld, MAX_ANTWORT);
+renderOptionButtons();
+// The two fields already in the markup, plus the question field above them.
+appendCounter($('#poll-question'), MAX_QUESTION);
+for (const field of $$('.poll-option')) appendCounter(field, MAX_ANSWER);
 
 /**
- * Setzt den Anlegekasten auf den Zustand zurück, in dem er aufgeht.
+ * Resets the create box to the state it opens in.
  *
- * Frage leer, genau MIN_OPTIONEN leere Antwortfelder, Laufzeit auf der
- * Vorgabe. Also nicht nur "die Texte löschen": Wer vier Antworten aufgemacht
- * hat, findet beim nächsten Öffnen wieder zwei vor.
+ * Question empty, exactly MIN_OPTIONEN empty answer fields, duration back
+ * to the default. So not just "clear the text": whoever opened up four
+ * answer fields finds two again the next time they open it.
  *
- * Entfernt wird der KASTEN und nicht nur das Feld darin: An ihm hängt der
- * Zähler. Bliebe er stehen, stünde "0 / 60" ohne Feld darunter.
+ * The BOX gets removed, not just the field inside it: the counter hangs
+ * off the box. Leave it in place and "0 / 60" would sit there with no
+ * field underneath it.
  *
- * Das input-Ereignis muss von Hand kommen. value zu setzen löst keins aus –
- * der Zähler daneben hörte sonst beim letzten getippten Stand auf und zeigte
- * "37 / 60" über einem leeren Feld.
+ * The input event has to be dispatched by hand. Setting value doesn't
+ * trigger one - the counter next to it would otherwise stay stuck at the
+ * last typed count and show "37 / 60" over an empty field.
  */
-function pollFormularLeeren() {
-  $$('#poll-options > .zaehl-feld').forEach((kasten, idx) => {
-    if (idx >= MIN_OPTIONEN) { kasten.remove(); return; }
-    const feld = kasten.querySelector('.poll-option');
-    feld.value = '';
-    feld.dispatchEvent(new Event('input'));
+function pollFormClear() {
+  $$('#poll-options > .zaehl-feld').forEach((panel, idx) => {
+    if (idx >= MIN_OPTIONEN) { panel.remove(); return; }
+    const field = panel.querySelector('.poll-option');
+    field.value = '';
+    field.dispatchEvent(new Event('input'));
   });
   $('#poll-question').value = '';
   $('#poll-question').dispatchEvent(new Event('input'));
-  renderOptionKnoepfe();
-  setzeLaufzeit();
+  renderOptionButtons();
+  setTerm();
 }
 
 /**
- * Der Anlegekasten geht auf und wieder zu.
+ * The create box opens and closes.
  *
- * Zugeklappt ist der Normalzustand, und zwar aus einem Grund, der beim Bauen
- * leicht untergeht: Ansem sieht diesen Kasten als Einziger, aber er sieht ihn
- * IMMER. Fünf Zeilen über der Liste, auch an den allermeisten Tagen, an denen
- * er gar keine Abstimmung anlegt. Auf dem Handy war damit der halbe Bildschirm
- * weg, bevor die erste Abstimmung anfing.
+ * Closed is the default state, for a reason that's easy to lose sight of
+ * while building this: Ansem is the only one who sees this box, but he
+ * sees it ALWAYS. Five lines above the list, even on the vast majority of
+ * days when he isn't creating a poll at all. On a phone that meant half
+ * the screen was gone before the first poll even started.
  *
- * Der Zustand steht als Klasse am Kasten und nicht in einer Variable: Dann
- * kann das Blatt ihn selbst auswerten, und es gibt keinen zweiten Ort, an dem
- * "offen" gespeichert wäre und mit dem ersten auseinanderlaufen könnte.
+ * The state lives as a class on the box, not in a variable: that way the
+ * stylesheet can react to it directly, and there's no second place where
+ * "open" gets stored that could drift out of sync with the first.
  *
  * ---------------------------------------------------------------------------
- * Zuklappen ist ein ABBRUCH und kein Wegräumen
+ * Closing is a CANCEL, not a tidy-up
  *
- * Hier stand das Zuklappen lange nur für "kleiner machen", und das Getippte
- * blieb liegen. Es kam beim nächsten Öffnen wieder hoch – ein halb
- * ausgefülltes Formular von vorgestern, dessen Frage man erst wieder lesen
- * muss, um zu wissen, ob man sie noch stellen will.
+ * For a long time, closing here just meant "make it smaller," and
+ * whatever had been typed stayed in place. It came back up the next time
+ * it opened - a half-filled-out form from two days ago, whose question
+ * you have to read again just to figure out whether you still want to ask
+ * it.
  *
- * Das Zurücksetzen steht deshalb HIER und nicht am Knopf: Es gibt sonst zwei
- * Wege zu, den Knopf und den nach dem Anlegen, und nur einer davon räumt auf.
- * Genau so laufen die beiden auseinander.
+ * That's why the reset lives HERE and not on the button: otherwise there
+ * are two paths in, the button and the one after creating a poll, and only
+ * one of them would clean up. That's exactly how the two would drift
+ * apart.
  *
- * Ein "Sicher?" gibt es bewusst nicht. Es stünde bei jedem Zuklappen im Weg,
- * auch bei den vielen, bei denen nichts drinsteht – und was verloren geht,
- * sind ein bis vier kurze Zeilen. Der Weg zurück ist, sie noch einmal zu
- * tippen, nicht ein zweiter Klick bei jedem Mal.
+ * There's deliberately no "Are you sure?" It would get in the way on
+ * every close, including the many where nothing has been typed at all -
+ * and what's lost is one to four short lines. Getting it back means typing
+ * it again, not clicking through a confirmation every single time.
  */
 function pollFormular(offen) {
-  const kasten = $('#poll-admin');
-  kasten.classList.toggle('offen', offen);
+  const panel = $('#poll-admin');
+  panel.classList.toggle('offen', offen);
   $('#poll-admin-felder').hidden = !offen;
   $('#btn-poll-neu').setAttribute('aria-expanded', String(offen));
-  // Der Sprung ins erste Feld nur beim Öffnen. Beim Schliessen wäre er ein
-  // Sprung ins Nichts – und auf dem Handy risse er die Tastatur hoch.
+  // Jump focus into the first field only on opening. On closing it would
+  // be a jump into nothing - and on a phone it would pop the keyboard up.
   if (offen) { $('#poll-question').focus(); return; }
-  // Die Laufzeitliste kann offen über dem Kasten stehen. Sie gehört zum
-  // Formular und muss mit ihm verschwinden, sonst bleibt sie als Rest hängen.
+  // The duration dropdown can be sitting open above the box. It belongs to
+  // the form and has to disappear with it, or it's left stranded.
   lzZu();
-  pollFormularLeeren();
+  pollFormClear();
 }
 
 $('#btn-poll-neu').addEventListener('click', () =>
   pollFormular(!$('#poll-admin').classList.contains('offen')));
 
 /**
- * Wie hoch der Anlegekasten gerade ist – als CSS-Variable am Polls-Tab.
+ * How tall the create box currently is - as a CSS variable on the polls
+ * tab.
  *
- * Gebraucht wird sie für genau eine Sache: Der Hinweis "No polls yet" soll in
- * der Mitte der SEITE stehen und nicht in der Mitte der Liste. Die beiden sind
- * dasselbe, solange über der Liste nichts steht – und fallen um gut hundert
- * Pixel auseinander, sobald Ansem den Kasten aufklappt. Ohne den Ausgleich
- * rutscht der Satz beim Aufklappen sichtbar nach unten.
+ * Needed for exactly one thing: the "No polls yet" message should sit in
+ * the middle of the PAGE, not the middle of the list. The two are the same
+ * as long as nothing sits above the list - and drift apart by a good
+ * hundred pixels as soon as Ansem opens the box. Without this
+ * compensation, the message visibly slides down when it opens.
  *
- * Ein ResizeObserver und kein Aufruf an den drei, vier Stellen, die die Höhe
- * ändern: Aufklappen, Zuklappen, eine Antwort mehr, eine weniger, ein Umbruch
- * beim Drehen des Geräts – das sind fünf Wege, und beim sechsten vergisst man
- * den Aufruf. Der Beobachter kennt nur einen Fall: Die Höhe hat sich geändert.
+ * A ResizeObserver, not a call added at the three or four places that
+ * change the height: opening, closing, one more answer, one fewer, a line
+ * wrap on device rotation - that's five paths, and the sixth one is where
+ * you forget to add the call. The observer only knows one case: the height
+ * changed.
  *
- * Der Rand nach unten zählt mit: Zwischen Kasten und Liste steht 1rem, und der
- * schiebt genauso.
+ * The bottom margin counts too: there's 1rem between the box and the
+ * list, and it pushes the same way.
  */
-function beobachteKopfHoehe() {
-  const kasten = $('#poll-admin');
+function observeHeaderHeight() {
+  const panel = $('#poll-admin');
   const tab = $('#pane-polls');
-  if (!kasten || !tab || typeof ResizeObserver === 'undefined') return;
+  if (!panel || !tab || typeof ResizeObserver === 'undefined') return;
   const melde = () => {
-    const sichtbar = !kasten.hidden;
-    const unten = parseFloat(getComputedStyle(kasten).marginBottom) || 0;
+    const sichtbar = !panel.hidden;
+    const bottom = parseFloat(getComputedStyle(panel).marginBottom) || 0;
     tab.style.setProperty('--poll-kopf',
-      `${sichtbar ? kasten.getBoundingClientRect().height + unten : 0}px`);
+      `${sichtbar ? panel.getBoundingClientRect().height + bottom : 0}px`);
   };
-  new ResizeObserver(melde).observe(kasten);
+  new ResizeObserver(melde).observe(panel);
   melde();
 }
-beobachteKopfHoehe();
+observeHeaderHeight();
 
 /**
- * Die Laufzeit im Anlegeformular: Tage, Stunden, Minuten.
+ * The duration in the create form: days, hours, minutes.
  *
- * Vorher stand hier ein einziger Wert in Stunden mit einem Plus und einem
- * Minus daneben, und das war eine Reihe, durch die man sich tippte. Der Weg
- * von einem Tag auf drei waren 48 Tipper.
+ * This used to be a single value in hours, with a plus and a minus next
+ * to it, and that was a row you had to tap your way through. Getting from
+ * one day to three took 48 taps.
  *
- * Drei Listen sind nicht nur schneller, sie passen auch dazu, wie jemand über
- * eine Laufzeit nachdenkt: "drei Tage", "zwei Stunden" – nicht "72" oder "2".
- *
- * ---------------------------------------------------------------------------
- * Warum das kein <select> ist
- *
- * Es war eines, zwei Runden lang, und beide Gründe dagegen sind gemessen:
- *
- *   Der Fokusring. Chromium zählt ein <select> nach einem MAUSKLICK als
- *   :focus-visible – wie ein Textfeld, anders als ein Knopf. Die Regel
- *   :focus-visible:not(input):not(textarea) im Blatt greift damit, und um das
- *   Feld lag ein heller Ring, den niemand bestellt hatte. Gemessen:
- *   outline 2px solid nach einem Klick, ohne dass data-tastatur gesetzt war.
- *
- *   Die Klappe. Beim <select> zeichnet sie das Betriebssystem, und ihre Höhe
- *   folgt der Anzahl der Einträge: acht bei Days, vierundzwanzig bei Hours,
- *   sechzig bei Minutes. Drei verschieden hohe Klappen unter drei gleich
- *   aussehenden Kästen – und von hier aus daran kein Griff.
- *
- * Also selbst gebaut: ein <button> (nach einem Klick NICHT focus-visible) und
- * eine eigene Liste, die für alle drei dieselbe Höhe hat und scrollt.
- *
- * Was ein <select> geschenkt mitbringt, steht dafür weiter unten
- * ausgeschrieben: Pfeile, Pos1/Ende, Enter, Escape, Tippen schliesst. Halb
- * gebaut wäre schlimmer als gar nicht – wer eine Klappe aufmacht und dann mit
- * den Pfeilen ins Leere greift, sitzt fest.
+ * Three lists aren't just faster, they also match how someone actually
+ * thinks about a duration: "three days", "two hours" - not "72" or "2".
  *
  * ---------------------------------------------------------------------------
- * Ohne Frist steht an der richtigen Stelle
+ * Why this isn't a <select>
  *
- * "Läuft, bis Ansem sie von Hand schliesst" hing vorher als Sonderfall UNTER
- * der kürzesten Laufzeit, weil es in einer Reihe irgendwo hin musste – der
- * Reihenfolge nach gehörte es ans obere Ende, dort war es aber unerreichbar.
- * Der Kommentar an dieser Stelle hat das offen als Kompromiss benannt.
+ * It was one, for two rounds, and both reasons against it are measured:
  *
- * Mit drei Feldern gibt es den Kompromiss nicht mehr: Keine Dauer IST keine
- * Frist. Alles auf null heisst kein Ende, und weil das jemand auch versehentlich
- * einstellen kann, steht der Satz darunter, sobald es gilt.
+ *   The focus ring. Chromium counts a <select> as :focus-visible after a
+ *   MOUSE CLICK - like a text field, unlike a button. That triggers the
+ *   :focus-visible:not(input):not(textarea) rule in the stylesheet, and
+ *   the field ended up with a bright ring nobody asked for. Measured:
+ *   outline 2px solid after a click, with data-tastatur not set.
+ *
+ *   The dropdown. For a <select>, the operating system draws it, and its
+ *   height follows the number of entries: eight for Days, twenty-four for
+ *   Hours, sixty for Minutes. Three differently-sized dropdowns under
+ *   three identical-looking boxes - and no way to control that from here.
+ *
+ * So it's hand-built instead: a <button> (NOT focus-visible after a
+ * click) and a custom list that has the same height for all three and
+ * scrolls.
+ *
+ * What a <select> gives you for free is written out below instead:
+ * arrows, Home/End, Enter, Escape, typing closes it. Half-built would be
+ * worse than not built at all - opening a dropdown and then reaching into
+ * nothing with the arrow keys leaves you stuck.
  *
  * ---------------------------------------------------------------------------
- * Die Woche als Obergrenze
+ * No deadline sits in the right place
  *
- * Sieben Tage waren schon vorher das Maximum, und die Begründung gilt weiter:
- * Darüber ist es keine Abstimmung mehr. Neu ist, dass die Grenze aus drei
- * Feldern zusammen entsteht – 7 Tage plus 6 Stunden wären zu viel.
+ * "Runs until Ansem closes it by hand" used to hang as a special case
+ * BELOW the shortest duration, because it had to go somewhere in a single
+ * row - by rank it belonged at the top end, but that spot was
+ * unreachable. The comment at that spot openly named it a compromise.
  *
- * Gelöst wird das mit einer einzigen Regel, dreimal angewendet: Ein Eintrag ist
- * abgeschaltet, wenn er ZUSAMMEN MIT DEN ANDEREN BEIDEN über eine Woche käme.
- * Steht Hours auf 6, ist die 7 bei Days grau. Steht Days auf 7, sind alle
- * Stunden ausser der Null grau.
+ * With three fields, that compromise is gone: no duration IS no deadline.
+ * Everything at zero means no end, and because someone could set that by
+ * accident too, the sentence about it shows up right below as soon as it
+ * applies.
  *
- * Der Gewinn ist nicht nur Symmetrie: So muss nie eine Zahl nachträglich
- * korrigiert werden. Eine Angabe, die sich nach dem Loslassen von selbst
- * ändert, ist das Unangenehmste, was ein Formular tun kann – man hat etwas
- * eingestellt und etwas anderes steht da. Hier kommt man erst gar nicht in den
- * Zustand hinein, und der Grund steht sichtbar daneben.
+ * ---------------------------------------------------------------------------
+ * A week as the ceiling
+ *
+ * Seven days was already the maximum before, and the reasoning still
+ * holds: beyond that it stops being a poll. What's new is that the limit
+ * now comes from three fields combined - 7 days plus 6 hours would be too
+ * much.
+ *
+ * That's solved with a single rule, applied three times: an entry is
+ * disabled if it, TOGETHER WITH THE OTHER TWO, would come to more than a
+ * week. If Hours is set to 6, the 7 in Days is grayed out. If Days is set
+ * to 7, every hour except zero is grayed out.
+ *
+ * The payoff isn't just symmetry: this way a number never needs correcting
+ * after the fact. A value that changes itself after you let go is the
+ * most unpleasant thing a form can do - you set one thing and a different
+ * one is sitting there. Here you never even get into that state, and the
+ * reason for it is visible right next to it.
  */
-const LZ_MAX_MINUTEN = 7 * 24 * 60;   // eine Woche
-const LZ_FELDER = [
+const LZ_MAX_MINUTEN = 7 * 24 * 60;   // one week
+const TERM_FIELDS = [
   { id: 'tage',    max: 7,  faktor: 1440 },
   { id: 'stunden', max: 23, faktor: 60 },
   { id: 'minuten', max: 59, faktor: 1 },
@@ -3700,90 +3753,89 @@ const LZ_VORGABE = { tage: 1, stunden: 0, minuten: 0 };
 
 const lzWert = (id) => Number($(`#lz-${id}`).dataset.wert);
 
-/** Die eingestellte Laufzeit in Minuten. 0 heisst: ohne Frist. */
-const gewaehlteFristMinuten = () =>
-  LZ_FELDER.reduce((summe, f) => summe + lzWert(f.id) * f.faktor, 0);
+/** The chosen duration in minutes. 0 means: no deadline. */
+const chosenDeadlineMinutes = () =>
+  TERM_FIELDS.reduce((summe, f) => summe + lzWert(f.id) * f.faktor, 0);
 
 /**
- * Baut die Einträge einer Liste neu.
+ * Rebuilds a list's entries.
  *
- * Jedes Mal vollständig statt einzelne Einträge nachzuziehen: Eine Liste hat
- * höchstens sechzig Zeilen, das kostet nichts – und der Zustand "welcher ist
- * abgeschaltet" kann so nicht mit dem echten auseinanderlaufen.
+ * Fully rebuilt every time instead of patching individual entries: a list
+ * has at most sixty rows, that costs nothing - and this way the "which one
+ * is disabled" state can never drift out of sync with the real one.
  */
-function lzListe(feld) {
-  const knopf = $(`#lz-${feld.id}`);
-  const liste = $(`#lz-liste-${feld.id}`);
-  const wert = lzWert(feld.id);
-  // Was die anderen beiden Felder zusammen schon belegen.
-  const rest = LZ_FELDER.filter((f) => f !== feld)
+function lzListe(field) {
+  const button = $(`#lz-${field.id}`);
+  const liste = $(`#lz-liste-${field.id}`);
+  const wert = lzWert(field.id);
+  // What the other two fields already account for combined.
+  const rest = TERM_FIELDS.filter((f) => f !== field)
     .reduce((summe, f) => summe + lzWert(f.id) * f.faktor, 0);
 
-  liste.replaceChildren(...Array.from({ length: feld.max + 1 }, (_, i) => {
+  liste.replaceChildren(...Array.from({ length: field.max + 1 }, (_, i) => {
     const el = document.createElement('div');
-    el.id = `lz-${feld.id}-${i}`;
+    el.id = `lz-${field.id}-${i}`;
     el.className = 'lz-eintrag';
     el.setAttribute('role', 'option');
     el.textContent = String(i);
     el.dataset.wert = String(i);
-    const zuViel = rest + i * feld.faktor > LZ_MAX_MINUTEN;
-    // aria-disabled und nicht disabled: Ein <div> kennt kein disabled, und
-    // eine Vorlesestimme soll den Eintrag trotzdem nennen – "sieben, nicht
-    // verfuegbar" sagt mehr als ein Eintrag, der einfach fehlt.
+    const zuViel = rest + i * field.faktor > LZ_MAX_MINUTEN;
+    // aria-disabled, not disabled: a <div> has no concept of disabled, and
+    // a screen reader should still announce the entry - "seven, not
+    // available" says more than an entry that's simply missing.
     if (zuViel) el.setAttribute('aria-disabled', 'true');
     el.setAttribute('aria-selected', String(i === wert));
     return el;
   }));
-  knopf.querySelector('.lz-zahl').textContent = String(wert);
+  button.querySelector('.lz-zahl').textContent = String(wert);
 }
 
-/** Bringt alle drei Listen und den Hinweis mit dem Zustand in Deckung. */
+/** Brings all three lists and the notice in line with the current state. */
 function renderLaufzeit() {
-  for (const feld of LZ_FELDER) lzListe(feld);
-  const ohne = gewaehlteFristMinuten() === 0;
+  for (const field of TERM_FIELDS) lzListe(field);
+  const ohne = chosenDeadlineMinutes() === 0;
   const hinweis = $('#lz-hinweis');
   hinweis.hidden = !ohne;
   hinweis.textContent = ohne ? 'No end — the poll runs until you close it.' : '';
 }
 
 /**
- * Setzt alle drei Felder auf einmal.
+ * Sets all three fields at once.
  *
- * Die Woche wird hier noch einmal durchgesetzt, obwohl die Klappen schon
- * verhindern, dass man sie ueberhaupt ueberschreiten kann. Der Grund ist die
- * Reihenfolge der Zusagen: "Eine Abstimmung laeuft hoechstens eine Woche" ist
- * eine Aussage ueber die LAUFZEIT, nicht ueber die Bedienung. Stuende sie nur
- * in der Oberflaeche, waere sie beim naechsten zweiten Aufrufer weg – und
- * genau das ist die Sorte Luecke, die niemand bemerkt, weil nichts kaputt
- * aussieht.
+ * The one-week limit gets enforced again here, even though the dropdowns
+ * already prevent exceeding it in the first place. The reason is the order
+ * of guarantees: "a poll runs at most one week" is a statement about the
+ * DURATION, not about the UI. If it only lived in the UI, it would be gone
+ * the next time something else calls this - and that's exactly the kind
+ * of gap nobody notices, because nothing looks broken.
  *
- * Gekuerzt wird von unten: erst die Minuten, dann die Stunden. Wer sieben Tage
- * angibt, meint die sieben Tage; der Rest ist das, was zu viel war.
+ * Trimmed from the bottom up: minutes first, then hours. Someone who sets
+ * seven days means those seven days; the rest is whatever was too much.
  */
-function setzeLaufzeit(werte = LZ_VORGABE) {
-  let uebrig = LZ_MAX_MINUTEN;
-  for (const feld of LZ_FELDER) {
-    const gewuenscht = Math.min(feld.max, Math.max(0, Math.round(werte[feld.id] ?? 0)));
-    const passt = Math.min(gewuenscht, Math.floor(uebrig / feld.faktor));
-    uebrig -= passt * feld.faktor;
-    $(`#lz-${feld.id}`).dataset.wert = String(passt);
+function setTerm(werte = LZ_VORGABE) {
+  let remaining = LZ_MAX_MINUTEN;
+  for (const field of TERM_FIELDS) {
+    const desired = Math.min(field.max, Math.max(0, Math.round(werte[field.id] ?? 0)));
+    const passt = Math.min(desired, Math.floor(remaining / field.faktor));
+    remaining -= passt * field.faktor;
+    $(`#lz-${field.id}`).dataset.wert = String(passt);
   }
   renderLaufzeit();
 }
 
 // ---------------------------------------------------------------------------
-// Die Klappe
+// The dropdown
 // ---------------------------------------------------------------------------
 
-/** Welche Liste gerade offen ist – höchstens eine. */
+/** Which list is currently open - at most one. */
 let lzOffen = null;
 
 function lzZu() {
   if (!lzOffen) return;
   $(`#lz-liste-${lzOffen}`).hidden = true;
-  const knopf = $(`#lz-${lzOffen}`);
-  knopf.setAttribute('aria-expanded', 'false');
-  knopf.removeAttribute('aria-activedescendant');
+  const button = $(`#lz-${lzOffen}`);
+  button.setAttribute('aria-expanded', 'false');
+  button.removeAttribute('aria-activedescendant');
   lzOffen = null;
 }
 
@@ -3792,19 +3844,19 @@ function lzAuf(id) {
   lzZu();
   lzOffen = id;
   const liste = $(`#lz-liste-${id}`);
-  const knopf = $(`#lz-${id}`);
+  const button = $(`#lz-${id}`);
   liste.hidden = false;
-  knopf.setAttribute('aria-expanded', 'true');
+  button.setAttribute('aria-expanded', 'true');
   lzZeigeAuf(id, lzWert(id));
 }
 
 /**
- * Setzt die Marke auf einen Eintrag und rollt ihn ins Bild.
+ * Sets the highlight on an entry and scrolls it into view.
  *
- * Die Marke ist nicht die Auswahl: Sie ist das, worauf die Pfeiltasten gerade
- * zeigen. Erst Enter macht daraus einen Wert. Ohne diese Trennung könnte man
- * mit den Pfeilen nicht durch eine Liste laufen, ohne dabei zu wählen – und
- * jede Bewegung würde die anderen beiden Listen umbauen.
+ * The highlight isn't the selection: it's what the arrow keys currently
+ * point at. Only Enter turns it into a value. Without that separation, you
+ * couldn't move through a list with the arrows without also selecting -
+ * and every move would rebuild the other two lists.
  */
 function lzZeigeAuf(id, wert) {
   const liste = $(`#lz-liste-${id}`);
@@ -3812,34 +3864,34 @@ function lzZeigeAuf(id, wert) {
   if (!ziel) return;
   for (const e of liste.children) e.classList.toggle('ist-marke', e === ziel);
   $(`#lz-${id}`).setAttribute('aria-activedescendant', ziel.id);
-  // Nur so weit rollen wie nötig – block: 'nearest' laesst die Liste stehen,
-  // solange der Eintrag ohnehin zu sehen ist.
+  // Only scroll as far as needed - block: 'nearest' leaves the list alone
+  // whenever the entry is already visible.
   ziel.scrollIntoView({ block: 'nearest' });
 }
 
-const lzMarke = (id) => {
+const termMarker = (id) => {
   const el = $(`#lz-liste-${id}`).querySelector('.ist-marke');
   return el ? Number(el.dataset.wert) : lzWert(id);
 };
 
-/** Einen Wert übernehmen und schliessen. Abgeschaltete Einträge zählen nicht. */
-function lzWaehle(id, wert) {
+/** Commits a value and closes. Disabled entries don't count. */
+function termChoose(id, wert) {
   const eintrag = $(`#lz-liste-${id}`).querySelector(`[data-wert="${wert}"]`);
   if (!eintrag || eintrag.getAttribute('aria-disabled') === 'true') return;
   $(`#lz-${id}`).dataset.wert = String(wert);
   lzZu();
-  // Alle drei neu: Der neue Wert verschiebt, was in den anderen beiden noch
-  // erlaubt ist.
+  // All three, rebuilt: the new value shifts what's still allowed in the
+  // other two.
   renderLaufzeit();
   $(`#lz-${id}`).focus();
 }
 
 /**
- * Der nächste WÄHLBARE Eintrag in eine Richtung.
+ * The next SELECTABLE entry in a given direction.
  *
- * Abgeschaltete werden übersprungen statt angesteuert. Auf einem Eintrag zu
- * landen, den Enter dann nicht annimmt, wäre eine Sackgasse mitten in der
- * Liste – man drückt und nichts passiert.
+ * Disabled entries are skipped over, not landed on. Landing on an entry
+ * that Enter then refuses would be a dead end in the middle of the list -
+ * you press it and nothing happens.
  */
 function lzNachbar(id, von, richtung) {
   const liste = $(`#lz-liste-${id}`);
@@ -3849,40 +3901,39 @@ function lzNachbar(id, von, richtung) {
   if (!alle.length) return von;
   if (richtung === 'anfang') return alle[0];
   if (richtung === 'ende') return alle[alle.length - 1];
-  const weiter = richtung > 0 ? alle.filter((w) => w > von) : alle.filter((w) => w < von);
-  if (!weiter.length) return von;
-  return richtung > 0 ? weiter[0] : weiter[weiter.length - 1];
+  const next = richtung > 0 ? alle.filter((w) => w > von) : alle.filter((w) => w < von);
+  if (!next.length) return von;
+  return richtung > 0 ? next[0] : next[next.length - 1];
 }
 
-for (const feld of LZ_FELDER) {
-  const knopf = $(`#lz-${feld.id}`);
-  const liste = $(`#lz-liste-${feld.id}`);
+for (const field of TERM_FIELDS) {
+  const button = $(`#lz-${field.id}`);
+  const liste = $(`#lz-liste-${field.id}`);
 
-  knopf.addEventListener('click', () => lzAuf(feld.id));
+  button.addEventListener('click', () => lzAuf(field.id));
 
-  // Ein Klick auf einen Eintrag. Ueber die Liste und nicht ueber jeden Eintrag
-  // einzeln: Die Eintraege werden bei jeder Aenderung neu gebaut, und
-  // Zuhoerer, die man an neu gebaute Elemente haengt, vergisst man beim
-  // naechsten Umbau.
+  // A click on an entry. Attached to the list, not to each entry
+  // individually: entries get rebuilt on every change, and listeners
+  // attached to freshly built elements get forgotten on the next rebuild.
   liste.addEventListener('click', (e) => {
     const eintrag = e.target.closest('[data-wert]');
-    if (eintrag) lzWaehle(feld.id, Number(eintrag.dataset.wert));
+    if (eintrag) termChoose(field.id, Number(eintrag.dataset.wert));
   });
-  // Die Marke folgt dem Zeiger, damit Maus und Tastatur nicht zwei
-  // verschiedene "hier bin ich" zeigen.
+  // The highlight follows the pointer, so mouse and keyboard don't show
+  // two different "here I am"s.
   liste.addEventListener('mousemove', (e) => {
     const eintrag = e.target.closest('[data-wert]');
     if (eintrag && eintrag.getAttribute('aria-disabled') !== 'true') {
-      lzZeigeAuf(feld.id, Number(eintrag.dataset.wert));
+      lzZeigeAuf(field.id, Number(eintrag.dataset.wert));
     }
   });
 
-  // Die Tastatur. Das ist der Teil, den ein <select> geschenkt mitbrachte –
-  // hier steht er ausgeschrieben, weil eine halb bediente Klappe schlimmer ist
-  // als gar keine.
-  knopf.addEventListener('keydown', (e) => {
-    const offen = lzOffen === feld.id;
-    const marke = lzMarke(feld.id);
+  // The keyboard. This is the part a <select> gave you for free - written
+  // out here in full, because a half-working dropdown is worse than none
+  // at all.
+  button.addEventListener('keydown', (e) => {
+    const offen = lzOffen === field.id;
+    const marker = termMarker(field.id);
 
     if (e.key === 'Escape') {
       if (offen) { e.preventDefault(); lzZu(); }
@@ -3891,26 +3942,26 @@ for (const feld of LZ_FELDER) {
     if (e.key === 'Tab') { lzZu(); return; }
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (offen) lzWaehle(feld.id, marke); else lzAuf(feld.id);
+      if (offen) termChoose(field.id, marker); else lzAuf(field.id);
       return;
     }
-    const schritt = { ArrowDown: 1, ArrowUp: -1, Home: 'anfang', End: 'ende' }[e.key];
-    if (schritt === undefined) return;
+    const step = { ArrowDown: 1, ArrowUp: -1, Home: 'anfang', End: 'ende' }[e.key];
+    if (step === undefined) return;
     e.preventDefault();
-    if (!offen) { lzAuf(feld.id); return; }
-    lzZeigeAuf(feld.id, lzNachbar(feld.id, marke, schritt));
+    if (!offen) { lzAuf(field.id); return; }
+    lzZeigeAuf(field.id, lzNachbar(field.id, marker, step));
   });
 }
 
-// Klick daneben schliesst. Auf dem Dokument und in der Blasenphase: Ein Klick
-// auf einen anderen Knopf soll die alte Klappe schliessen UND den neuen
-// oeffnen, und die Reihenfolge stimmt nur so herum.
+// A click elsewhere closes it. On the document, in the bubble phase: a
+// click on a different button should close the old dropdown AND open the
+// new one, and that order only comes out right this way.
 document.addEventListener('click', (e) => {
   if (lzOffen && !e.target.closest(`#lz-liste-${lzOffen}`)
       && !e.target.closest(`#lz-${lzOffen}`)) lzZu();
 });
 
-setzeLaufzeit();
+setTerm();
 
 $('#btn-create-poll').addEventListener('click', async () => {
   const question = $('#poll-question').value.trim();
@@ -3920,15 +3971,15 @@ $('#btn-create-poll').addEventListener('click', async () => {
     return toast(`At least ${MIN_OPTIONEN} options are required`, true);
   }
 
-  // Die Frist wird HIER gerechnet, aus der Uhr des Geräts, und als fester
-  // Zeitpunkt gespeichert – nicht als Dauer, die die Datenbank später
-  // auslegen müsste. "Läuft 24h" heisst 24 Stunden ab dem Anlegen; ein
-  // gespeicherter Zeitpunkt kann danach von nichts mehr verschoben werden.
+  // The deadline is computed HERE, from the device's clock, and saved as
+  // a fixed point in time - not as a duration the database would have to
+  // interpret later. "Runs 24h" means 24 hours from creation; a stored
+  // timestamp can't be shifted by anything after that.
   //
-  // 0 heisst ausdrücklich null: eine Abstimmung ohne Frist, die nur von Hand
-  // zugeht. Das war vor der Frist der einzige Fall, deshalb muss er weiter
-  // erreichbar bleiben.
-  const minuten = gewaehlteFristMinuten();
+  // 0 explicitly means null: a poll with no deadline that only closes by
+  // hand. That was the only case before deadlines existed, so it has to
+  // stay reachable.
+  const minuten = chosenDeadlineMinutes();
   const closes_at = minuten > 0
     ? new Date(Date.now() + minuten * 60_000).toISOString()
     : null;
@@ -3944,29 +3995,31 @@ $('#btn-create-poll').addEventListener('click', async () => {
     return toast(optErr.message, true);
   }
 
-  // Und wieder zu. Die Abstimmung steht ab jetzt in der Liste darunter – das
-  // ist es, was Ansem nach dem Anlegen sehen will, nicht ein leeres Formular.
+  // And close again. The poll is now in the list below - that's what
+  // Ansem wants to see after creating it, not an empty form.
   //
-  // Das Leeren steckt im Zuklappen: Hier stand es einmal ausgeschrieben, und
-  // der Knopf, der den Kasten zuklappt, hatte seine eigene Fassung davon –
-  // nämlich gar keine. Ein Formular, das sich auf ZWEI Wegen schliessen lässt
-  // und nur auf einem aufräumt, räumt irgendwann auf keinem mehr auf.
+  // The reset lives inside the close: this used to be written out
+  // separately here, and the button that closes the box had its own
+  // version of it - namely none at all. A form that can be closed TWO
+  // different ways, and only cleans up on one of them, eventually stops
+  // cleaning up on either.
   //
-  // Auch die Laufzeit geht dabei zurück auf die Vorgabe. Sie stehen zu lassen
-  // wäre die freundlichere Annahme – "er will wohl wieder 7 Tage" –, aber das
-  // Formular sähe dann aus wie ein halb ausgefülltes: Frage leer, Antworten
-  // leer, und eine Einstellung, die noch von der letzten Abstimmung stammt.
+  // The duration also resets to the default here. Leaving it as is would
+  // be the friendlier assumption - "he probably wants 7 days again" - but
+  // then the form would look half filled-out: question empty, answers
+  // empty, and one setting still carried over from the last poll.
   pollFormular(false);
   await loadPolls();
   toast('Poll started');
 
-  // Erst nach loadPolls(): Vorher gibt es die Abstimmung im Zustand noch
-  // nicht, und das Bild braucht die fertigen Antworten samt Nullzahlen.
+  // Only after loadPolls(): before that, the poll doesn't exist yet in
+  // state, and the image needs the finished answers, zero counts included.
   //
-  // Genau diese Nullzahlen sind der Punkt: So sieht die Karte aus, die später
-  // unter jedem geteilten Link steht. Sie wird nie wieder überschrieben.
-  const frisch = state.polls.find((x) => x.id === data.id);
-  if (frisch) ladeOgBildHoch(frisch);
+  // Those zero counts are exactly the point: this is what the card will
+  // look like everywhere a shared link points to it. It never gets
+  // overwritten again.
+  const fresh = state.polls.find((x) => x.id === data.id);
+  if (fresh) ladeOgBildHoch(fresh);
 });
 
 // ---------------------------------------------------------------------------
@@ -3977,17 +4030,18 @@ async function loadDms() {
   $('#dm-user').hidden = state.me.isAdmin;
   $('#dm-admin').hidden = !state.me.isAdmin;
 
-  // Die Schwelle kann Ansem jederzeit ändern. Wer den Tab öffnet, soll nicht
-  // gegen einen Wert von vor einer Stunde geprüft werden und erst beim
-  // Absenden erfahren, dass er zu niedrig war. Eine Zeile, eine Abfrage.
+  // Ansem can change the threshold at any time. Whoever opens the tab
+  // shouldn't be checked against a value from an hour ago and only find
+  // out on submit that it was too low. One line, one query.
   await refreshDmMin();
 
   if (!state.me.isAdmin) {
     const rows = unwrap(await state.db.from('dms').select('*').order('id'));
     state.dmMessages = rows;
-    pruefeDmAntworten(rows);
-    // Bezog sich die offene Antwort auf etwas, das es nicht mehr gibt, muss
-    // sie weg – sonst zeigt die Leiste auf eine gelöschte Nachricht.
+    checkDmAnswers(rows);
+    // If the open reply referenced something that no longer exists, it
+    // has to go - otherwise the reply bar would point at a deleted
+    // message.
     if (state.dmReplyTo && !rows.some((r) => r.id === state.dmReplyTo)) clearDmReply();
     const box = $('#dm-thread');
     box.innerHTML = rows.length
@@ -3999,127 +4053,131 @@ async function loadDms() {
 
   renderDmMin();
 
-  // Im Demomodus wird gar nicht geladen – siehe DEMO_DMS ganz oben.
+  // Nothing gets loaded in demo mode at all - see DEMO_DMS way up top.
   const threads = DEMO_DMS
     ? demoThreads(DEMO_DMS)
     : unwrap(await state.db.from('dm_threads').select('*').order('tokens', { ascending: false }));
   state.dmThreads = threads;
-  pruefeVerbergen(threads);
+  checkHiding(threads);
 
   renderThreads();
 }
 
 /**
- * Kennt die Datenbank das Verbergen schon?
+ * Does the database already know about hiding?
  *
- * Dasselbe Muster wie bei pruefeDmAntworten() daneben, und aus demselben
- * Grund: Das Blatt und app.js liegen auf einem Webspace, die Migration in
- * Supabase – die beiden werden von Hand hochgeladen und sind deshalb
- * zwangslaeufig manchmal ungleich alt. Fuer eine Weile laeuft eine neue
- * Oberflaeche auf einer alten Datenbank.
+ * The same pattern as checkDmAnswers() nearby, and for the same reason:
+ * the markup and app.js live on a web host, the migration lives in
+ * Supabase - the two get uploaded by hand and are therefore bound to be
+ * out of sync in age sometimes. For a while, a newer UI runs against an
+ * older database.
  *
- * Ohne diese Pruefung sah das so aus: Der Knopf "Hide" stand da, ein Druck
- * darauf brachte "Could not find the table 'public.dm_hidden' in the schema
- * cache" – eine Meldung aus dem Maschinenraum, mitten in der Oberflaeche, fuer
- * einen Knopf, den die Seite selbst angeboten hat.
+ * Without this check, it looked like this: the "Hide" button was there, a
+ * press on it produced "Could not find the table 'public.dm_hidden' in the
+ * schema cache" - a message from the machine room, in the middle of the
+ * UI, for a button the site itself offered.
  *
- * Erkannt wird es an der Spalte, die die neue Ansicht mitliefert. Fehlt sie,
- * ist die Migration noch nicht eingespielt, und der Knopf erscheint gar nicht
- * erst. Bei leerem Posteingang bleibt der letzte bekannte Stand stehen – die
- * Frage laesst sich dann nicht beantworten, und "nicht anbieten" ist die
- * sichere Antwort.
+ * It's detected by the column the new view includes. If it's missing, the
+ * migration hasn't been applied yet, and the button never shows up in the
+ * first place. With an empty inbox, the last known state is kept - the
+ * question can't be answered then, and "don't offer it" is the safe
+ * answer.
  */
-function pruefeVerbergen(threads) {
+function checkHiding(threads) {
   if (DEMO_DMS) { state.dmHideAvailable = true; return; }
   if (threads?.length) state.dmHideAvailable = 'hidden' in threads[0];
 }
 
 /**
- * Zeichnet den Posteingang aus state.dmThreads.
+ * Renders the inbox from state.dmThreads.
  *
- * Eigene Funktion, weil sie nicht nur beim Laden gebraucht wird: Öffnet Ansem
- * einen Faden, sind dessen Nachrichten damit gelesen, und die rote Zahl muss
- * sofort verschwinden. Vorher tat sie das erst beim nächsten vollständigen
- * Neuladen – man klickte also auf einen Faden und die Zahl blieb stehen, als
- * hätte der Klick nichts bewirkt.
+ * A function of its own, because it's needed for more than just loading:
+ * when Ansem opens a thread, its messages are now read, and the red
+ * counter has to disappear immediately. Before, it only did that on the
+ * next full reload - so you'd click a thread and the count would just sit
+ * there, as if the click had done nothing.
  */
 function renderThreads() {
   const alle = state.dmThreads ?? [];
 
-  // Wer weniger hält als die Schwelle, taucht nicht mehr auf. Gelöscht wird
-  // dabei nichts – senkt Ansem die Schwelle wieder, sind die Gespräche samt
-  // Verlauf zurück. Die Leute selbst sehen ihren Faden weiterhin, können aber
-  // nichts Neues schreiben; das entscheidet die Datenbank beim Einfügen, nicht
-  // diese Ansicht.
-  // Beim Tippen gilt schon die getippte Zahl, ohne Bestätigung.
+  // Anyone holding less than the threshold no longer shows up. Nothing
+  // gets deleted in the process - if Ansem lowers the threshold again, the
+  // conversations come back, history and all. The people themselves still
+  // see their own thread, but can't write anything new; the database
+  // decides that on insert, not this view.
+  // While typing, the typed number already applies, with no need to
+  // confirm it.
   const min = Number(state.dmMinEntwurf ?? state.cfg.min_dm_usd ?? 0);
-  const ueberSchwelle = min > 0 ? alle.filter((t) => Number(t.usd) >= min) : alle;
+  const overThreshold = min > 0 ? alle.filter((t) => Number(t.usd) >= min) : alle;
 
-  // Hier stand eine Zeile, die zaehlte, wie viele Gespraeche die Schwelle
-  // gerade ausblendet. Sie ist raus: Der Regler steht direkt darueber und sagt
-  // dieselbe Sache besser. Wer "$1,000" liest, weiss, dass gefiltert wird – die
-  // Zahl daneben war eine zweite Auskunft ueber dieselbe Einstellung, und sie
-  // stand ausgerechnet ueber der Zeile, die eine ANDERE Auskunft gibt.
+  // There used to be a line here counting how many conversations the
+  // threshold is currently hiding. It's gone: the slider sits right above
+  // and says the same thing better. Anyone reading "$1,000" knows
+  // filtering is happening - the number next to it was a second piece of
+  // information about the same setting, and it sat, of all places, above
+  // the line that gives a DIFFERENT piece of information.
 
   // ---------------------------------------------------------------------
-  // Von Hand verborgene Gespraeche
+  // Manually hidden conversations
   //
-  // Zwei Arten, aus der Liste zu verschwinden, und nur EINE bekommt eine
-  // Zeile:
+  // Two ways to disappear from the list, and only ONE gets a status line:
   //
-  //   die SCHWELLE ist eine Regel, und sie steht als Zahl im Regler darueber.
-  //   Wer sie senkt, sieht die Gespraeche wiederkommen – dafuer braucht es
-  //   keinen Zaehler, der dasselbe noch einmal sagt.
+  //   the THRESHOLD is a rule, and it's shown as a number on the slider
+  //   above. Lower it, and the conversations come back - that doesn't
+  //   need a counter that says the same thing a second time.
   //
-  //   VERBERGEN ist eine Entscheidung ueber genau eine Person, und sie ist
-  //   nirgends sonst abzulesen. Sie bleibt, bis Ansem sie zuruecknimmt – auch
-  //   wenn derjenige weiterschreibt. Ohne diese Zeile waere das eine
-  //   Sackgasse: Er wuesste nicht mehr, dass es die Gespraeche gibt.
+  //   HIDING is a decision about exactly one person, and it isn't visible
+  //   anywhere else. It stays until Ansem reverses it - even if that
+  //   person keeps writing. Without this line that would be a dead end:
+  //   he'd have no way to know the conversations still exist.
   //
-  // Gezaehlt wird deshalb nur ueber der Schwelle. Wer ohnehin darunter liegt,
-  // taucht auch ohne Verbergen nicht auf – ihn hier mitzuzaehlen hiesse, eine
-  // Zahl zu nennen, die sich beim Senken der Schwelle von selbst aendert.
+  // That's why only conversations above the threshold get counted here.
+  // Whoever's already below it doesn't show up regardless of hiding -
+  // counting them here would mean quoting a number that changes on its
+  // own the moment the threshold is lowered.
   const verborgene = state.dmHideAvailable
-    ? ueberSchwelle.filter((t) => t.hidden) : [];
-  // Der Schalter zeigt die verborgenen ANSTATT der anderen, nicht dazwischen.
+    ? overThreshold.filter((t) => t.hidden) : [];
+  // The toggle shows the hidden ones INSTEAD of the others, not mixed in
+  // between.
   //
-  // Zuerst standen sie gemischt in der Liste, gedaempft. Das las sich falsch:
-  // Wer nachsieht, wen er weggenommen hat, sucht dann in vierzig Zeilen nach
-  // dreien – und die Daempfung war die einzige Auskunft darueber, welche
-  // gemeint sind. Umgeschaltet wird deshalb die ganze Liste; man ist entweder
-  // im Posteingang oder in dem, was man weggeraeumt hat.
-  // Kennt die Datenbank das Verbergen nicht, gibt es die Ansicht nicht. Das
-  // ist der einzige Fall, in dem sie von selbst zugeht.
+  // At first they sat mixed into the list, dimmed. That read wrong:
+  // checking who you hid meant hunting for three rows among forty - and
+  // the dimming was the only clue for which ones were meant. So the whole
+  // list toggles instead; you're either in the inbox or in what you set
+  // aside.
+  // If the database doesn't know about hiding, this view doesn't exist.
+  // That's the only case where it closes on its own.
   if (state.zeigeVerborgene && !state.dmHideAvailable) state.zeigeVerborgene = false;
 
   const threads = state.zeigeVerborgene
     ? verborgene
-    : ueberSchwelle.filter((t) => !t.hidden);
+    : overThreshold.filter((t) => !t.hidden);
 
-  // Die Zeile bleibt stehen, auch wenn nichts mehr verborgen ist – solange man
-  // in dieser Ansicht steht. Sonst ist sie eine Sackgasse: Wer das letzte
-  // Gespraech zurueckholt, sieht "Inbox is empty" und hat keinen Knopf mehr,
-  // um in den echten Posteingang zurueckzukommen.
+  // The status row stays visible even once nothing is hidden anymore, as
+  // long as you're standing in this view. Otherwise it's a dead end:
+  // whoever brings back the last conversation sees "Inbox is empty" with
+  // no button left to get back to the real inbox.
   //
-  // Hier stand stattdessen ein Ruecksprung – bei null Verborgenen ging die
-  // Ansicht von selbst zu. Der war schon deshalb wirkungslos, weil er UNTER
-  // der Zeile stand, die die Liste zusammenstellt: gezeigt wurde noch die
-  // leere, und erst der naechste Aufruf haette es gemerkt.
+  // There used to be an automatic jump back here instead - at zero hidden,
+  // the view closed itself. That was already pointless because it sat
+  // BELOW the line that assembles the list: the empty version was still
+  // what got shown, and only the next call would have caught it.
   //
-  // Er waere aber auch dann falsch gewesen. Zurueckholen ist ein Klick auf
-  // eine Zeile, und die ganze Liste unter der Hand auszutauschen, weil es die
-  // letzte war, ist eine Bewegung, die man nicht ausgeloest hat. Wer fertig
-  // ist, geht ueber denselben Knopf zurueck, ueber den er hergekommen ist.
+  // But it would have been the wrong move regardless. Bringing something
+  // back is a click on a row, and swapping out the whole list underneath
+  // that click just because it was the last one is a movement nobody
+  // triggered. Whoever's done leaves through the same button they came in
+  // through.
   const vBox = $('#thread-versteckt');
   vBox.hidden = !state.dmHideAvailable
     || (verborgene.length === 0 && !state.zeigeVerborgene);
   if (!vBox.hidden) {
-    // Der Text sagt, WAS man gerade sieht – nicht immer dasselbe. Im
-    // Verborgen-Modus steht die Liste darunter fuer etwas anderes, und eine
-    // Zeile, die das verschweigt, laesst einen den Posteingang fuer leer
-    // halten.
-    // Auch die 0 wird ausgeschrieben: "Showing 0 hidden conversations" ist
-    // die Auskunft, die zur leeren Liste darunter gehoert.
+    // The text says WHAT you're currently looking at - it isn't always
+    // the same thing. In hidden mode, the list below means something
+    // different, and a line that stays silent about that would leave you
+    // thinking the inbox is empty.
+    // Even zero gets spelled out: "Showing 0 hidden conversations" is the
+    // information that matches the empty list below it.
     $('#thread-versteckt-zahl').textContent = state.zeigeVerborgene
       ? (verborgene.length === 1
         ? 'Showing 1 hidden conversation'
@@ -4127,63 +4185,65 @@ function renderThreads() {
       : (verborgene.length === 1
         ? '1 conversation hidden by you'
         : `${verborgene.length} conversations hidden by you`);
-    // Der Knopf sagt, was er TUT, nicht in welchem Zustand die Liste ist:
-    // "Show" heisst, dass ein Druck sie zeigt. Ein Schalter, der den Zustand
-    // benennt, liest sich in der Haelfte der Faelle als das Gegenteil.
+    // The button says what it DOES, not what state the list is in: "Show"
+    // means pressing it will show them. A toggle that names the state
+    // reads as the opposite of what it does in half the cases.
     $('#btn-versteckt').textContent = state.zeigeVerborgene ? 'Back' : 'Show';
     $('#btn-versteckt').setAttribute('aria-expanded', String(Boolean(state.zeigeVerborgene)));
   }
 
-  // Eine Zeile pro Gespräch: Kürzel, Vorschau, Betrag. Sortiert nach Bestand,
-  // von oben nach unten – die Reihenfolge ist die einzige Ordnung, die es
-  // braucht. Keine Abschnitte, kein farbiger Strich für das offene Gespräch:
-  // Eine Auswahl ist nicht wichtig, sie ist nur ausgewählt. Dafür reicht eine
-  // hellere Fläche.
+  // One row per conversation: handle, preview, amount. Sorted by holdings,
+  // top to bottom - that ordering is the only structure needed here. No
+  // sections, no colored bar for the open conversation: a selection isn't
+  // important, it's just selected. A brighter background is enough for
+  // that.
   //
-  // Ungeöffnete Gespräche liegen auf einer schwach blauen Fläche und ihre
-  // Vorschau steht eine Stufe heller. Zwei Anzeichen für denselben Zustand,
-  // aber beide leise – und keins davon ein eigenes Zeichen in der Zeile: Rote
-  // Blase, Punkt und Strich waren durch, und alle drei behaupteten Dringlichkeit
-  // statt bloß "noch nicht gelesen".
+  // Unopened conversations sit on a faintly blue background, and their
+  // preview text is one step brighter. Two signals for the same state, but
+  // both quiet - and neither one is its own separate mark in the row: a
+  // red badge, a dot, and a bar were all tried, and all three claimed
+  // urgency instead of just "not read yet".
   //
-  // Blau, weil Helligkeit schon vergeben ist: Die hellere Fläche bedeutet
-  // "geöffnet". Wären beide Zustände Helligkeiten, wären sie verwechselbar –
-  // so ist Farbe der eine, Helligkeit der andere.
+  // Blue, because brightness is already spoken for: the brighter
+  // background means "currently open". If both states were expressed as
+  // brightness, they'd be confusable - this way color carries one, and
+  // brightness carries the other.
   //
-  // Deshalb steht die Regel im Stylesheet auch vor :hover und .is-active: alle
-  // drei sind gleich spezifisch, die Reihenfolge entscheidet, und ein Gespräch,
-  // das gerade offen ist, soll offen aussehen und nicht ungelesen.
+  // That's also why the rule in the stylesheet sits before :hover and
+  // .is-active: all three are equally specific, so order decides, and a
+  // conversation that's currently open should look open, not unread.
   //
-  // Hat Ansem zuletzt geschrieben, steht "You:" vor der Vorschau.
+  // "You:" appears before the preview if Ansem wrote last.
   //
-  // Das war schon einmal da und wieder raus, mit der Begruendung: In einer
-  // Liste aus Kuerzeln, Text und Betraegen ist es ein vierter Bestandteil, und
-  // die Zeile wird davon unruhig. Das Argument war richtig – fuer die Zeile,
-  // wie sie damals aussah. Inzwischen endet die Vorschau nach 16 Zeichen, und
-  // rechts davon steht Luft; der Platz ist da.
+  // This was here once, got removed, and came back. The reasoning for
+  // removing it: in a list of handles, text, and amounts, it's a fourth
+  // element, and it makes the row noisy. That argument was correct - for
+  // the row as it looked back then. Since then, the preview cuts off at 16
+  // characters, leaving open space to its right; the room is there now.
   //
-  // Und die Auskunft ist mehr wert, als sie damals schien: Ohne sie liest sich
-  // die eigene letzte Antwort wie eine neue Nachricht des anderen. Bei
-  // vierzig Gespraechen, von denen die meisten beantwortet sind, ist genau das
-  // die haeufigste Zeile.
+  // And the information is worth more than it seemed back then: without
+  // it, your own last reply reads like a new message from the other
+  // person. With forty conversations, most of them already answered,
+  // that's exactly the most common row.
   //
-  // Es steht als eigenes Element vor der Vorschau und nicht in ihrem Text: So
-  // frisst es die 16 Zeichen nicht auf, und es kann eine eigene Farbe tragen.
+  // It sits as its own element before the preview, not inside its text:
+  // that way it doesn't eat into the 16 characters, and it can carry a
+  // color of its own.
   //
-  // Einzeilig statt zweizeilig, weil bei fünfzig Gesprächen die Liste sonst
-  // fünf Bildschirme lang ist.
+  // Single-line instead of two, because with fifty conversations the list
+  // would otherwise run five screens long.
   $('#thread-items').innerHTML = threads.length ? threads.map((t) => `
     <button class="thread ${Number(t.unread) > 0 ? 'is-unread' : ''} ${state.activeThread === t.wallet ? 'is-active' : ''} ${t.hidden ? 'ist-verborgen' : ''}"
             data-wallet="${esc(t.wallet)}" title="${esc(t.wallet)}">
       <span class="h t${toneOf(t.wallet)}">${esc(handleOf(t.wallet))}</span>
       ${t.last_from_admin ? '<span class="thread-du">You:</span>' : ''}
       <span class="thread-prev">${esc(t.preview)}</span>
-      <span class="w">${kurzUsd(Number(t.usd))}</span>
+      <span class="w">${shortUsd(Number(t.usd))}</span>
     </button>`).join('')
-    // Leer heisst hier zweierlei. In der Verborgen-Ansicht ist der Posteingang
-    // NICHT leer – er steht nur gerade woanders, einen Knopf entfernt. Der
-    // alte Satz behauptete an dieser Stelle das Gegenteil dessen, was die
-    // Zeile darueber sagt.
+    // "Empty" means two different things here. In the hidden view, the
+    // inbox is NOT empty - it's just currently sitting somewhere else, one
+    // button away. The old sentence used to claim the opposite of what the
+    // line above it says.
     : (state.zeigeVerborgene
       ? '<div class="empty">Nothing hidden any more.</div>'
       : '<div class="empty">Inbox is empty.</div>');
@@ -4193,26 +4253,28 @@ function renderThreads() {
 }
 
 /**
- * Wessen Nachricht zitiert wird – als Kürzel.
+ * Whose message is being quoted - as a handle.
  *
- * Nur zwei Beteiligte, also gibt es genau zwei Antworten: Ansem oder die
- * andere Seite. Wer "die andere Seite" ist, hängt davon ab, wer zusieht –
- * für Ansem der Faden, den er offen hat, für alle anderen sie selbst.
+ * Only two participants, so there are exactly two possible answers: Ansem
+ * or the other side. Who "the other side" is depends on who's looking -
+ * for Ansem it's the thread he currently has open, for everyone else it's
+ * themselves.
  */
 const dmAutor = (q) => handleOf(q.from_admin
   ? state.cfg.admin_wallet
   : (state.me.isAdmin ? state.activeThread : state.me.wallet));
 
 /**
- * Das Zitat über einer DM-Antwort.
+ * The quote above a DM reply.
  *
- * Ohne Namen: In einem Gespräch mit genau zwei Beteiligten sagt er nichts, was
- * man nicht ohnehin weiß, und nimmt dem eigentlichen Text die Breite.
+ * With no name: in a conversation with exactly two participants, a name
+ * says nothing you don't already know, and it takes width away from the
+ * actual text.
  *
- * Es braucht keinen Nachladeweg: Ein Gespräch wird immer vollständig
- * geladen, die zitierte Nachricht liegt also bereits vor. Fehlt
- * sie doch, wurde sie gelöscht – und dann soll dort auch nichts stehen, was
- * sie wiederherstellt.
+ * It needs no separate loading path: a conversation always loads in full,
+ * so the quoted message is already available. If it's still missing, it
+ * was deleted - and in that case nothing should be shown here that
+ * pretends to restore it.
  */
 function dmQuoteHtml(row) {
   if (!row.reply_to) return '';
@@ -4227,21 +4289,21 @@ function dmQuoteHtml(row) {
 }
 
 /**
- * Baut den Verlauf mit Datumstrennern.
+ * Builds the conversation history with date separators.
  *
- * Der Vergleich läuft über den Tagesbeginn, nicht über die Zeichenkette des
- * Datums: Eine Nachricht um 23:58 und die Antwort um 00:03 gehören zu
- * verschiedenen Tagen, obwohl nur fünf Minuten dazwischen liegen – genau
- * dafür ist der Trenner da.
+ * The comparison runs on the start of the day, not on the date's string
+ * form: a message at 23:58 and the reply at 00:03 belong to different
+ * days, even though only five minutes separate them - that's exactly what
+ * the separator is for.
  */
 function dmListeHtml(rows) {
-  let letzterTag = null;
+  let lastDay = null;
   const out = [];
   for (const r of rows) {
     const tag = tagBeginn(new Date(r.created_at));
-    if (tag !== letzterTag) {
+    if (tag !== lastDay) {
       out.push(`<div class="day-sep"><span>${esc(tagLabel(r.created_at))}</span></div>`);
-      letzterTag = tag;
+      lastDay = tag;
     }
     out.push(dmHtml(r));
   }
@@ -4249,17 +4311,18 @@ function dmListeHtml(rows) {
 }
 
 /**
- * Eine DM.
+ * A single DM.
  *
- * Das Zitat steht AUSSERHALB der Blase, darüber – so macht es X, und danach
- * ist dieser Teil gebaut. Der Unterschied ist nicht bloss Geschmack: In der
- * Blase musste sich das Zitat gegen deren Grund absetzen, und weil die eigene
- * Blase hell ist und die eingehende dunkel, brauchte es dafür zwei
- * Sonderregeln, die sich gegenseitig widersprachen. Darüber gestellt liegt es
- * für beide Seiten auf demselben Grund und kommt mit einer Regel aus.
+ * The quote sits OUTSIDE the bubble, above it - that's how X does it, and
+ * this part is built to match. The difference isn't just taste: inside the
+ * bubble, the quote had to stand out against the bubble's background, and
+ * because your own bubble is light and an incoming one is dark, that took
+ * two special-case rules that contradicted each other. Placed above the
+ * bubble, it sits on the same background on both sides and needs just one
+ * rule.
  *
- * Die drei Teile stehen deshalb in einer eigenen Spalte (.dm-block): Kopfzeile,
- * Zitatblase, Nachricht. Der Antwortpfeil bleibt daneben.
+ * That's why the three parts sit in their own column (.dm-block): header,
+ * quote bubble, message. The reply arrow stays next to it.
  */
 function dmHtml(row) {
   const mine = state.me.isAdmin ? row.from_admin : !row.from_admin;
@@ -4267,7 +4330,7 @@ function dmHtml(row) {
       <div class="dm-block${row.reply_to ? ' has-quote' : ''}">
         ${dmQuoteHtml(row)}
         <div class="msg dm ${mine ? 'mine' : ''}">
-          <span class="body">${mitLinks(row.body)}</span>
+          <span class="body">${withLinks(row.body)}</span>
           <span class="meta"><span class="time">${fmtTime(row.created_at)}</span></span>
         </div>
       </div>
@@ -4280,7 +4343,7 @@ function dmHtml(row) {
 // Antworten in DMs
 // ---------------------------------------------------------------------------
 
-/** Die beiden Gesprächsansichten – für Ansem die eine, für alle anderen die andere. */
+/** The two conversation views - one for Ansem, the other for everyone else. */
 const dmTeile = () => state.me.isAdmin
   ? { box: '#admin-thread', bar: '#admin-reply-bar', who: '#admin-reply-bar-who',
       text: '#admin-reply-bar-text', input: '#admin-dm-input', pane: '#dm-admin' }
@@ -4292,7 +4355,7 @@ function setDmReply(id) {
   if (!q || !state.dmRepliesAvailable) return;
   const t = dmTeile();
   state.dmReplyTo = id;
-  // Kein Name, wie im Zitat: zwei Beteiligte, da sagt er nichts.
+  // No name, same as in the quote: two participants, a name says nothing.
   $(t.text).textContent = q.body;
   $(t.bar).hidden = false;
   $(t.input).focus();
@@ -4304,23 +4367,23 @@ function clearDmReply() {
   $('#admin-reply-bar').hidden = true;
 }
 
-/** Springt zur zitierten Nachricht und lässt sie kurz aufleuchten. */
+/** Jumps to the quoted message and makes it flash briefly. */
 function gotoDm(id) {
-  const zeile = $(`${dmTeile().box} .dm-row[data-id="${id}"]`);
-  const blase = zeile?.querySelector('.msg');
-  if (!blase) return;
-  zeile.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  blase.classList.remove('flash');
-  void blase.offsetWidth;
-  blase.classList.add('flash');
+  const line = $(`${dmTeile().box} .dm-row[data-id="${id}"]`);
+  const bubble = line?.querySelector('.msg');
+  if (!bubble) return;
+  line.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  bubble.classList.remove('flash');
+  void bubble.offsetWidth;
+  bubble.classList.add('flash');
 }
 
 /**
- * Ein Klickhandler für beide Gesprächsansichten.
+ * A click handler for both conversation views.
  *
- * Am Schreibtisch erscheint der Pfeil beim Überfahren, auf dem Handy durch
- * Antippen der Nachricht. Wer gerade Text markiert hat, wollte
- * nicht antippen – sonst verschwände die Auswahl beim Loslassen sofort wieder.
+ * On desktop, the arrow appears on hover; on a phone, by tapping the
+ * message. Whoever just selected text didn't mean to tap - otherwise the
+ * selection would disappear again the instant you let go.
  */
 for (const sel of ['#dm-thread', '#admin-thread']) {
   $(sel).addEventListener('click', (e) => {
@@ -4330,61 +4393,61 @@ for (const sel of ['#dm-thread', '#admin-thread']) {
     const goto = e.target.closest?.('[data-dm-goto]');
     if (goto) { gotoDm(Number(goto.dataset.dmGoto)); return; }
 
-    // Und sonst passiert beim Antippen NICHTS.
+    // Otherwise, tapping does NOTHING.
     // -----------------------------------------------------------------------
-    // Hier schaltete ein Tipp die Zeile auf "aktiv" und liess damit den
-    // Antwortpfeil erscheinen. Das war der Weg zur Antwort, bevor es das
-    // Wischen gab, und ist seitdem einer zu viel: Ein Tipp auf eine Nachricht
-    // ist die haeufigste Beruehrung ueberhaupt – beim Rollen, beim Zielen auf
-    // etwas anderes, beim blossen Hinsehen –, und jedes Mal sprang ein Pfeil
-    // ins Bild, den niemand gerufen hat.
+    // A tap here used to switch the row to "active" and make the reply
+    // arrow appear. That was the way to reply before swiping existed, and
+    // it's been one too many ever since: tapping a message is the single
+    // most common touch there is - while scrolling, while aiming at
+    // something else, while just looking at it - and every time, an arrow
+    // popped into view that nobody asked for.
     //
-    // Geantwortet wird durch Wischen. Am Rechner erscheint der Pfeil beim
-    // Ueberfahren mit der Maus (.dm-row:hover), das bleibt.
+    // Replying happens by swiping now. On desktop the arrow still appears
+    // on mouse hover (.dm-row:hover), that stays.
   });
 }
 
 // ---------------------------------------------------------------------------
-// Am Finger: lange draufhalten und nach links wischen
+// By touch: long-press and swipe left
 // ---------------------------------------------------------------------------
 //
-// Vorher gab es auf dem Handy nur einen Weg zu einer Antwort: die Nachricht
-// antippen, damit der Pfeil erscheint, dann den Pfeil treffen. Zwei Tipper auf
-// ein Ziel von 44 px – und wer stattdessen lange draufhielt, bekam eine
-// Textmarkierung und das Menue von iOS.
+// There used to be only one way to reply on a phone: tap the message so
+// the arrow appears, then hit the arrow. Two taps on a 44px target - and
+// whoever long-pressed instead got a text selection and iOS's context
+// menu.
 //
-// Jetzt wie in den DMs bei X: nach rechts wischen antwortet direkt, der Pfeil
-// taucht dabei auf, und am Anschlag brummt es einmal.
+// Now, like in X's DMs: swiping right replies directly, the arrow appears
+// along the way, and there's a single haptic buzz at the limit.
 //
-// Ein kleines Fenster beim langen Draufhalten ("Reply / Copy") gab es hier
-// eine Runde lang und ist auf Wunsch wieder weg.
+// A small popup on long-press ("Reply / Copy") existed here for a while
+// and was removed again on request.
 //
-// Nur am Finger. Am Rechner bleibt alles, wie es war – dort gibt es Hover
-// fuer den Pfeil und Markieren fuer den Text.
+// Touch only. On desktop everything stays as it was - there, hover shows
+// the arrow and selection works on the text.
 
-const WISCH_START_PX = 12;    // ab hier ist es ein Wisch und kein Zittern
-// Der Weg war 64 px und ist auf 44 gekuerzt: So weit muss der Daumen gar nicht
-// wandern, damit die Geste eindeutig ist, und die Blase verlaesst dabei ihren
-// Platz nicht so weit, dass die Zeile unruhig wirkt.
-const WISCH_MAX_PX = 44;      // so weit laesst sich die Blase ziehen
-const WISCH_SCHWELLE_PX = 32; // ab hier zaehlt der Wisch als Antwort
+const SWIPE_START_PX = 12;    // beyond this it's a swipe, not a jitter
+// This distance used to be 64px and was cut to 44: the thumb doesn't need
+// to travel that far for the gesture to be unambiguous, and the bubble
+// doesn't leave its spot by so much that the row looks jumpy.
+const SWIPE_MAX_PX = 44;      // how far the bubble can be dragged
+const SWIPE_THRESHOLD_PX = 32; // beyond this the swipe counts as a reply
 
 /**
- * Der Zustand einer laufenden Beruehrung.
+ * The state of an in-progress touch.
  *
- * Ein einziges Objekt und keins je Zeile: Es gibt genau einen Finger, der
- * gerade etwas tut. Zwei gleichzeitig sind kein Wisch, sondern ein Zoom – die
- * werden unten ausgeschlossen.
+ * A single object, not one per row: there's exactly one finger doing
+ * something at any moment. Two at once isn't a swipe, it's a pinch zoom -
+ * that case is excluded below.
  */
 let griff = null;
 
 
-/** Die Blase zurueck an ihren Platz, egal wie der Wisch ausging. */
-function wischZurueck(g) {
+/** Puts the bubble back in place, no matter how the swipe ended. */
+function swipeBack(g) {
   if (!g?.block) return;
-  g.zeile.classList.remove('wischt');
+  g.line.classList.remove('wischt');
   g.block.style.transform = '';
-  const pfeil = g.zeile.querySelector('.reply-btn');
+  const pfeil = g.line.querySelector('.reply-btn');
   if (pfeil) pfeil.style.opacity = '';
 }
 
@@ -4392,22 +4455,23 @@ for (const sel of ['#dm-thread', '#admin-thread']) {
   const box = $(sel);
 
   box.addEventListener('touchstart', (e) => {
-    // Zwei Finger sind kein Wisch, sondern ein Zoom.
-    if (e.touches.length !== 1) { wischZurueck(griff); griff = null; return; }
-    const zeile = e.target.closest?.('.dm-row');
-    if (!zeile) return;
-    const id = Number(zeile.dataset.id);
+    // Two fingers isn't a swipe, it's a pinch zoom.
+    if (e.touches.length !== 1) { swipeBack(griff); griff = null; return; }
+    const line = e.target.closest?.('.dm-row');
+    if (!line) return;
+    const id = Number(line.dataset.id);
     if (!id) return;
 
     const t = e.touches[0];
     griff = {
-      zeile, id, block: zeile.querySelector('.dm-block'),
+      line, id, block: line.querySelector('.dm-block'),
       x: t.clientX, y: t.clientY, zieht: false,
     };
   }, { passive: true });
 
-  // passive: false, weil beim Wischen preventDefault gebraucht wird – sonst
-  // rollt die Liste mit, waehrend die Blase am Finger haengt.
+  // passive: false, because preventDefault is needed while swiping -
+  // otherwise the list scrolls along while the bubble is stuck to the
+  // finger.
   box.addEventListener('touchmove', (e) => {
     if (!griff || e.touches.length !== 1) return;
     const t = e.touches[0];
@@ -4415,16 +4479,17 @@ for (const sel of ['#dm-thread', '#admin-thread']) {
     const dy = t.clientY - griff.y;
 
     if (!griff.zieht) {
-      // Erst entscheiden, WAS das hier wird, und bis dahin nichts abfangen:
-      // Ein senkrechter Wisch ist Rollen und muss weiter rollen duerfen. Der
-      // Faktor 1.5 sorgt dafuer, dass ein schraeger Wisch als Rollen gilt –
-      // im Zweifel gehoert die Bewegung der Liste, nicht uns.
-      if (dx > WISCH_START_PX && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      // Decide WHAT this gesture is first, and intercept nothing until
+      // then: a vertical swipe is scrolling and has to keep scrolling.
+      // The 1.5 factor makes a diagonal swipe count as scrolling - when in
+      // doubt, the movement belongs to the list, not to us.
+      if (dx > SWIPE_START_PX && Math.abs(dx) > Math.abs(dy) * 1.5) {
         griff.zieht = true;
-        griff.zeile.classList.add('wischt');
-      } else if (Math.abs(dy) > WISCH_START_PX) {
-        // Eindeutig senkrecht: Der Griff ist damit erledigt.
-        wischZurueck(griff);
+        griff.line.classList.add('wischt');
+      } else if (Math.abs(dy) > SWIPE_START_PX) {
+        // Unambiguously vertical: this touch is done as far as we're
+        // concerned.
+        swipeBack(griff);
         griff = null;
         return;
       } else {
@@ -4433,24 +4498,24 @@ for (const sel of ['#dm-thread', '#admin-thread']) {
     }
 
     e.preventDefault();
-    // Nur nach rechts, und nur bis WISCH_MAX_PX. Ohne die Klammer liesse sich
-    // die Blase ueber den Bildrand hinausziehen.
-    const weg = Math.min(WISCH_MAX_PX, Math.max(0, dx));
+    // Only to the right, and only up to SWIPE_MAX_PX. Without this clamp,
+    // the bubble could be dragged past the edge of the screen.
+    const weg = Math.min(SWIPE_MAX_PX, Math.max(0, dx));
     griff.block.style.transform = `translateX(${weg}px)`;
-    const pfeil = griff.zeile.querySelector('.reply-btn');
-    // Der Pfeil taucht mit dem Finger auf, nicht auf einen Schlag: So sieht
-    // man vor dem Loslassen, dass die Geste erkannt wurde.
-    if (pfeil) pfeil.style.opacity = String(Math.min(1, weg / WISCH_SCHWELLE_PX));
+    const pfeil = griff.line.querySelector('.reply-btn');
+    // The arrow fades in along with the finger, not all at once: this
+    // lets you see the gesture was recognized before you let go.
+    if (pfeil) pfeil.style.opacity = String(Math.min(1, weg / SWIPE_THRESHOLD_PX));
 
-    // Am Anschlag einmal kurz brummen – und nur einmal, deshalb der Merker.
-    // Das ist die Rueckmeldung, die der Daumen bekommt, wenn die Blase nicht
-    // weiter geht: Ab hier ist die Antwort sicher, man kann loslassen.
+    // A single short buzz at the limit - and only once, hence the flag.
+    // This is the feedback the thumb gets when the bubble stops moving:
+    // from here on the reply is locked in, you can let go.
     //
-    // navigator.vibrate gibt es auf Android; Safari auf dem iPhone kennt es
-    // NICHT und ignoriert den Aufruf stillschweigend. Dort bleibt es beim
-    // sichtbaren Anschlag. Ein anderer Weg dafuer steht einer Webseite auf
-    // iOS nicht offen.
-    if (weg >= WISCH_MAX_PX && !griff.gebrummt) {
+    // navigator.vibrate exists on Android; Safari on iPhone does NOT know
+    // it and silently ignores the call. There, it stays at the visible
+    // stop. There's no other way to do this available to a website on
+    // iOS.
+    if (weg >= SWIPE_MAX_PX && !griff.gebrummt) {
       griff.gebrummt = true;
       navigator.vibrate?.(8);
     }
@@ -4463,15 +4528,15 @@ for (const sel of ['#dm-thread', '#admin-thread']) {
     if (!g.zieht) return;
     const weg = Math.abs(parseFloat(
       (g.block.style.transform.match(/-?[\d.]+/) ?? [0])[0]));
-    wischZurueck(g);
-    if (weg >= WISCH_SCHWELLE_PX) setDmReply(g.id);
+    swipeBack(g);
+    if (weg >= SWIPE_THRESHOLD_PX) setDmReply(g.id);
   };
   box.addEventListener('touchend', losgelassen, { passive: true });
-  box.addEventListener('touchcancel', () => { wischZurueck(griff); griff = null; }, { passive: true });
+  box.addEventListener('touchcancel', () => { swipeBack(griff); griff = null; }, { passive: true });
 
-  // Nach einem Wisch folgt ein click. Der wuerde die Zeile umschalten, als
-  // haette man sie angetippt. Deshalb wird er hier abgefangen, bevor der
-  // Handler weiter unten ihn sieht (capture).
+  // A click follows every swipe. That click would toggle the row as if it
+  // had been tapped. So it's intercepted here, before the handler further
+  // down sees it (capture).
   box.addEventListener('click', (e) => {
     if (griff?.zieht) { e.stopPropagation(); e.preventDefault(); }
   }, true);
@@ -4483,41 +4548,41 @@ for (const sel of ['#dm-input', '#admin-dm-input']) {
 }
 
 /**
- * Merkt sich, ob die Datenbank die Antwort-Spalte schon kennt.
+ * Tracks whether the database already knows about the reply column.
  *
- * Liegt das Frontend vor der Migration, fehlt reply_to in den Zeilen. Dann
- * verschwindet der Antwortknopf, statt einen Bezug anzubieten, den das
- * Einfügen später ablehnt.
+ * If the frontend is ahead of the migration, reply_to is missing from the
+ * rows. In that case, the reply button disappears instead of offering a
+ * reference that the insert would later reject.
  */
-function pruefeDmAntworten(rows) {
+function checkDmAnswers(rows) {
   if (rows.length) state.dmRepliesAvailable = 'reply_to' in rows[0];
   $('#dm-user').classList.toggle('no-replies', !state.dmRepliesAvailable);
   $('#dm-admin').classList.toggle('no-replies', !state.dmRepliesAvailable);
 }
 
 /**
- * Zeichnet Kopfzeile und Verlauf eines Gesprächs. Rein aus dem Speicher,
- * ohne Netz – damit ein Wechsel sofort sichtbar ist.
+ * Renders a conversation's header and history. Purely from memory, no
+ * network - so switching is visible immediately.
  */
 function renderThread(wallet, rows) {
   state.dmMessages = rows;
-  pruefeDmAntworten(rows);
+  checkDmAnswers(rows);
 
-  // Kein Betrag in dieser Leiste. Er steht in der Liste links, direkt in der
-  // Zeile, aus der man das Gespräch geöffnet hat – ihn hier zu wiederholen
-  // sagt nichts Neues und macht aus einer Kopfzeile eine zweite Anzeige.
+  // No amount in this header. It's already in the list on the left,
+  // right in the row the conversation was opened from - repeating it here
+  // says nothing new and turns a header into a second display of it.
   $('#thread-title').innerHTML =
     `<strong class="h t${toneOf(wallet)}">${esc(handleOf(wallet))}</strong>`
     + `<span class="addr dim">${esc(wallet)}</span>`;
 
-  // Der Verbergen-Knopf sagt, was ein Druck TUT, und nicht, in welchem
-  // Zustand das Gespraech ist: Bei einem verborgenen steht "Unhide".
+  // The hide button says what pressing it DOES, not what state the
+  // conversation is in: for a hidden one it reads "Unhide".
   const verborgen = Boolean(state.dmThreads?.find((t) => t.wallet === wallet)?.hidden);
-  const knopf = $('#btn-hide-thread');
-  // Nicht anbieten, was die Datenbank noch nicht kann – siehe pruefeVerbergen().
-  knopf.hidden = !state.dmHideAvailable;
-  knopf.textContent = verborgen ? 'Unhide' : 'Hide';
-  knopf.title = verborgen
+  const button = $('#btn-hide-thread');
+  // Don't offer what the database can't do yet - see checkHiding().
+  button.hidden = !state.dmHideAvailable;
+  button.textContent = verborgen ? 'Unhide' : 'Hide';
+  button.title = verborgen
     ? 'Put this conversation back in the inbox'
     : 'Take this conversation out of your inbox';
 
@@ -4529,67 +4594,72 @@ function renderThread(wallet, rows) {
 }
 
 /**
- * Öffnet ein Gespräch.
+ * Opens a conversation.
  *
- * Der Punkt hier ist die Reihenfolge. Vorher wurde zuerst die Netzantwort
- * abgewartet und erst danach etwas gezeichnet – jeder Klick auf einen Faden
- * kostete also eine volle Runde zum Server, bevor sich überhaupt etwas
- * bewegte. Beim Hin- und Herspringen zwischen zwei Gesprächen war das jedes
- * Mal dieselbe Wartezeit, obwohl die Daten längst dagewesen waren.
+ * The point here is the order of operations. It used to wait for the
+ * network response first and only draw something afterward - so every
+ * click on a thread cost a full round trip to the server before anything
+ * even moved. Jumping back and forth between two conversations meant
+ * paying that same wait every time, even though the data had been sitting
+ * there the whole while.
  *
- * Jetzt: Ist das Gespräch schon einmal geladen worden, wird es sofort aus dem
- * Speicher gezeichnet. Die frische Abfrage läuft danach im Hintergrund und
- * zeichnet nur nach, wenn sich wirklich etwas geändert hat – sonst würde die
- * Ansicht bei jedem Wechsel grundlos flackern und ans Ende springen.
+ * Now: if the conversation has been loaded before, it's drawn immediately
+ * from memory. The fresh query runs in the background afterward and only
+ * redraws if something has actually changed - otherwise the view would
+ * flicker and jump to the bottom for no reason on every switch.
  *
- * Beim ersten Öffnen eines Fadens bleibt eine Wartezeit; die ist unvermeidbar,
- * die Nachrichten sind noch nicht da. Danach nicht mehr.
+ * Opening a thread for the first time still has a wait; that's
+ * unavoidable, the messages simply aren't there yet. Not after that,
+ * though.
  *
- * @param {boolean} reveal  Nur beim Antippen durch Ansem selbst. Beim
- *   Nachladen wegen einer eingehenden Nachricht darf sich das Gespräch nicht
- *   von allein über den Posteingang schieben – sonst springt ihm die Ansicht
- *   unter dem Daumen weg, während er die Liste durchgeht.
+ * @param {boolean} reveal  Only on a tap by Ansem himself. When reloading
+ *   because of an incoming message, the conversation must not slide over
+ *   the inbox on its own - otherwise the view would jump out from under
+ *   his thumb while he's going through the list.
  */
 async function openThread(wallet, reveal = false) {
   const gewechselt = state.activeThread !== wallet;
   state.activeThread = wallet;
   if (reveal) $('#dm-admin').classList.add('viewing');
-  // Ein Bezug gilt immer nur innerhalb eines Gesprächs – die Datenbank lehnt
-  // alles andere ab. Beim Wechsel also verwerfen statt mitschleppen.
+  // A reply reference only ever applies within one conversation - the
+  // database rejects anything else. So it gets dropped on switching
+  // instead of carried along.
   if (gewechselt) clearDmReply();
 
   const bekannt = state.dmCache.get(wallet);
   if (bekannt) renderThread(wallet, bekannt);
 
-  // Gelesen markieren ist eine Nebensache und darf das Zeichnen nicht
-  // aufhalten – deshalb ohne await. Der Punkt verschwindet trotzdem sofort;
-  // markiereGelesen() setzt den Zaehler erst lokal und schickt danach.
+  // Marking as read is a side concern and must not hold up drawing -
+  // that's why it runs without await. The dot still disappears
+  // immediately; markiereGelesen() updates the counter locally first and
+  // sends afterward.
   //
-  // Es steht VOR dem Demo-Ausstieg darunter, und das ist keine Kosmetik: Stand
-  // es dahinter, blieb der Punkt im Demomodus fuer immer stehen – man klickte
-  // ein ungelesenes Gespraech an, las es, und die Liste behauptete weiter, da
-  // sei etwas offen. Genau so ist es aufgefallen.
+  // It sits BEFORE the demo-mode early return below, and that's not
+  // cosmetic: if it sat after it, the dot would stay stuck forever in
+  // demo mode - you'd click an unread conversation, read it, and the list
+  // would keep claiming something was still open. That's exactly how this
+  // was noticed.
   markiereGelesen(wallet);
 
-  // Im Demomodus gibt es die Gespraeche nicht – also auch nichts zu laden.
-  // Ein paar erfundene Zeilen, damit der Verlauf nicht leer ist und der
-  // Verbergen-Knopf ein Ziel hat.
+  // In demo mode the conversations don't exist - so there's nothing to
+  // load either. A few made-up rows so the history isn't empty and the
+  // hide button has something to act on.
   if (DEMO_DMS) {
-    const zeile = state.dmThreads?.find((t) => t.wallet === wallet);
+    const line = state.dmThreads?.find((t) => t.wallet === wallet);
 
-    // Die letzte Zeile ist die Vorschau, und sie kommt von dem, den die Liste
-    // nennt. Hier stand fest verdrahtet Ansem mit "will look at it" – in jedem
-    // Gespraech, auch in denen ohne "You:" davor, und die Vorschau lag eine
-    // Zeile darueber. Die Liste sagte also das eine, das geoeffnete Gespraech
-    // das andere, und beim Vergleichen zweier Entwuerfe der Liste haette man
-    // sich auf beides berufen koennen.
-    const duZuletzt = !!zeile?.last_from_admin;
+    // The last row is the preview, and it comes from whoever the list
+    // names. This used to be hardcoded to Ansem with "will look at it" -
+    // in every conversation, including the ones without "You:" in front,
+    // while the preview sat one row up. So the list said one thing, the
+    // opened conversation said another, and comparing two drafts of the
+    // list could have cited either one as evidence.
+    const youLatest = !!line?.last_from_admin;
     const zeit = (ms) => new Date(Date.now() - ms).toISOString();
     const rows = [
       { id: 1, wallet, from_admin: false, body: 'hey', created_at: zeit(9e6) },
-      { id: 2, wallet, from_admin: duZuletzt ? false : true,
-        body: duZuletzt ? 'can you look at this' : 'whats up', created_at: zeit(8e6) },
-      { id: 3, wallet, from_admin: duZuletzt, body: zeile?.preview ?? 'gm',
+      { id: 2, wallet, from_admin: youLatest ? false : true,
+        body: youLatest ? 'can you look at this' : 'whats up', created_at: zeit(8e6) },
+      { id: 3, wallet, from_admin: youLatest, body: line?.preview ?? 'gm',
         created_at: zeit(4e6) },
     ];
     state.dmCache.set(wallet, rows);
@@ -4605,16 +4675,16 @@ async function openThread(wallet, reveal = false) {
   }
   state.dmCache.set(wallet, data);
 
-  // Ein anderer Faden wurde inzwischen angetippt – dann gehört diese Antwort
-  // nicht mehr auf den Bildschirm.
+  // A different thread got tapped in the meantime - then this response no
+  // longer belongs on screen.
   if (state.activeThread !== wallet) return;
 
-  // Nur neu zeichnen, wenn es wirklich etwas Neues gibt.
-  if (!bekannt || !gleicheNachrichten(bekannt, data)) renderThread(wallet, data);
+  // Only redraw if there's actually something new.
+  if (!bekannt || !sameMessages(bekannt, data)) renderThread(wallet, data);
 }
 
-/** Flacher Vergleich: Kennungen und Textlänge genügen, um Änderungen zu sehen. */
-function gleicheNachrichten(a, b) {
+/** Shallow comparison: ids and text length are enough to detect changes. */
+function sameMessages(a, b) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (a[i].id !== b[i].id || a[i].body !== b[i].body
@@ -4624,12 +4694,11 @@ function gleicheNachrichten(a, b) {
 }
 
 /**
- * Schließt das offene Gespräch.
+ * Closes the open conversation.
  *
- * Wird gebraucht, wenn die Schwelle steigt und der gerade geöffnete Faden
- * dadurch aus dem Posteingang fällt: Ein Gespräch offen zu lassen, das in der
- * Liste nicht mehr steht, wäre ein Zustand, aus dem man nicht mehr
- * herausfindet.
+ * Needed when the threshold rises and the currently open thread drops out
+ * of the inbox as a result: leaving a conversation open that's no longer
+ * in the list would be a state there's no way back out of.
  */
 function closeThread() {
   state.activeThread = null;
@@ -4638,28 +4707,29 @@ function closeThread() {
   $('#thread-title').innerHTML = '<span class="dim">Select a thread</span>';
   $('#admin-thread').innerHTML = '';
   $('#admin-dm-form').hidden = true;
-  // Auch der Verbergen-Knopf geht weg: Ohne offenes Gespraech haette er kein
-  // Ziel, und ein Knopf ohne Ziel liest sich als Defekt.
+  // The hide button goes away too: with no open conversation it would
+  // have nothing to act on, and a button with nothing to act on reads as
+  // broken.
   $('#btn-hide-thread').hidden = true;
   $('#dm-admin').classList.remove('viewing');
 }
 
 /**
- * Hält fest, dass dieser Faden gelesen wurde – erst in der Ansicht, dann in
- * der Datenbank.
+ * Records that this thread was read - in the view first, then in the
+ * database.
  *
- * Die Reihenfolge ist Absicht. Die blaue Fläche verschwindet in dem Moment, in
- * dem angetippt wird, nicht erst wenn der Server geantwortet hat: Beim
- * Durchgehen von fünfzig Gesprächen ist das der Unterschied zwischen einer
- * Liste, die mitgeht, und einer, die hinterherhinkt.
+ * The order is deliberate. The blue background disappears the instant the
+ * tap happens, not once the server has responded: going through fifty
+ * conversations, that's the difference between a list that keeps up and
+ * one that lags behind.
  *
- * Schlägt das Speichern fehl, wird die Markierung zurückgedreht. Das ist die
- * ehrlichere Anzeige: Beim nächsten Laden holt die Liste ihren Stand ohnehin
- * aus der Datenbank, und dort stünde das Gespräch dann wieder als ungelesen.
- * Ohne das Zurückdrehen sähe man einen Zustand, den nur dieser Browser kennt.
+ * If saving fails, the mark gets reverted. That's the more honest display:
+ * the next load pulls the list's state from the database anyway, and
+ * there the conversation would show as unread again. Without reverting
+ * it, you'd be looking at a state only this browser knows about.
  *
- * Gemeldet wird der Fehlschlag nicht: Es gibt nichts, was Ansem daraufhin
- * anders machen würde, und der Faden ist trotzdem offen und lesbar.
+ * The failure isn't reported: there's nothing Ansem would do differently
+ * because of it, and the thread is still open and readable regardless.
  */
 async function markiereGelesen(wallet) {
   const eintrag = state.dmThreads?.find((t) => t.wallet === wallet);
@@ -4669,9 +4739,9 @@ async function markiereGelesen(wallet) {
     renderThreads();
   }
 
-  // Im Demomodus gibt es die Nachrichten nicht – der Vermerk waere ein update
-  // auf fremde Zeilen. Die Anzeige oben ist schon gesetzt, mehr braucht es
-  // hier nicht.
+  // In demo mode the messages don't exist - marking them would be an
+  // update against rows that aren't ours. The display above is already
+  // set, nothing more is needed here.
   if (DEMO_DMS) return;
 
   const { error } = await state.db.from('dms').update({ read_by_admin: true })
@@ -4686,39 +4756,40 @@ async function markiereGelesen(wallet) {
   }
 }
 
-// Zurück zum Posteingang (nur auf dem Handy sichtbar). Der Faden bleibt
-// bewusst ausgewählt: Kommt eine Antwort herein, wird er im Hintergrund
-// aktualisiert und ist beim nächsten Öffnen aktuell.
+// Back to the inbox (visible on a phone only). The thread stays selected
+// on purpose: if a reply comes in, it gets updated in the background and
+// is current the next time it's opened.
 $('#btn-back-inbox').addEventListener('click', () => {
   $('#dm-admin').classList.remove('viewing');
 });
 
 /**
- * Ein Gespraech aus dem Posteingang nehmen – und zurueckholen.
+ * Takes a conversation out of the inbox - and brings it back.
  *
- * Was das NICHT tut, gehoert zur Erklaerung: Der andere merkt nichts. Er sieht
- * seinen Verlauf weiter, er kann weiter schreiben, seine Nachrichten werden
- * weiter gespeichert. Nur Ansems Liste zeigt ihn nicht mehr. Wer hier schreiben
- * darf, haelt dafuer einen Mindestbestand – gekauft ist damit das Recht zu
- * SCHREIBEN, nicht das Recht auf Antwort. Ihm nachtraeglich das Schreiben zu
- * nehmen waere etwas anderes.
+ * What this does NOT do is part of the explanation: the other person
+ * notices nothing. They keep seeing their own history, they can keep
+ * writing, their messages keep being saved. Only Ansem's list stops
+ * showing them. Whoever is allowed to write here holds a minimum balance
+ * for it - what that buys is the right to WRITE, not a right to a reply.
+ * Taking away their ability to write on top of this would be a different
+ * thing entirely.
  *
- * Und es bleibt verborgen, auch wenn er wieder schreibt: Die Liste ist nach
- * Bestand sortiert und nicht nach Zeit, es gibt also gar keine Bewegung, die
- * ein Gespraech zurueckbraechte. Das ist Absicht – man verbirgt jemanden, den
- * man nicht mehr lesen will.
+ * And it stays hidden even if they write again: the list is sorted by
+ * holdings, not by time, so there's no movement at all that would bring a
+ * conversation back on its own. That's deliberate - you hide someone you
+ * don't want to read anymore.
  *
- * Zuerst die Datenbank, dann die Anzeige, und nicht umgekehrt: Die Zeile
- * verschwindet sonst sofort und kaeme beim naechsten Laden wieder, ohne dass
- * jemand wuesste warum. Ein Fehler wird gemeldet und die Liste bleibt, wie sie
- * war.
+ * The database first, then the display, not the other way around:
+ * otherwise the row would disappear immediately and come back on the next
+ * load, with nobody knowing why. A failure gets reported and the list
+ * stays as it was.
  */
-async function verbergeThread(wallet, verbergen) {
-  const zeile = state.dmThreads?.find((t) => t.wallet === wallet);
-  if (!zeile) return;
+async function hideThread(wallet, verbergen) {
+  const line = state.dmThreads?.find((t) => t.wallet === wallet);
+  if (!line) return;
 
-  // Im Demomodus wird nichts geschrieben: Die Gespraeche gibt es nicht, und
-  // ein insert wuerde eine Adresse in die echte Tabelle legen.
+  // Nothing gets written in demo mode: the conversations don't exist, and
+  // an insert would put an address into the real table.
   if (!DEMO_DMS) {
     const { error } = verbergen
       ? await state.db.from('dm_hidden').insert({ wallet })
@@ -4726,17 +4797,17 @@ async function verbergeThread(wallet, verbergen) {
     if (error) return toast(error.message, true);
   }
 
-  zeile.hidden = verbergen;
+  line.hidden = verbergen;
 
-  // Beim Verbergen das Gespraech schliessen: Es steht sonst offen daneben,
-  // waehrend seine Zeile links gerade verschwunden ist – ein Bildschirm, der
-  // zwei verschiedene Dinge behauptet.
-  // Das offene Gespraech schliessen, wenn seine Zeile aus der gerade
-  // gezeigten Liste faellt – sonst steht es offen daneben, waehrend es links
-  // verschwunden ist. Im Verborgen-Modus ist das genau andersherum: Dort
-  // faellt heraus, wer ZURUECKGEHOLT wird.
-  const faelltRaus = state.zeigeVerborgene ? !verbergen : verbergen;
-  if (faelltRaus && state.activeThread === wallet) closeThread();
+  // Close the conversation when hiding it: otherwise it would sit open
+  // right next to a row that has just disappeared on the left - one
+  // screen claiming two contradictory things.
+  // Close the open conversation whenever its row drops out of the
+  // currently shown list - otherwise it stays open while it's vanished on
+  // the left. In hidden mode this runs exactly the other way around:
+  // there, whoever gets BROUGHT BACK is the one that drops out.
+  const dropsOut = state.zeigeVerborgene ? !verbergen : verbergen;
+  if (dropsOut && state.activeThread === wallet) closeThread();
   else if (state.activeThread === wallet) renderThread(wallet, state.dmMessages ?? []);
 
   renderThreads();
@@ -4747,22 +4818,22 @@ $('#btn-hide-thread').addEventListener('click', () => {
   const wallet = state.activeThread;
   if (!wallet) return;
   const verborgen = Boolean(state.dmThreads?.find((t) => t.wallet === wallet)?.hidden);
-  verbergeThread(wallet, !verborgen);
+  hideThread(wallet, !verborgen);
 });
 
-// Der Schalter unter der Liste. Er ist bewusst KEIN Filter, den man setzt und
-// vergisst: Beim naechsten Laden steht er wieder auf zu, weil "verborgen" der
-// gemeinte Normalzustand ist. Wer sie dauerhaft sehen wollte, hat sie nicht
-// verbergen wollen.
+// The toggle under the list. It's deliberately NOT a filter you set and
+// forget: the next load resets it to closed, because "hidden" is the
+// intended normal state. Whoever wanted to see them permanently didn't
+// really want to hide them.
 $('#btn-versteckt').addEventListener('click', () => {
   state.zeigeVerborgene = !state.zeigeVerborgene;
   renderThreads();
 });
 
 /**
- * Holt die aktuelle Schwelle nach. Schlägt es fehl – kein Netz, Spalte noch
- * nicht da – bleibt der zuletzt bekannte Wert stehen. Die verbindliche
- * Prüfung sitzt ohnehin in der Datenbank; hier geht es nur um die Anzeige.
+ * Refreshes the current threshold. If it fails - no network, column not
+ * there yet - the last known value stays in place. The binding check
+ * lives in the database anyway; this is only about the display.
  */
 async function refreshDmMin() {
   try {
@@ -4771,33 +4842,34 @@ async function refreshDmMin() {
     if (error || !data) return;
     state.cfg.min_dm_usd = data.min_dm_usd;
     renderDmGate();
-  } catch { /* Anzeige bleibt, wie sie war. */ }
+  } catch { /* display stays as it was. */ }
 }
 
 /**
- * Die Untergrenze der DM-Schwelle.
+ * The floor on the DM threshold.
  *
- * Ansem kann sie hoeher setzen, aber nicht darunter – und auch nicht auf null.
- * Der Posteingang laesst sich damit nicht mehr ganz oeffnen, und das ist die
- * Entscheidung: Er ist der teurere Kanal, eine DM landet nicht in einem Strom,
- * den man ueberfliegt, sondern bei einer einzelnen Person.
+ * Ansem can set it higher, but not lower - and not to zero either. That
+ * means the inbox can no longer be opened up completely, and that's the
+ * intent: it's the more expensive channel, a DM doesn't land in a stream
+ * you skim, it lands with one specific person.
  *
- * Dieselbe Zahl steht in der Datenbank (Migration 20260831030000_dm_untergrenze),
- * und dort ist sie die eigentliche Sperre. Was hier steht, sorgt nur dafuer,
- * dass niemand erst tippt und dann eine Absage bekommt.
+ * The same number lives in the database (migration
+ * 20260831030000_dm_untergrenze), and there it's the actual enforcement.
+ * What's here only makes sure nobody types first and gets a rejection
+ * after.
  */
-const MIN_DM_SCHWELLE = 1000;
+const MIN_DM_THRESHOLD = 1000;
 
 /**
- * Die Obergrenze, und zwar dieselbe Zahl in beide Richtungen gelesen: Sie ist
- * genau das, was in ein Feld mit MAX_STELLEN Stellen hineinpasst.
+ * The ceiling, and it's the same number read in both directions: it's
+ * exactly what fits in a field with MAX_STELLEN digits.
  *
- * Deshalb steht sie hier abgeleitet und nicht ausgeschrieben. Eine getippte
- * 9999999999 und eine Grenze von 9999999999 muessen zusammenfallen – sonst
- * gibt es eine Zahl, die das Feld annimmt und die Datenbank ablehnt, und das
- * ist der eine Fall, den es an dieser Stelle nicht geben darf.
+ * That's why it's derived here instead of written out. A typed
+ * 9999999999 and a limit of 9999999999 have to coincide - otherwise
+ * there's a number the field accepts and the database rejects, and that's
+ * the one case that must not exist at this point.
  */
-const MAX_DM_SCHWELLE = 10 ** MAX_STELLEN - 1;
+const MAX_DM_THRESHOLD = 10 ** MAX_STELLEN - 1;
 
 
 function renderDmMin() {
@@ -4806,148 +4878,155 @@ function renderDmMin() {
   box.hidden = !known;
   if (!known) return;
 
-  // Nie ein leeres Feld: Leer hiess frueher "keine Schwelle", und die gibt es
-  // nicht mehr. Steht in der Datenbank noch eine 0 aus der Zeit davor, zeigt
-  // das Feld die Untergrenze – denn das ist es, was beim naechsten Speichern
-  // hineingeht.
-  const min = Math.max(MIN_DM_SCHWELLE, Number(state.cfg.min_dm_usd));
-  // Beim Tippen nicht dazwischenfunken.
+  // Never an empty field: empty used to mean "no threshold", and that no
+  // longer exists. If the database still has a leftover 0 from before,
+  // the field shows the floor value - because that's what will actually
+  // get saved next.
+  const min = Math.max(MIN_DM_THRESHOLD, Number(state.cfg.min_dm_usd));
+  // Don't interfere while typing.
   if (document.activeElement !== $('#dm-min-input')) {
     $('#dm-min-input').value = gruppiere(min);
   }
 }
 
 /**
- * Übernimmt die eingegebene Schwelle.
+ * Commits the entered threshold.
  *
- * Es gibt keinen Speichern-Knopf mehr. Ein einzelnes Zahlenfeld mit
- * Bestätigungsknopf ist ein Schritt, den man vergisst – und dann steht dort
- * eine Zahl, die gar nicht gilt. Übernommen wird beim Verlassen des Feldes
- * und bei Enter.
+ * There's no save button anymore. A single number field with a confirm
+ * button is a step people forget - and then a number sits there that
+ * doesn't actually apply. It commits when the field loses focus and on
+ * Enter.
  *
- * Zwei Vorsichtsmaßnahmen, die dabei nötig werden:
+ * Two safeguards become necessary as a result:
  *
- *   * Nur bei tatsächlicher Änderung schreiben. Sonst löste jedes Anklicken
- *     und Wegklicken einen Schreibvorgang aus.
- *   * Bei ungültiger Eingabe den letzten gültigen Wert zurückschreiben. Ohne
- *     Knopf gibt es keinen Moment, in dem man einen Fehler noch korrigieren
- *     könnte – das Feld darf also nichts stehen lassen, was nicht gilt.
+ *   * Only write on an actual change. Otherwise every click in and click
+ *     away would trigger a write.
+ *   * On invalid input, write back the last valid value. With no button
+ *     there's no moment left to correct a mistake - so the field must
+ *     never be left showing something invalid.
  */
-let dmMinLaeuft = false;
+let dmMinRunning = false;
 
 /**
- * Ansems Regler für die DM-Schwelle.
+ * Ansem's slider for the DM threshold.
  *
- * Kennt die Datenbank die Spalte noch nicht (Frontend liegt vor der
- * Migration), fehlt sie in app_config schlicht. Dann verschwindet das Feld,
- * statt einen Wert anzubieten, den niemand speichern kann.
+ * If the database doesn't know the column yet (frontend is ahead of the
+ * migration), it's simply missing from app_config. Then the field
+ * disappears, instead of offering a value nobody can save.
  */
 async function speichereDmMin() {
   const input = $('#dm-min-input');
   const bisher = Number(state.cfg.min_dm_usd ?? 0);
 
-  // Zweite Sicherung neben nurZahlen(): fängt ab, was anders ins Feld kommt.
-  const raw = saubereZahl(input.value);
+  // A second safeguard alongside onlyNumbers(): catches whatever gets into
+  // the field some other way.
+  const raw = cleanNumber(input.value);
 
-  // Ein leeres Feld heisst die UNTERGRENZE, nicht null.
+  // An empty field means the FLOOR value, not null.
   //
-  // Hier stand: leer heisst "keine Schwelle", also 0 – mit der Begruendung, wer
-  // die Zahl loesche, wolle sie loswerden. Das galt, solange 0 ein erlaubter
-  // Wert war. Er ist es nicht mehr; unter 1000 geht nichts. Damit ist "leer"
-  // keine Aussage mehr, sondern ein unfertiger Zustand, und die einzige
-  // ehrliche Antwort darauf ist der kleinste Wert, den es gibt.
+  // This used to say: empty means "no threshold", i.e. 0 - on the
+  // reasoning that whoever deletes the number wants to get rid of it. That
+  // held as long as 0 was an allowed value. It isn't anymore; nothing
+  // under 1000 is allowed. So "empty" is no longer a statement, it's an
+  // unfinished state, and the only honest answer to that is the smallest
+  // value that exists.
   //
-  // Auch alles UNTERHALB wird angehoben statt abgelehnt. Eine Absage waere
-  // formal richtiger und praktisch schlechter: Man haette getippt, bekaeme eine
-  // rote Meldung und muesste noch einmal tippen – fuer eine Zahl, die die Seite
-  // selbst kennt. Die Datenbank lehnt trotzdem ab; sie ist die Sperre, das hier
-  // ist die Hoeflichkeit davor.
+  // Everything BELOW the floor also gets raised instead of rejected. A
+  // rejection would be more correct on paper and worse in practice: you'd
+  // have typed something, gotten a red error, and had to type it again -
+  // for a number the page already knows about. The database still rejects
+  // it regardless; it's the actual gate, this is just the courtesy in
+  // front of it.
   //
-  // Ein alleinstehender Punkt ist ebenfalls keine Zahl und zaehlt wie leer.
+  // A bare period is also not a number and counts as empty.
   const getippt = Number.isFinite(Number(raw)) && raw !== '' ? Number(raw) : 0;
-  // Nach oben deckelt schon saubereZahl(), indem die elfte Stelle nicht ins
-  // Feld kommt. Das hier faengt den Weg daran vorbei ab – ein Wert, der per
-  // Skript gesetzt wurde, ohne dass ein input-Ereignis lief.
-  const usd = Math.min(MAX_DM_SCHWELLE, Math.max(MIN_DM_SCHWELLE, getippt));
+  // The ceiling is already enforced by cleanNumber(), since the eleventh
+  // digit never makes it into the field. This catches the path around
+  // that - a value set by script, with no input event ever firing.
+  const usd = Math.min(MAX_DM_THRESHOLD, Math.max(MIN_DM_THRESHOLD, getippt));
 
-  // Ab hier gilt wieder der gespeicherte Stand, nicht der Entwurf.
+  // From here on, the saved value applies again, not the draft.
   state.dmMinEntwurf = null;
 
-  if (usd === bisher || dmMinLaeuft) {
-    // Auch hier die Untergrenze zeigen und nicht den alten Stand: Stuende in
-    // der Datenbank noch eine 0 von frueher, saehe man sonst nach dem Loeschen
-    // wieder eine 0 – also genau den Wert, den es nicht mehr geben soll.
-    input.value = gruppiere(Math.max(MIN_DM_SCHWELLE, bisher));
+  if (usd === bisher || dmMinRunning) {
+    // Show the floor value here too, not the old saved value: if the
+    // database still had a leftover 0 from before, you'd otherwise see a
+    // 0 again after clearing - exactly the value that's not supposed to
+    // exist anymore.
+    input.value = gruppiere(Math.max(MIN_DM_THRESHOLD, bisher));
     renderThreads();
     return;
   }
 
-  dmMinLaeuft = true;
+  dmMinRunning = true;
   try {
     const { data, error } = await state.db.rpc('set_min_dm_usd', { p_usd: usd });
     if (error) throw error;
     state.cfg.min_dm_usd = Number(data);
     renderDmMin();
 
-    // Die neue Schwelle gilt sofort für den Posteingang. Fällt das gerade
-    // offene Gespräch heraus, wird es geschlossen – sonst stünde eine Antwort
-    // offen an jemanden, der in der Liste nicht mehr auftaucht.
+    // The new threshold applies to the inbox immediately. If the
+    // currently open conversation drops out, it gets closed - otherwise
+    // a reply would sit open to someone who no longer appears in the
+    // list.
     renderThreads();
     const offen = state.dmThreads?.find((t) => t.wallet === state.activeThread);
     if (offen && Number(offen.usd) < Number(data)) closeThread();
   } catch (err) {
-    input.value = gruppiere(Math.max(MIN_DM_SCHWELLE, bisher));
+    input.value = gruppiere(Math.max(MIN_DM_THRESHOLD, bisher));
     renderThreads();
     toast(err.message, true);
   } finally {
-    dmMinLaeuft = false;
+    dmMinRunning = false;
   }
 }
 
-/* Keine eigene Rückmeldung beim Speichern – und das ist kein Vergessen:
-   Der Posteingang darunter folgt der Zahl schon beim Tippen. Wer die Schwelle
-   erhöht, sieht Gespräche verschwinden. Eine zusätzliche Meldung würde nur
-   bestätigen, was man gerade zugesehen hat. Fehler melden sich weiterhin. */
+/* No dedicated confirmation on save - and that's not an oversight: the
+   inbox below already follows the number as you type. Whoever raises the
+   threshold watches conversations disappear. An extra message would just
+   confirm what you already just watched happen. Errors still get
+   reported. */
 
 /**
- * Der Posteingang folgt der Zahl schon beim Tippen.
+ * The inbox follows the number as you type.
  *
- * Ohne Verzögerung: Es wird nur neu gezeichnet, was ohnehin im Speicher liegt.
- * Ein Filter, der dafür den Server fragen müsste, müsste warten, bis man mit
- * dem Tippen fertig ist – dieser nicht.
+ * With no delay: only what's already in memory gets redrawn. A filter
+ * that had to ask the server for this would have to wait until you're
+ * done typing - this one doesn't.
  *
- * Gespeichert wird davon nichts; das passiert erst beim Verlassen des Feldes.
- * Deshalb der eigene Entwurfswert: Ohne ihn wäre beim Rausklicken nicht mehr
- * erkennbar, ob sich gegenüber dem gespeicherten Stand etwas geändert hat.
+ * None of this gets saved; that only happens when the field loses focus.
+ * That's why there's a separate draft value: without it, clicking away
+ * would leave no way to tell whether anything actually changed compared
+ * to the saved state.
  *
- * Ein leeres Feld heißt "keine Schwelle" und zeigt wieder alles. Sonst wäre
- * der Posteingang im Moment des Löschens leer, obwohl gerade keine Schwelle
- * gilt.
+ * An empty field means "no threshold" and shows everything again.
+ * Otherwise the inbox would go empty the moment you clear it, even though
+ * no threshold is actually in effect at that point.
  */
 $('#dm-min-input').addEventListener('input', () => {
-  const raw = saubereZahl($('#dm-min-input').value);
+  const raw = cleanNumber($('#dm-min-input').value);
   const usd = Number(raw);
-  // Auch der Entwurf haelt die Untergrenze ein. Sonst zeigte der Posteingang
-  // beim Tippen von "1", "10", "100" drei Zustaende, die es nicht geben kann –
-  // und beim Loslassen spraenge er auf einen vierten.
+  // The draft also enforces the floor. Otherwise, typing "1", "10", "100"
+  // would make the inbox show three states that can't actually exist -
+  // and then jump to a fourth one once you let go.
   const getippt = (raw === '' || !Number.isFinite(usd)) ? 0 : usd;
-  state.dmMinEntwurf = Math.max(MIN_DM_SCHWELLE, getippt);
+  state.dmMinEntwurf = Math.max(MIN_DM_THRESHOLD, getippt);
   renderThreads();
 });
 
 $('#dm-min-input').addEventListener('blur', speichereDmMin);
 
 $('#dm-min-input').addEventListener('keydown', (e) => {
-  // Enter bestätigt: Das Feld gibt den Fokus ab, und genau daran hängt das
-  // Speichern. Sonst bliebe der Zeiger blinkend stehen, als wäre noch etwas
-  // offen.
+  // Enter confirms: the field loses focus, and saving is tied to exactly
+  // that. Otherwise the cursor would keep blinking there, as if something
+  // were still open.
   if (e.key === 'Enter') { e.preventDefault(); $('#dm-min-input').blur(); return; }
 
-  // Escape verwirft und stellt den zuletzt gespeicherten Wert wieder her.
+  // Escape discards and restores the last saved value.
   if (e.key !== 'Escape') return;
   state.dmMinEntwurf = null;
   $('#dm-min-input').value =
-    gruppiere(Math.max(MIN_DM_SCHWELLE, Number(state.cfg.min_dm_usd ?? 0)));
+    gruppiere(Math.max(MIN_DM_THRESHOLD, Number(state.cfg.min_dm_usd ?? 0)));
   renderThreads();
   $('#dm-min-input').blur();
 });
@@ -4958,9 +5037,9 @@ $('#dm-form').addEventListener('submit', async (e) => {
   const body = input.value.trim();
   if (!body) return;
   input.value = '';
-  const zeile = { wallet: state.me.wallet, body };
-  if (state.dmRepliesAvailable && state.dmReplyTo) zeile.reply_to = state.dmReplyTo;
-  const { error } = await state.db.from('dms').insert(zeile);
+  const line = { wallet: state.me.wallet, body };
+  if (state.dmRepliesAvailable && state.dmReplyTo) line.reply_to = state.dmReplyTo;
+  const { error } = await state.db.from('dms').insert(line);
   if (error) { toast(error.message, true); input.value = body; }
   else { clearDmReply(); loadDms(); }
 });
@@ -4971,26 +5050,26 @@ $('#admin-dm-form').addEventListener('submit', async (e) => {
   const body = input.value.trim();
   if (!body || !state.activeThread) return;
   input.value = '';
-  const zeile = { wallet: state.activeThread, from_admin: true, body };
-  if (state.dmRepliesAvailable && state.dmReplyTo) zeile.reply_to = state.dmReplyTo;
+  const line = { wallet: state.activeThread, from_admin: true, body };
+  if (state.dmRepliesAvailable && state.dmReplyTo) line.reply_to = state.dmReplyTo;
 
-  // Im Demomodus bleibt die Antwort im Speicher.
+  // In demo mode the reply stays in memory.
   //
-  // Nicht nur, damit nichts in die Datenbank faellt: Ohne diesen Zweig
-  // scheiterte das Absenden mit einer Fehlermeldung, und man saehe von der
-  // Sache, um die es geht – wie sich das Antworten anfuehlt – gar nichts.
+  // Not just so nothing ends up in the database: without this branch,
+  // submitting would fail with an error message, and you'd see nothing at
+  // all of the thing this is actually about - what replying feels like.
   //
-  // Mitgefuehrt wird auch die Zeile im Posteingang: Vorschau, "You:" davor und
-  // der Ungelesen-Zaehler auf null. Sonst behauptet die Liste weiter, der
-  // andere habe zuletzt geschrieben – und das ist genau die Art Widerspruch,
-  // an der man in einer Simulation die falschen Schluesse zieht.
+  // The inbox row gets updated along with it too: preview, "You:" in
+  // front, and the unread counter at zero. Otherwise the list would keep
+  // claiming the other person wrote last - and that's exactly the kind of
+  // contradiction that leads to the wrong conclusions in a simulation.
   if (DEMO_DMS) {
     const wallet = state.activeThread;
     const rows = [...(state.dmCache.get(wallet) ?? [])];
     rows.push({
       id: (rows.at(-1)?.id ?? 0) + 1,
       wallet, from_admin: true, body,
-      reply_to: zeile.reply_to ?? null,
+      reply_to: line.reply_to ?? null,
       created_at: new Date().toISOString(),
     });
     state.dmCache.set(wallet, rows);
@@ -5010,11 +5089,11 @@ $('#admin-dm-form').addEventListener('submit', async (e) => {
     return;
   }
 
-  const { error } = await state.db.from('dms').insert(zeile);
+  const { error } = await state.db.from('dms').insert(line);
   if (error) { toast(error.message, true); input.value = body; }
   else {
     clearDmReply();
-    // Der zwischengespeicherte Stand ist jetzt veraltet.
+    // The cached state is now stale.
     state.dmCache.delete(state.activeThread);
     await openThread(state.activeThread);
     loadDms();
@@ -5022,27 +5101,29 @@ $('#admin-dm-form').addEventListener('submit', async (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Start
+// Startup
 // ---------------------------------------------------------------------------
 
 /**
- * Den Service Worker anmelden. Er macht die Seite ablegbar und fängt kurze
- * Funklöcher ab – nicht mehr. Scheitert er, läuft alles normal weiter.
+ * Registers the service worker. It makes the site installable and covers
+ * brief connectivity gaps - nothing more. If it fails, everything else
+ * keeps working normally.
  *
- * Auf dem eigenen Rechner ausdrücklich NICHT. Beim Entwickeln sitzt er sonst
- * zwischen Browser und Dateien, und ein Neuladen mit gedrückter Umschalttaste
- * kommt bei ihm gar nicht an: Der Worker holt die Dateien mit einem eigenen
- * fetch, und das umgeht den Zwischenspeicher des Browsers nicht mit. Man
- * ändert also etwas und sieht weiter die alte Seite, ohne dass etwas kaputt
- * wäre. Auf dem Startbildschirm liegt hier ohnehin niemand.
+ * Explicitly NOT on your own machine. While developing, it would otherwise
+ * sit between the browser and the files, and a reload with Shift held down
+ * never reaches it: the worker fetches files with its own fetch, which
+ * doesn't bypass the browser cache along with it. So you'd change
+ * something and keep seeing the old page, with nothing actually broken.
+ * And nobody has this added to a home screen here anyway.
  *
- * Ein bereits angemeldeter Worker wird dabei aktiv abgemeldet und sein Speicher
- * geleert – sonst bliebe er von früheren Besuchen für immer aktiv.
+ * An already-registered worker gets actively unregistered here, with its
+ * storage cleared - otherwise it would stay active forever from an earlier
+ * visit.
  *
- * ?sw=1 schaltet ihn auch auf dem eigenen Rechner ein. Das ist kein Hintertürchen,
- * sondern eine Notwendigkeit: Ein Service Worker läuft nur in einem sicheren
- * Kontext, also über HTTPS oder eben auf localhost. Wer ihn prüfen will – der
- * Test tut das – hat gar keine andere Wahl, als ihn dort einzuschalten.
+ * ?sw=1 turns it on even on your own machine. That's not a backdoor, it's
+ * a necessity: a service worker only runs in a secure context, meaning
+ * HTTPS or localhost. Whoever needs to test it - the test suite does - has
+ * no choice but to turn it on there.
  */
 const SW_ERZWUNGEN = new URLSearchParams(location.search).get('sw') === '1';
 if ('serviceWorker' in navigator) {
@@ -5051,7 +5132,7 @@ if ('serviceWorker' in navigator) {
       .then((rs) => Promise.all(rs.map((r) => r.unregister())))
       .then(() => (self.caches ? caches.keys() : []))
       .then((keys) => Promise.all([...keys].map((k) => caches.delete(k))))
-      .catch(() => { /* Nichts abzumelden. */ });
+      .catch(() => { /* Nothing to unregister. */ });
   } else {
     navigator.serviceWorker.register('/sw.js')
       .catch((e) => console.warn('[pwa] service worker not registered:', e.message));
@@ -5059,80 +5140,81 @@ if ('serviceWorker' in navigator) {
 }
 
 // ---------------------------------------------------------------------------
-// Vor dem Start: die Seite ist zu
+// Before startup: the site is closed
 // ---------------------------------------------------------------------------
 //
-// Ein Schalter fuer beides. app_config.open_to_public entscheidet in der
-// Function, WER hereinkommt (siehe _shared/freischaltung.ts), und hier, WAS
-// ein Besucher zu sehen bekommt. Eine Zeile SQL macht die Seite auf und wieder
-// zu, ohne dass etwas hochgeladen wird:
+// One switch, two effects. app_config.open_to_public decides, in the edge
+// function, WHO gets in (see _shared/freischaltung.ts), and here, WHAT a
+// visitor gets to see. One line of SQL opens or closes the site, with
+// nothing to upload:
 //
-//   update public.app_config set open_to_public = false where id = 1;   -- zu
-//   update public.app_config set open_to_public = true  where id = 1;   -- auf
+//   update public.app_config set open_to_public = false where id = 1;   -- close
+//   update public.app_config set open_to_public = true  where id = 1;   -- open
 //
-// Der Bildschirm ist eine FASSADE, keine Sperre. Wer ihn umgeht, steht vor dem
-// Login und kommt dort keinen Schritt weiter – die Function laesst nur
-// admin_wallet und test_wallet durch, und das entscheidet der Server. Deshalb
-// darf der Knopf offen dastehen, und deshalb ist die naechste Entscheidung
-// auch richtig herum:
+// This screen is a FACADE, not a lock. Whoever bypasses it lands on the
+// login and gets no further than that - the function only lets
+// admin_wallet and test_wallet through, and the server decides that. So
+// the button is allowed to sit there openly, and that's also why the next
+// decision goes the right way:
 //
-// Faellt die Abfrage aus, wird NICHT ausgesperrt. Ein Netzfehler zeigte sonst
-// ein "Launching soon", obwohl die Seite laengst offen ist – und das waere ein
-// Fehler, den niemand meldet, weil er wie Absicht aussieht. Andersherum
-// kostet es nichts: Wer dann am Login steht und nicht hereindarf, bekommt die
-// Absage vom Server.
+// If the query fails, access is NOT blocked. A network error would
+// otherwise show "Launching soon" even though the site has long been
+// open - and that's the kind of bug nobody reports, because it looks
+// intentional. Going the other way costs nothing: whoever then reaches
+// the login and isn't allowed in gets rejected by the server instead.
 const TEAM_ZUGANG = 'size_team';
 
-/** Hat jemand hier schon einmal auf "Team access" getippt? */
+/** Has anyone here ever tapped "Team access"? */
 function teamFrei() {
   try { return localStorage.getItem(TEAM_ZUGANG) === '1'; } catch { return false; }
 }
 
-// Wie lange auf die Antwort gewartet wird, bevor die Seite als offen gilt.
+// How long to wait for the response before treating the site as open.
 //
-// Dass es diese Zahl gibt, ist kein Feinschliff. Ohne sie haengt der ganze
-// Start an einer einzigen Anfrage: Kommt keine Antwort – Funkloch, ein
-// Hotel-WLAN mit Anmeldeseite davor, ein Ausfall bei Supabase –, wartet boot()
-// unbegrenzt, und der Besucher sieht NIE etwas. Weder Login noch Vorhang, nur
-// Schwarz.
+// The existence of this number isn't polish. Without it, the entire
+// startup hangs off a single request: if no response comes back - a dead
+// zone, a hotel wifi with a login page in front of it, an outage at
+// Supabase - boot() would wait forever, and the visitor would NEVER see
+// anything. No login, no curtain, just black.
 //
-// Gefunden hat das nicht ein Gedanke, sondern zwei Tests: In beiden zeigt die
-// Adresse ins Leere, und in beiden blieb die Seite danach fuer immer leer.
-// Genau derselbe Ablauf wie in einem Funkloch.
-const ZU_ABFRAGE_MS = 2500;
+// This wasn't found by thinking about it, it was found by two test runs:
+// in both, the URL pointed at nothing, and in both, the site stayed empty
+// forever afterward. The exact same sequence as a dead zone.
+const TO_QUERY_MS = 2500;
 
-async function seiteIstZu() {
-  // Wer eine Sitzung hat oder den Knopf kennt, sieht den Bildschirm nicht.
+async function pageIsClosed() {
+  // Whoever has a session, or knows the button, never sees this screen.
   if (state.jwt || teamFrei()) return false;
   try {
     const db = state.db ?? makeClient();
-    const frage = db.from('app_config').select('open_to_public').eq('id', 1).single()
+    const pollQuestion = db.from('app_config').select('open_to_public').eq('id', 1).single()
       .then(({ data }) => data?.open_to_public === false);
-    // Im Zweifel offen – die Begruendung steht ueber TEAM_ZUGANG.
-    const geduld = new Promise((r) => setTimeout(() => r(false), ZU_ABFRAGE_MS));
-    return await Promise.race([frage, geduld]);
+    // Open when in doubt - the reasoning is above TEAM_ZUGANG.
+    const geduld = new Promise((r) => setTimeout(() => r(false), TO_QUERY_MS));
+    return await Promise.race([pollQuestion, geduld]);
   } catch {
     return false;
   }
 }
 
-function zeigeBald() {
+function showSoon() {
   $('#app').hidden = true;
   $('#login').hidden = true;
   $('#soon').hidden = false;
 }
 
 $('#btn-team').addEventListener('click', () => {
-  // Gemerkt, damit man beim Bauen nicht bei jedem Laden wieder tippen muss.
-  try { localStorage.setItem(TEAM_ZUGANG, '1'); } catch { /* egal */ }
+  // Remembered, so you don't have to type it again on every load while
+  // building.
+  try { localStorage.setItem(TEAM_ZUGANG, '1'); } catch { /* doesn't matter */ }
   $('#soon').hidden = true;
-  zeigeLogin();
+  showLogin();
   maybeShowInstallStep();
 });
 
 (async function boot() {
-  if (await seiteIstZu()) { zeigeBald(); return; }
-  if (!state.jwt) { zeigeLogin(); maybeShowInstallStep(); return; }
+  if (await pageIsClosed()) { showSoon(); return; }
+  if (!state.jwt) { showLogin(); maybeShowInstallStep(); return; }
 
   const payload = jwtPayload();
   const expMs = (payload?.exp ?? 0) * 1000;
@@ -5147,10 +5229,10 @@ $('#btn-team').addEventListener('click', () => {
     try {
       const r = await callFunction('verify', { action: 'renew' }, true);
       state.jwt = r.token;
-      schreib(TOKEN_KEY, r.token);
+      write(TOKEN_KEY, r.token);
       state.me = r.profile;
     } catch (e) {
-      // Bei 401 ist die Sitzung endgültig vorbei, sonst einfach weitermachen.
+      // On a 401 the session is definitively over; otherwise just carry on.
       if (/expired|too old|Not verified/i.test(e.message)) { logout(); return; }
       console.warn('[session] renewal failed, continuing:', e.message);
     }
@@ -5161,8 +5243,8 @@ $('#btn-team').addEventListener('click', () => {
   } catch (e) {
     console.error('[start] failed:', e.message);
     if (/JWT|token|expired/i.test(e.message)) { logout(); return; }
-    // Kein Rauswurf: Es kann genauso gut ein kurzer Ausfall sein.
-    zeigeLogin();
+    // No forced logout: this could just as easily be a brief outage.
+    showLogin();
     maybeShowInstallStep();
     $('#login-error').textContent =
       'Could not load. Check your connection and reload the page.';

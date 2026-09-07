@@ -1,11 +1,11 @@
 /**
- * Prüft, dass sich die Seite wirklich auf dem Startbildschirm ablegen lässt.
+ * Checks that the page can really be added to the home screen.
  *
- * Das ist die Sorte Sache, die still fehlschlägt: Manifest verlinkt, Icons
- * vorhanden, alles sieht richtig aus – und der Browser bietet das Ablegen
- * trotzdem nicht an, weil eine Icon-Datei 191 statt 192 Pixel hat oder der
- * Service Worker keinen fetch-Handler besitzt. Im Browser sieht man davon
- * nichts, hier schon.
+ * This is the kind of thing that fails silently: manifest linked, icons
+ * present, everything looks right - and the browser still doesn't offer
+ * the install prompt, because one icon file is 191 instead of 192 pixels,
+ * or the service worker has no fetch handler. In the browser you see none
+ * of that. Here you do.
  *
  *   node scripts/test-pwa.mjs
  */
@@ -24,8 +24,8 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
-  // Erst die Abfrageparameter abschneiden, dann auf index.html abbilden –
-  // andersherum landete "/?sw=1" auf dem Verzeichnis statt auf der Seite.
+  // Strip the query string first, then map to index.html - the other way
+  // around, "/?sw=1" landed on the directory instead of the page.
   const pfad = req.url.split('?')[0];
   const file = pfad === '/' ? '/index.html' : pfad;
   const abs = path.join(pub, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
@@ -45,7 +45,7 @@ const check = (label, ok, detail = '') => {
   console.log(`  ${ok ? 'ok  ' : 'FEHL'}  ${label}${detail && !ok ? `\n         ${detail}` : ''}`);
 };
 
-/** PNG-Maße direkt aus dem Dateikopf lesen – ohne Bibliothek. */
+/** Read PNG dimensions straight from the file header - no library. */
 function pngSize(file) {
   const b = fs.readFileSync(file);
   if (b.length < 24 || b.readUInt32BE(0) !== 0x89504e47) return null;
@@ -77,7 +77,7 @@ if (manifest) {
   check('background_color gesetzt (kein weißes Aufblitzen beim Start)',
         Boolean(manifest.background_color));
 
-  // Genau hier geht es sonst schief.
+  // This is exactly where it usually goes wrong.
   for (const icon of manifest.icons ?? []) {
     const f = path.join(pub, icon.src.replace(/^\//, ''));
     const exists = fs.existsSync(f);
@@ -87,7 +87,7 @@ if (manifest) {
     const [w, h] = icon.sizes.split('x').map(Number);
     check(`Icon ${icon.src} ist wirklich ${icon.sizes}`,
           size && size.w === w && size.h === h,
-          size ? `gemessen: ${size.w}x${size.h}` : 'keine lesbare PNG-Datei');
+          size ? `measured: ${size.w}x${size.h}` : 'keine lesbare PNG-Datei');
   }
 
   const any = (manifest.icons ?? []).some((i) => (i.purpose ?? 'any').includes('any'));
@@ -111,7 +111,7 @@ check('Service Worker fasst fremde Adressen nicht an',
       swSrc.includes('self.location.origin'));
 
 // ---------------------------------------------------------------------------
-// Im echten Browser
+// In the real browser
 // ---------------------------------------------------------------------------
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -120,10 +120,10 @@ const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
 
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-// ?sw=1, weil der Service Worker auf localhost sonst absichtlich nicht
-// angemeldet wird (er stünde beim Entwickeln zwischen Browser und Dateien).
-// Ein sicherer Kontext ist Pflicht, also bleibt localhost der einzige Ort, an
-// dem er sich überhaupt prüfen lässt.
+// ?sw=1, because the service worker is otherwise deliberately not
+// registered on localhost (during development it would sit between the
+// browser and the files). A secure context is mandatory, so localhost stays
+// the only place it can be checked at all.
 await page.goto(base + '/?sw=1', { waitUntil: 'load' });
 
 check('Manifest ist in der Seite verlinkt',
@@ -133,12 +133,12 @@ check('apple-touch-icon ist verlinkt (iPhone nutzt nicht das Manifest)',
 check('theme-color gesetzt',
       await page.$eval('meta[name=theme-color]', (el) => Boolean(el.content)).catch(() => false));
 
-// Fehler beim Laden zuerst: Bricht das Modul ab, wird der Service Worker nie
-// angemeldet – die Prüfung darunter wartete dann ewig. Ein Test, der hängt,
-// sagt einem nicht, was kaputt ist.
+// Load errors first: if the module aborts, the service worker never gets
+// registered - the check below would then wait forever. A test that hangs
+// doesn't tell you what's broken.
 check('Keine JavaScript-Fehler beim Laden', errors.length === 0, errors.join(' | '));
 
-// Registrierung abwarten, aber nicht endlos.
+// Wait for registration, but not forever.
 const swOk = await page.evaluate(async () => {
   if (!('serviceWorker' in navigator)) return 'kein Service-Worker-Support';
   try {
@@ -152,21 +152,21 @@ const swOk = await page.evaluate(async () => {
 check('Service Worker registriert und aktiv', swOk === true, String(swOk));
 
 
-// Ohne Anmeldung muss der Login zu sehen sein – und die App nicht.
+// Without a session, the login must be visible - and the app must not be.
 //
-// Das klingt selbstverstaendlich, ist es seit Kurzem aber nicht mehr: Im Blatt
-// sind BEIDE versteckt, damit bei einem geteilten Abstimmungslink nicht erst
-// der Login und dann die Abstimmungen aufblitzen. Sichtbar macht sie nur noch das
-// Skript. Faellt das aus oder greift eine Verzweigung daneben, sieht der
-// Besucher eine schwarze Seite – und genau das wuerde man ohne diese Pruefung
-// erst von jemand anderem erfahren.
-// Abwarten, bevor gemessen wird.
+// That sounds obvious, but it hasn't been for a while: in the sheet BOTH
+// are hidden, so that a shared poll link doesn't flash the login and then
+// the polls in quick succession. Only the script makes either one visible.
+// If that fails, or a branch grabs the wrong one, the visitor sees a black
+// page - and that is exactly the kind of thing you'd only hear about from
+// someone else without this check.
+// Wait before measuring.
 // ---------------------------------------------------------------------------
-// boot() fragt jetzt zuerst die Datenbank, ob die Seite noch zu ist. Erst
-// danach steht fest, WAS zu sehen ist. Auf dem Testserver gibt es keine
-// Datenbank, die Anfrage scheitert, und app.js faellt auf den Login zurueck –
-// aber eben ein paar Millisekunden spaeter. Ohne dieses Warten misst der Test
-// die Luecke dazwischen und meldet einen Fehler, den es nicht gibt.
+// boot() now asks the database first whether the site is still closed. Only
+// after that is it decided WHAT gets shown. The test server has no
+// database, the request fails, and app.js falls back to the login - just a
+// few milliseconds later. Without this wait, the test measures that gap and
+// reports a failure that doesn't exist.
 await page.waitForFunction(() =>
   !document.querySelector('#login').hidden
   || !document.querySelector('#app').hidden
@@ -180,24 +180,22 @@ check('Ohne Anmeldung ist der Login sichtbar', sichtbar.login);
 check('Ohne Anmeldung ist die App verborgen', !sichtbar.app);
 
 // ---------------------------------------------------------------------------
-// Der Startbildschirm-Schritt: Ordnung und der richtige Satz zur richtigen Zeit
+// The home-screen step: order, and the right sentence at the right time
 // ---------------------------------------------------------------------------
 //
-// Zwei Dinge, die man auf einem Bild nicht sieht und die beide schon falsch
-// waren:
+// Two things you can't see in a screenshot, and both were wrong before:
 //
-//   1. Der Zahlungshinweis stand auf DIESEM Schritt, obwohl dort noch gar
-//      keine Rede von einer Zahlung ist. Er gehoert einen Schritt spaeter.
-//      Geregelt ist das ueber eine CSS-Regel mit :has() und nicht ueber
-//      JavaScript -- der Schrittwechsel passiert an fuenf Stellen in app.js,
-//      und eine Zeile, die an vier davon steht, faellt niemandem auf.
+//   1. The payment note stood on THIS step, even though it's not yet
+//      about payment at all. It belongs one step later. That's handled
+//      with a CSS rule using :has() and not with JavaScript - the step
+//      change happens in five places in app.js, and a line that's only
+//      in four of them goes unnoticed.
 //
-//   2. Die Anleitung war eine gewoehnliche Aufzaehlung. Bricht eine Zeile um
-//      (bei 375 px tun das zwei von dreien), rutschte die zweite Zeile unter
-//      die Nummer, und der linke Rand franste aus. Jetzt steht der Text in
-//      einer eigenen Spalte.
+//   2. The instructions were a plain list. If a line wraps (two out of
+//      three do at 375 px), the second line slid under the number and the
+//      left edge got ragged. Now the text sits in its own column.
 //
-// Gemessen wird beides an der echten Seite, nicht am Stylesheet.
+// Both are measured on the real page, not on the stylesheet.
 
 await page.setViewportSize({ width: 375, height: 667 });
 await page.evaluate(() => {
@@ -215,7 +213,7 @@ const install = await page.evaluate(() => {
     fussWeg: getComputedStyle(fuss).display === 'none',
     kanten: [...new Set(kanten)],
     anzahl: document.querySelectorAll('.steps li').length,
-    hoehe: Math.round(document.querySelector('#login .login-card').getBoundingClientRect().height),
+    height: Math.round(document.querySelector('#login .login-card').getBoundingClientRect().height),
     text: document.querySelector('#step-install .lede').textContent.trim(),
   };
 });
@@ -224,15 +222,15 @@ check('Auf dem Startbildschirm-Schritt steht kein Zahlungshinweis', install.fuss
 check('Von einer Zahlung ist dort auch sonst keine Rede',
   !/payment|pay again|costs/i.test(install.text), install.text);
 check('Die Anleitung hat drei Schritte', install.anzahl === 3, String(install.anzahl));
-// DIE Pruefung: Alle drei Texte beginnen an derselben Kante. Rutschte eine
-// zweite Zeile unter die Nummer, gaebe es hier zwei verschiedene Werte.
+// THE check: all three texts start at the same edge. If a second line
+// slid under the number, there'd be two different values here.
 check('Alle Schritte beginnen an derselben Kante',
   install.kanten.length === 1, install.kanten.join(' / ') + ' px');
 check('Und die Karte passt auf einen 667-px-Bildschirm',
-  install.hoehe <= 667, `${install.hoehe} px`);
+  install.height <= 667, `${install.height} px`);
 
-// Gegenprobe: Einen Schritt weiter MUSS der Hinweis da sein. Ohne diese Zeile
-// waere die Pruefung oben auch dann gruen, wenn der Satz ueberall fehlte.
+// Control: one step further the note MUST be there. Without this line the
+// check above would pass even if the sentence were missing everywhere.
 await page.evaluate(() => {
   document.querySelector('#step-install').hidden = true;
   document.querySelector('#step-address').hidden = false;
@@ -242,22 +240,23 @@ const beiAdresse = await page.evaluate(() =>
 check('Gegenprobe: beim Adressschritt steht er sehr wohl da', beiAdresse);
 
 // ---------------------------------------------------------------------------
-// Die sichere Zone – vom Startbildschirm aus beginnt die Seite unter der Uhr
+// The safe area - from the home screen the page starts under the clock
 // ---------------------------------------------------------------------------
 //
-// index.html setzt viewport-fit=cover und black-translucent. Beides zusammen
-// heisst: Als abgelegte App faengt der Inhalt bei y=0 an, also UNTER Uhrzeit,
-// Empfangsbalken und Akkustand. Im Browser-Tab faellt das nicht auf, weil dort
-// die Browserleiste darueber liegt – der Fehler zeigt sich nur auf dem
-// Startbildschirm, und genau von dort kam der Befund.
+// index.html sets viewport-fit=cover and black-translucent. Together that
+// means: as an installed app, the content starts at y=0, i.e. UNDER the
+// clock, signal bars and battery indicator. In a browser tab this doesn't
+// show, because the browser chrome sits above it there - the bug only shows
+// up on the home screen, and that's exactly where the report came from.
 //
-// Es gab dafuer im ganzen Stylesheet EINE Zeile, und die galt unten.
+// There was ONE line in the whole stylesheet for this, and it covered the
+// bottom only.
 //
-// Geprueft wird hier am Text der Regeln und nicht am gerenderten Bild:
-// Chromium kennt env(safe-area-inset-*) ohne echten Geraeteausschnitt nicht,
-// die Werte waeren im Test immer 0 und jede Messung darauf immer gruen. Was
-// sich messen laesst – der Abstand nach oben im Inhalt – wird darunter
-// gemessen.
+// This checks the text of the rules, not the rendered image: Chromium
+// doesn't know env(safe-area-inset-*) without a real device notch, so the
+// values would always be 0 in the test and any measurement based on them
+// would always pass. What can be measured - the gap at the top of the
+// content - is measured further below.
 const cssText = fs.readFileSync(path.join(pub, 'styles.css'), 'utf8');
 const regelFuer = (wahl) => {
   const i = cssText.indexOf(wahl + ' {');
@@ -271,34 +270,35 @@ check('Die Anmeldekarte ebenso',
 check('Und beide auch der Kameraaussparung im Querformat',
   /env\(safe-area-inset-left/.test(regelFuer('.topbar'))
   && /env\(safe-area-inset-right/.test(regelFuer('.login')));
-// Unten liegt bei Telefonen ohne Knopf der Balken zum Schliessen. Die Zeile
-// dafuer stand an .composer – die sitzt aber INNERHALB des DM-Rahmens und
-// konnte den Rahmen selbst nicht anheben; dessen untere Ecken verschwanden
-// darunter.
+// At the bottom, on phones without a home button, sits the close-gesture
+// bar. The line for that was on .composer - but that sits INSIDE the DM
+// frame and couldn't lift the frame itself; its bottom corners disappeared
+// underneath.
 check('Die Eingabezeile weicht dem Schliess-Balken aus',
   /env\(safe-area-inset-bottom/.test(regelFuer('  .composer')));
 
 // ---------------------------------------------------------------------------
-// Und jetzt der untere Rand – gemessen statt gelesen
+// And now the bottom edge - measured, not read
 // ---------------------------------------------------------------------------
 //
-// Oben steht, Chromium kenne env(safe-area-inset-*) nicht. Das stimmt, ist
-// aber kein Grund, es beim Lesen des Regeltexts zu belassen: Was fehlt, sind
-// nur die WERTE. Der zweite Server unten liefert dieselbe styles.css, in der
-// genau diese Aufrufe durch die Masse eines iPhone 14 ersetzt sind (oben 47,
-// unten 34) – sonst Zeichen fuer Zeichen die ausgelieferte Datei. Damit laesst
-// sich der Fall messen, aus dem beide Befunde vom Geraet kamen:
+// Above it says Chromium doesn't know env(safe-area-inset-*). That's true,
+// but it's no reason to leave it at reading the rule text: what's missing
+// is only the VALUES. The second server below serves the same styles.css,
+// in which exactly these calls are replaced with the measurements of an
+// iPhone 14 (47 top, 34 bottom) - otherwise character for character the
+// shipped file. That lets us measure the actual case both reports from the
+// device came from:
 //
-//   erst  die unteren Ecken des DM-Rahmens verschwanden unter dem Balken
-//   dann  46 px leerer Grund darunter, weil sich zwei Abstaende addierten
+//   first  the bottom corners of the DM frame disappeared under the bar
+//   then   46 px of empty ground below it, because two gaps added up
 //
-// Beide Fehler haetten hier auffallen muessen und taten es nicht, weil an
-// dieser Stelle nur der Regeltext geprueft wurde. Ein Regeltext sagt, DASS
-// jemand an die sichere Zone gedacht hat – nicht, was dabei herauskommt.
+// Both bugs should have shown up here and didn't, because this check only
+// looked at the rule text. A rule text says THAT someone thought about the
+// safe area - not what comes out of it.
 const SICHER = { top: 47, bottom: 34, left: 0, right: 0 };
 const mitSicherenZonen = (css) => css.replace(
   /env\(\s*safe-area-inset-(top|bottom|left|right)\s*(?:,[^)]*)?\)/g,
-  (_, seite) => `${SICHER[seite]}px`);
+  (_, page) => `${SICHER[page]}px`);
 
 const serverSicher = http.createServer((req, res) => {
   const pfad = req.url.split('?')[0];
@@ -311,8 +311,8 @@ const serverSicher = http.createServer((req, res) => {
     return res.writeHead(200, { 'content-type': 'text/css' })
       .end(mitSicherenZonen(fs.readFileSync(abs, 'utf8')));
   }
-  // app.js bleibt leer: Der Zustand wird hier von Hand gesetzt, sonst startet
-  // das Skript den Anmeldeablauf und versteckt alles wieder.
+  // app.js stays empty: the state is set by hand here, otherwise the
+  // script would start the login flow and hide everything again.
   if (pfad === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('');
   }
@@ -325,7 +325,7 @@ const geraet = await browser.newPage({
   viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
 });
 await geraet.goto(`http://127.0.0.1:${serverSicher.address().port}/`);
-const unten = await geraet.evaluate(() => {
+const bottom = await geraet.evaluate(() => {
   document.querySelector('#login').hidden = true;
   document.querySelector('#app').hidden = false;
   document.querySelector('#pane-dms').hidden = false;
@@ -340,24 +340,24 @@ const unten = await geraet.evaluate(() => {
   };
 });
 
-// Der Balken selbst ist duenn; reserviert sind 34 px. Alles Antippbare muss
-// darueber bleiben, sonst trifft der Finger den Balken statt den Knopf.
+// The bar itself is thin; 34 px are reserved. Anything tappable must stay
+// above it, or the finger hits the bar instead of the button.
 check('Die Eingabezeile bleibt ueber dem Schliess-Balken',
-  unten.eingabe >= SICHER.bottom, `${unten.eingabe} px ueber der Kante`);
-// Und der Rahmen laeuft darunter durch, statt daneben zu enden. Hier stand
-// einmal die Summe aus beidem – 46 px leerer Grund, am Geraet gesehen.
+  bottom.eingabe >= SICHER.bottom, `${bottom.eingabe} px ueber der Kante`);
+// And the frame runs underneath it instead of stopping short. This is where
+// the sum of both gaps once stood - 46 px of empty ground, seen on device.
 check('Der Rahmen endet nicht schon ueber dem Balken',
-  unten.unterRahmen < SICHER.bottom, `${unten.unterRahmen} px leer darunter`);
-// Aber auch nicht an der Kante: Ohne Rand waeren die unteren Ecken
-// angeschnitten und der Rahmen unten kein Rahmen mehr.
-check('Seine unteren Ecken bleiben trotzdem sichtbar', unten.unterRahmen > 0,
-  `${unten.unterRahmen} px`);
+  bottom.unterRahmen < SICHER.bottom, `${bottom.unterRahmen} px empty darunter`);
+// But not right at the edge either: without a margin the bottom corners
+// would be clipped and the frame at the bottom wouldn't be a frame anymore.
+check('Seine unteren Ecken bleiben trotzdem sichtbar', bottom.unterRahmen > 0,
+  `${bottom.unterRahmen} px`);
 
-// Gegenprobe zum Ganzen: Dieselbe Messung am ERSTEN Server, der die Datei
-// unveraendert liefert. Dort ist env() null, die Eingabe steht also dicht an
-// der Kante – waere der Wert auch dort schon gross genug, wuerden die drei
-// Pruefungen darueber nicht die sichere Zone messen, sondern irgendetwas
-// anderes.
+// Control for the whole thing: the same measurement on the FIRST server,
+// which serves the file unchanged. There env() is null, so the input sits
+// right at the edge - if the value were already big enough there too, the
+// three checks above wouldn't be measuring the safe area, but something
+// else entirely.
 await geraet.goto(base + '/');
 const ohneErsatz = await geraet.evaluate(() => {
   document.querySelector('#login').hidden = true;
@@ -372,7 +372,7 @@ check('Gegenprobe: ohne den Ersatz misst dieselbe Stelle deutlich weniger',
 await geraet.close();
 serverSicher.close();
 
-// Und der Abstand nach oben im Inhalt – der laesst sich messen.
+// And the gap at the top of the content - that can be measured.
 await page.setViewportSize({ width: 375, height: 667 });
 await page.evaluate(() => {
   document.querySelector('#login').hidden = true;
@@ -384,31 +384,32 @@ await page.evaluate(() => {
 const luft = await page.evaluate(() => Math.round(
   document.querySelector('.poll').getBoundingClientRect().top
   - document.querySelector('.topbar').getBoundingClientRect().bottom));
-// Hier stand null. Die oberste Abstimmung stiess direkt an den Strich unter
-// der Kopfzeile und sah dort abgeschnitten aus – derselbe Grund, aus dem der
-// DM-Rahmen oben klebte.
+// This used to be zero. The topmost poll butted straight up against the
+// rule below the header and looked cut off there - the same reason the DM
+// frame stuck to the top.
 check('Die oberste Abstimmung klebt nicht am Strich', luft >= 6, `${luft} px`);
 
 // ---------------------------------------------------------------------------
-// Der Ladekreis im Knopf
+// The loading ring inside the button
 // ---------------------------------------------------------------------------
-// Zwischen "Continue" und dem Betrag liegt ein Aufruf ueber das Handynetz. Der
-// Knopf wurde dabei nur blass – das sieht aus wie kaputt, nicht wie
-// beschaeftigt, und wer nichts passieren sieht, tippt noch einmal.
+// Between "Continue" and the amount there's a call over the phone network.
+// The button only used to go pale during that - that looks broken, not
+// busy, and someone who sees nothing happening taps again.
 await page.evaluate(() => {
   document.querySelector('#app').hidden = true;
   document.querySelector('#login').hidden = false;
   document.querySelector('#step-install').hidden = true;
   document.querySelector('#step-address').hidden = false;
 });
-const knopf = await page.evaluate(() => {
+const button = await page.evaluate(() => {
   const b = document.querySelector('#btn-challenge');
   const vor = b.getBoundingClientRect();
   b.classList.add('laedt');
   const nach = b.getBoundingClientRect();
-  // getComputedStyle liefert ein LEBENDIGES Objekt: Wird die Klasse entfernt,
-  // aendern sich seine Werte mit. Erst auslesen, dann aufraeumen – sonst misst
-  // man den Knopf ohne Ladekreis und wundert sich ueber "none".
+  // getComputedStyle returns a LIVE object: if the class is removed, its
+  // values change along with it. Read first, clean up after - otherwise
+  // you'd measure the button without the loading ring and wonder why it
+  // says "none".
   const nachher = getComputedStyle(b, '::after');
   const ring = String(nachher.animationName);
   const dick = String(nachher.width);
@@ -420,53 +421,55 @@ const knopf = await page.evaluate(() => {
   };
 });
 check('Der Knopf springt beim Laden nicht in der Groesse',
-  knopf.gleicheBreite && knopf.gleicheHoehe);
-check('Und zeigt einen drehenden Ring', knopf.ring === 'kreisel', knopf.ring);
-check('Der einen Durchmesser hat', parseFloat(knopf.sichtbar) > 8, knopf.sichtbar);
+  button.gleicheBreite && button.gleicheHoehe);
+check('Und zeigt einen drehenden Ring', button.ring === 'kreisel', button.ring);
+check('Der einen Durchmesser hat', parseFloat(button.sichtbar) > 8, button.sichtbar);
 
-const appQuelle = fs.readFileSync(path.join(pub, 'app.js'), 'utf8');
-check('Und der Knopf bekommt die Klasse wirklich – und nimmt sie zurueck',
-  /btn\.classList\.add\('laedt'\)/.test(appQuelle)
-  && /btn\.classList\.remove\('laedt'\)/.test(appQuelle));
+const appSource = fs.readFileSync(path.join(pub, 'app.js'), 'utf8');
+check('Und der Knopf bekommt die Klasse wirklich – und nimmt sie back',
+  /btn\.classList\.add\('laedt'\)/.test(appSource)
+  && /btn\.classList\.remove\('laedt'\)/.test(appSource));
 
 // ---------------------------------------------------------------------------
-// Teilen heisst kopieren
+// Sharing means copying
 // ---------------------------------------------------------------------------
-// Hier klappte auf dem Handy das Systemmenue hoch (WhatsApp, Mail, ...). Der
-// Knopf traegt aber ein Kettensymbol und verspricht damit einen Link, kein
-// Menue – und meistens will man ihn ohnehin nur in der Zwischenablage haben.
-// Geprueft wird GENAU teilePoll und nicht die ganze Datei.
+// This is where the system share sheet used to pop up on the phone
+// (WhatsApp, Mail, ...). But the button shows a chain-link icon, which
+// promises a link, not a menu - and most of the time you just want it on
+// the clipboard anyway. This checks EXACTLY sharePoll and not the whole
+// file.
 //
-// Der erste Anlauf suchte in app.js insgesamt nach navigator.share und schlug
-// an – zu Recht: Es gibt einen zweiten Aufruf, beim BILD-Knopf. Der ist eine
-// andere Sache und bleibt. Ein Bild laesst sich auf dem Handy schlecht "in die
-// Zwischenablage" legen; dort ist das Systemmenue der richtige Weg, um es
-// nach X zu bringen. Beim Link ist es das nicht.
-const teilenQuelle = (() => {
-  const a = appQuelle.indexOf('async function teilePoll(id) {');
-  return a < 0 ? '' : appQuelle.slice(a, appQuelle.indexOf('\n}', a));
+// The first attempt searched app.js as a whole for navigator.share and
+// flagged it - rightly so: there's a second call, on the IMAGE button.
+// That's a different matter and stays. An image is hard to put "on the
+// clipboard" on a phone; there the system share sheet is the right way to
+// get it onto X. For the link it isn't.
+const shareSource = (() => {
+  const a = appSource.indexOf('async function sharePoll(id) {');
+  return a < 0 ? '' : appSource.slice(a, appSource.indexOf('\n}', a));
 })();
-check('teilePoll ist auffindbar', teilenQuelle.length > 0);
+check('sharePoll ist auffindbar', shareSource.length > 0);
 check('Der Link-Knopf oeffnet kein Systemmenue mehr',
-  !/navigator\.share/.test(teilenQuelle.split('\n')
+  !/navigator\.share/.test(shareSource.split('\n')
     .filter((z) => !/^\s*(\/\/|\*|\/\*)/.test(z)).join('\n')));
-check('Sondern kopiert den Link', /if \(await copyText\(url\)\)/.test(teilenQuelle));
-// Und die Gegenprobe, damit die Zeile darueber nicht einfach deshalb gruen
-// ist, weil der Ausschnitt leer waere: Beim Bild-Knopf steht es weiterhin.
+check('Sondern kopiert den Link', /if \(await copyText\(url\)\)/.test(shareSource));
+// And the control, so the line above doesn't just pass because the
+// snippet was empty: at the image button it still stands.
 check('Beim Bild-Knopf bleibt das Menue dagegen stehen',
-  /navigator\.share\(\{ files: \[datei\] \}\)/.test(appQuelle));
+  /navigator\.share\(\{ files: \[file\] \}\)/.test(appSource));
 
 // ---------------------------------------------------------------------------
-// Gerollt wird IN den Listen, nicht an der Seite
+// Scrolling happens INSIDE the lists, not on the page
 // ---------------------------------------------------------------------------
 //
-// Der Befund kam vom Geraet: Wer im DM-Fenster oder in den Abstimmungen bis
-// ans Ende wischt, dessen Wisch wurde ab dort an die Seite weitergereicht –
-// die ganze Ansicht rutschte nach oben oder unten weg. Auf dem Startbildschirm
-// sieht das aus, als loese sich die App vom Rand.
+// The report came from a device: swiping to the end in the DM window or in
+// the polls, past that point the swipe got handed off to the page - the
+// whole view slid up or down. On the home screen this looks like the app
+// coming loose from its edge.
 //
-// Zwei Dinge muessen dafuer stimmen, und beide einzeln geprueft: Die Seite
-// darf gar nicht rollen koennen, und die Listen duerfen nichts weiterreichen.
+// Two things have to hold for that, and both are checked separately: the
+// page must not be able to scroll at all, and the lists must not hand
+// anything off.
 await page.setViewportSize({ width: 375, height: 667 });
 const rollen = await page.evaluate(() => {
   document.querySelector('#login').hidden = true;
@@ -474,22 +477,23 @@ const rollen = await page.evaluate(() => {
   document.querySelector('#pane-dms').hidden = false;
   document.querySelector('#dm-user').hidden = false;
   const t = document.querySelector('#dm-thread');
-  // Reichlich Inhalt – sonst rollt gar nichts und die Messung waere gratis.
+  // Plenty of content - otherwise nothing scrolls at all and the
+  // measurement would be free.
   t.innerHTML = Array.from({ length: 60 }, (_, i) =>
     `<div class="dm-row"><div class="msg dm"><span class="body">Nachricht ${i}</span></div></div>`).join('');
-  // Ein zu hoher Klotz in den Koerper. Ohne ihn passt die Seite ohnehin
-  // genau in den Bildschirm und liesse sich auch ohne jede Regel nicht
-  // verschieben – die Messung waere dann gratis und faende nichts. Mit ihm
-  // WUERDE die Seite rollen, wenn man sie liesse; genau das ist die Frage.
+  // An oversized block dropped into the body. Without it the page fits
+  // exactly on the screen anyway and couldn't move even without any rule -
+  // the measurement would then be free and find nothing. With it, the page
+  // WOULD scroll if you let it; that's exactly the question.
   const klotz = document.createElement('div');
   klotz.style.cssText = 'height: 3000px';
   document.body.append(klotz);
 
   const se = document.scrollingElement;
 
-  // Erst die Gegenprobe: Mit von Hand aufgehobener Sperre MUSS sich die Seite
-  // verschieben lassen. Tut sie das nicht, ist der Klotz zu klein oder der
-  // Aufbau anders als gedacht – und die Messung darunter waere wertlos.
+  // Control first: with the lock lifted by hand, the page MUST be able to
+  // move. If it doesn't, the block is too small or the setup is different
+  // than assumed - and the measurement below would be worthless.
   document.documentElement.style.overflow = 'visible';
   document.body.style.overflow = 'visible';
   se.scrollTop = 9999;
@@ -498,38 +502,38 @@ const rollen = await page.evaluate(() => {
   document.documentElement.style.overflow = '';
   document.body.style.overflow = '';
 
-  // Und jetzt mit der Sperre aus dem Stilblatt.
+  // And now with the lock from the stylesheet.
   se.scrollTop = 9999;
-  const seiteVerschoben = se.scrollTop;
+  const pageShifted = se.scrollTop;
   klotz.remove();
 
   t.scrollTop = 99999;
   return {
-    seiteVerschoben,
+    pageShifted,
     ohneSperre,
     kette: getComputedStyle(t).overscrollBehaviorY,
     balken: getComputedStyle(t).scrollbarWidth,
     balkenPolls: getComputedStyle(document.querySelector('#poll-list')).scrollbarWidth,
-    // Gegenprobe: Anderswo bleibt der Strich. Ohne diese Zeile waere oben
-    // auch dann alles gruen, wenn die Regel versehentlich JEDE Rollleiste
-    // der Seite abgeschaltet haette.
-    // Der Koerper hat keine eigene Regel dazu; sein Wert ist der des
-    // Browsers. Steht dort etwas anderes als "auto", hat eine Regel weiter
-    // gegriffen als gedacht.
+    // Control: elsewhere the scrollbar stays. Without this line everything
+    // above would pass even if the rule had accidentally disabled EVERY
+    // scrollbar on the page.
+    // The body has no rule of its own for this; its value is the
+    // browser's default. If it says anything other than "auto", a rule
+    // reached further than intended.
     balkenSonstwo: getComputedStyle(document.body).scrollbarWidth,
     listeRollt: t.scrollTop > 0,
   };
 });
 check('Die Seite selbst laesst sich nicht verschieben',
-  rollen.seiteVerschoben === 0, `scrollTop ${rollen.seiteVerschoben}`);
-// Gegenprobe dazu: Der Klotz war wirklich zu hoch. Ohne diese Zeile waere die
-// Pruefung darueber auch dann gruen, wenn gar nichts zu rollen da gewesen ist.
+  rollen.pageShifted === 0, `scrollTop ${rollen.pageShifted}`);
+// Control for that: the block really was oversized. Without this line the
+// check above would pass even if there had been nothing to scroll at all.
 check('Gegenprobe: ohne die Sperre liesse sie sich sehr wohl verschieben',
   rollen.ohneSperre > 0, `scrollTop ${rollen.ohneSperre}`);
-check('Die Liste reicht den Wisch nicht an die Seite weiter',
+check('Die Liste reicht den Wisch nicht an die Seite next',
   rollen.kette === 'contain', rollen.kette);
-// Gegenprobe: Ohne diese Zeile waere alles oben auch dann gruen, wenn die
-// Liste ueberhaupt nicht rollte.
+// Control: without this line everything above would pass even if the list
+// didn't scroll at all.
 check('Gegenprobe: die Liste rollt trotzdem', rollen.listeRollt);
 check('Im Gespraech gibt es keine Rollleiste', rollen.balken === 'none', rollen.balken);
 check('Bei den Abstimmungen auch nicht', rollen.balkenPolls === 'none', rollen.balkenPolls);
@@ -537,30 +541,31 @@ check('Gegenprobe: die Regel greift nicht auf die ganze Seite durch',
   rollen.balkenSonstwo === 'auto', rollen.balkenSonstwo);
 
 // ---------------------------------------------------------------------------
-// Die Tastatur darf nur das Gespraech kuerzen, nicht die Ansicht schieben
+// The keyboard may only shrink the conversation, not push the view around
 // ---------------------------------------------------------------------------
 //
-// Befund vom Geraet: Tippt man auf dem Handy eine DM, wandert alles nach oben
-// aus dem Bild – Kopfzeile, Reiter, der obere Rand des Rahmens.
+// Report from a device: typing a DM on the phone moved everything up out
+// of frame - header, tabs, the top edge of the frame.
 //
-// Was hier NICHT geprueft werden kann: ob iOS danach wirklich aufhoert zu
-// schieben. Dafuer braucht es eine Tastatur, und die gibt es in diesem
-// Chromium nicht. Was geprueft werden KANN, ist die Folge, auf der die Loesung
-// beruht – und die ist der eigentliche Anspruch:
+// What can NOT be checked here: whether iOS really stops pushing after
+// this. That needs an actual keyboard, and this Chromium doesn't have one.
+// What CAN be checked is the consequence the fix relies on - and that's
+// the real requirement:
 //
-//   Wird die Seite kuerzer, darf sich oberhalb des Gespraechs NICHTS bewegen.
-//   Die ganze Verkleinerung muss in der Liste ankommen.
+//   When the page gets shorter, NOTHING above the conversation may move.
+//   The entire shrink has to land in the list.
 //
-// Stimmt das nicht, hilft auch die beste Tastaturerkennung nichts: Dann
-// wandert eben beim Schrumpfen, was vorher beim Schieben wanderte.
+// If that doesn't hold, even the best keyboard detection is useless: then
+// whatever used to move on push just moves on shrink instead.
 await page.setViewportSize({ width: 390, height: 844 });
 const tastatur = await page.evaluate(() => {
   document.querySelector('#login').hidden = true;
   document.querySelector('#app').hidden = false;
-  // Der Abstimmungsbereich ist aus einer frueheren Pruefung noch offen. Beide
-  // Bereiche sind flex: 1 im selben Stapel und teilen sich dann die Hoehe –
-  // der Rahmen sass dadurch mitten auf dem Bild, und die Messung mass etwas
-  // anderes als das, was sie behauptet. Im Betrieb ist immer genau einer da.
+  // The polls pane is still open from an earlier check. Both panes are
+  // flex: 1 in the same stack and would then share the height - the frame
+  // would sit in the middle of the picture, and the measurement would
+  // measure something other than what it claims to. In real use exactly
+  // one is ever present.
   document.querySelector('#pane-polls').hidden = true;
   document.querySelector('#pane-dms').hidden = false;
   document.querySelector('#dm-user').hidden = false;
@@ -569,187 +574,188 @@ const tastatur = await page.evaluate(() => {
       `<div class="dm-row"><div class="dm-block"><div class="msg dm">`
       + `<span class="body">Nachricht ${i}</span></div></div></div>`).join('');
 
-  const messen = () => {
+  const measure = () => {
     const r = (s) => document.querySelector(s).getBoundingClientRect();
     return {
-      kopf: Math.round(r('.topbar').top),
+      header: Math.round(r('.topbar').top),
       reiter: Math.round(r('.tabs').top),
       rahmen: Math.round(r('#dm-user').top),
       eingabe: Math.round(r('#dm-input').bottom),
       liste: Math.round(r('#dm-thread').height),
     };
   };
-  const vorher = messen();
+  const vorher = measure();
 
-  // Die Tastatur nachstellen: Genau das, was app.js tut, wenn
-  // visualViewport meldet, dass unten etwas verdeckt ist – BEIDE Zeilen.
+  // Simulate the keyboard: exactly what app.js does when visualViewport
+  // reports that something is covered at the bottom - BOTH lines.
   const TASTATUR = 336;
-  // Wie weit iOS den Ausschnitt dabei schiebt, haengt daran, wo das
-  // Eingabefeld liegt. Ein mittlerer Wert genuegt: Geprueft wird, dass die
-  // Ansicht ihn ausgleicht, nicht wie gross er ist.
+  // How far iOS shifts the viewport for this depends on where the input
+  // field sits. A middling value is enough: the check is that the view
+  // compensates for it, not how big it is.
   const VERSATZ = 120;
   document.documentElement.style.setProperty(
     '--sicht', `${innerHeight - TASTATUR}px`);
   document.documentElement.style.setProperty('--versatz', `${VERSATZ}px`);
-  const nachher = messen();
+  const nachher = measure();
 
-  // Und dieselbe Lage OHNE den Ausgleich – so sah es aus, als der Befund kam:
-  // Die ganze Ansicht stand um den Versatz zu hoch.
+  // And the same situation WITHOUT the compensation - this is what it
+  // looked like when the report came in: the whole view sat too high by
+  // the offset amount.
   document.documentElement.style.removeProperty('--versatz');
-  const ohneAusgleich = messen();
+  const ohneAusgleich = measure();
 
   document.documentElement.style.setProperty('--versatz', `${VERSATZ}px`);
   document.documentElement.style.removeProperty('--sicht');
   document.documentElement.style.removeProperty('--versatz');
-  const zurueck = messen();
+  const back = measure();
 
-  return { vorher, nachher, ohneAusgleich, zurueck,
+  return { vorher, nachher, ohneAusgleich, back,
     tastatur: TASTATUR, versatz: VERSATZ };
 });
 
 const t = tastatur;
-// Die Kopfzeile muss dort stehen, wo der sichtbare Ausschnitt beginnt – also
-// um den Versatz tiefer als vorher, gemessen in den Koordinaten der Seite.
-// Auf dem Bildschirm ist das genau dieselbe Stelle wie ohne Tastatur.
+// The header must sit where the visible viewport begins - i.e. lower than
+// before by the offset amount, measured in page coordinates. On screen
+// that is exactly the same spot as without the keyboard.
 check('Die Kopfzeile bleibt stehen, wenn die Tastatur kommt',
-  t.nachher.kopf === t.vorher.kopf + t.versatz,
-  `${t.vorher.kopf} -> ${t.nachher.kopf}, erwartet ${t.vorher.kopf + t.versatz}`);
-// Das ist der Befund vom Geraet, nachgestellt: Ohne den Ausgleich steht alles
-// um den Versatz zu hoch – die ganze Seite ist nach oben gewandert.
-check('Gegenprobe: ohne den Ausgleich wandert sie sehr wohl nach oben',
-  t.ohneAusgleich.kopf === t.vorher.kopf,
-  `${t.ohneAusgleich.kopf} statt ${t.vorher.kopf + t.versatz}`);
+  t.nachher.header === t.vorher.header + t.versatz,
+  `${t.vorher.header} -> ${t.nachher.header}, erwartet ${t.vorher.header + t.versatz}`);
+// This is the device report, reproduced: without the compensation
+// everything sits too high by the offset amount - the whole page has
+// shifted up.
+check('Gegenprobe: ohne den Ausgleich wandert sie sehr wohl nach peek',
+  t.ohneAusgleich.header === t.vorher.header,
+  `${t.ohneAusgleich.header} statt ${t.vorher.header + t.versatz}`);
 check('Die Reiter ebenso', t.nachher.reiter === t.vorher.reiter + t.versatz,
   `${t.vorher.reiter} -> ${t.nachher.reiter}`);
 check('Und der obere Rand des Gespraechsrahmens',
   t.nachher.rahmen === t.vorher.rahmen + t.versatz,
   `${t.vorher.rahmen} -> ${t.nachher.rahmen}`);
-// Die Verkleinerung muss irgendwo ankommen – und zwar dort und nur dort.
+// The shrink has to land somewhere - and specifically there, and only
+// there.
 check('Gekuerzt wird stattdessen das Gespraech',
   t.vorher.liste - t.nachher.liste === t.tastatur,
   `${t.vorher.liste} -> ${t.nachher.liste} px (erwartet ${t.tastatur} weniger)`);
-// Der Sinn der Sache: Das Eingabefeld muss ueber die Tastatur rutschen.
+// The whole point: the input field has to rise above the keyboard.
 check('Und die Eingabezeile steigt genau um die Tastaturhoehe',
   t.vorher.eingabe - t.nachher.eingabe === t.tastatur - t.versatz,
   `${t.vorher.eingabe} -> ${t.nachher.eingabe}`);
-// Und wieder zurueck, sobald die Tastatur weg ist. Ohne diese Zeile waere
-// oben auch dann alles gruen, wenn --sicht haengenbliebe.
+// And back again once the keyboard is gone. Without this line everything
+// above would pass even if --sicht stayed stuck.
 check('Gegenprobe: ohne --sicht ist alles wieder wie vorher',
-  JSON.stringify(t.zurueck) === JSON.stringify(t.vorher));
+  JSON.stringify(t.back) === JSON.stringify(t.vorher));
 
-// Und die Verdrahtung: Ohne den Beobachter setzt niemand --sicht.
+// And the wiring: without the observer, nobody sets --sicht.
 const appQ = fs.readFileSync(path.join(pub, 'app.js'), 'utf8');
-// Und der Versatz muss aus visualViewport.offsetTop kommen und nirgendwo
-// anders her – geraten laesst er sich nicht.
+// And the offset has to come from visualViewport.offsetTop and nowhere
+// else - it can't be guessed at.
 check('app.js liest den Versatz aus visualViewport.offsetTop',
   /--versatz['"`],\s*`\$\{vv\.offsetTop\}px`/.test(appQ));
 check('app.js hoert auf visualViewport',
   /visualViewport/.test(appQ) && /addEventListener\('resize'/.test(appQ));
 check('Und nimmt die Zeile wieder weg, statt sie zu ueberschreiben',
   /removeProperty\('--sicht'\)/.test(appQ));
-// Eine Schwelle muss es geben: visualViewport.height aendert sich auch, wenn
-// Safaris Adressleiste ein- und ausfaehrt. Ohne Schwelle zuckte das Blatt bei
-// jedem Wisch.
+// There has to be a threshold: visualViewport.height also changes when
+// Safari's address bar slides in and out. Without a threshold, the sheet
+// twitched on every swipe.
 check('Und unterscheidet eine Tastatur von einer Browserleiste',
   /TASTATUR_AB_PX/.test(appQ));
 
-// Auf dem Anmeldebildschirm darf die Karte dagegen NACH OBEN AUSWEICHEN.
+// On the login screen, though, the card MAY move up.
 // ---------------------------------------------------------------------------
-// Hier stand eine Weile das Gegenteil: app.js hielt die Karte fest, damit sie
-// nicht wandert. Gewuenscht war es andersherum – dort soll Platz gemacht werden,
-// und das ist auch der Unterschied zur App: In der App steht oben etwas, das
-// stehenbleiben MUSS (Kopfzeile, Reiter). Auf dem Anmeldebildschirm steht dort
-// nichts als Luft, und Luft darf weichen, wenn das Eingabefeld sonst unter der
-// Tastatur laege.
+// For a while the opposite stood here: app.js held the card in place so it
+// wouldn't move. What was actually wanted was the other way round - room
+// should be made there, and that's also the difference from the app: in
+// the app something sits at the top that MUST stay put (header, tabs). On
+// the login screen there's nothing there but air, and air is allowed to
+// give way if the input field would otherwise sit under the keyboard.
 //
-// Geprueft wird deshalb, dass NIEMAND die Karte festhaelt – sonst kaeme die
-// Sonderbehandlung bei der naechsten Umarbeitung unbemerkt zurueck.
-const appQuelleLogin = fs.readFileSync(path.join(pub, 'app.js'), 'utf8');
+// So the check is that NOBODY holds the card in place - otherwise the
+// special case would come back unnoticed the next time this gets reworked.
+const appSourceLogin = fs.readFileSync(path.join(pub, 'app.js'), 'utf8');
 check('Die Anmeldekarte wird nicht festgehalten',
-  !/loginEinfrieren|marginTop\s*=/.test(appQuelleLogin));
+  !/loginEinfrieren|marginTop\s*=/.test(appSourceLogin));
 
 // ---------------------------------------------------------------------------
-// Und die Anmeldekarte bleibt trotzdem ganz erreichbar
+// And the login card still stays fully reachable
 // ---------------------------------------------------------------------------
-// Seit die Seite nicht mehr rollt, muss der Anmeldebildschirm es selbst
-// koennen. Der Fallstrick dabei ist justify-content: center in einem rollbaren
-// Kasten: Passt der Inhalt nicht, schiebt es seinen Anfang NACH OBEN HINAUS,
-// und dorthin kann man nicht rollen. Deshalb steht die Karte ueber einen
-// automatischen Rand mittig und nicht ueber justify-content.
-const loginLage = async (hoehe) => {
-  await page.setViewportSize({ width: 375, height: hoehe });
+// Since the page no longer scrolls, the login screen has to be able to do
+// it itself. The trap here is justify-content: center in a scrollable box:
+// if the content doesn't fit, it pushes its start UP AND OUT, and you
+// can't scroll there. That's why the card is centered with an auto margin
+// and not with justify-content.
+const loginLage = async (height) => {
+  await page.setViewportSize({ width: 375, height: height });
   return page.evaluate(() => {
     document.querySelector('#app').hidden = true;
     document.querySelector('#login').hidden = false;
     document.querySelector('#step-install').hidden = true;
     document.querySelector('#step-address').hidden = false;
     const l = document.querySelector('#login');
-    // Ausdruecklich die Karte IM Login. Seit es den Vorhang gibt ("Launching
-    // soon"), tragen zwei Abschnitte die Klasse .login-card, und der erste im
-    // Blatt ist der versteckte Vorhang – ein verstecktes Element misst sich
-    // als 0 x 0. Der Test meldete daraufhin "0 px von oben" und sah aus, als
-    // saesse die Anmeldekarte am oberen Rand.
+    // Explicitly the card WITHIN login. Since the curtain exists
+    // ("Launching soon"), two sections carry the .login-card class, and the
+    // first one in the sheet is the hidden curtain - a hidden element
+    // measures as 0 x 0. The test then reported "0 px from the top" and
+    // looked as if the login card sat right at the top edge.
     const k = document.querySelector('#login .login-card');
     l.scrollTop = 0;
-    const obenAbgeschnitten = Math.round(
+    const topCutOff = Math.round(
       k.getBoundingClientRect().top - l.getBoundingClientRect().top);
     l.scrollTop = 999999;
-    const untenFehlt = Math.round(
+    const bottomMissing = Math.round(
       k.getBoundingClientRect().bottom - l.getBoundingClientRect().bottom);
-    return { obenAbgeschnitten, untenFehlt, passt: l.scrollHeight <= l.clientHeight + 1 };
+    return { topCutOff, bottomMissing, passt: l.scrollHeight <= l.clientHeight + 1 };
   });
 };
 const hoch = await loginLage(667);
-const kurz = await loginLage(320);
+const short = await loginLage(320);
 check('Auf einem hohen Bildschirm steht die Karte mittig',
-  hoch.passt && hoch.obenAbgeschnitten > 40, `${hoch.obenAbgeschnitten} px von oben`);
-check('Auf einem kurzen ist oben nichts abgeschnitten',
-  kurz.obenAbgeschnitten >= 0, `${kurz.obenAbgeschnitten} px`);
-check('Und unten alles erreichbar', kurz.untenFehlt <= 0, `${kurz.untenFehlt} px`);
+  hoch.passt && hoch.topCutOff > 40, `${hoch.topCutOff} px von peek`);
+check('Auf einem kurzen ist peek nichts abgeschnitten',
+  short.topCutOff >= 0, `${short.topCutOff} px`);
+check('Und bottom alles erreichbar', short.bottomMissing <= 0, `${short.bottomMissing} px`);
 await page.setViewportSize({ width: 375, height: 667 });
 
 // ---------------------------------------------------------------------------
-// Hier standen zehn Pruefungen fuer das Abstimmungsformular auf dem Handy
+// Ten checks for the poll form on the phone used to be here
 // ---------------------------------------------------------------------------
-// Trefferflaeche des Schalters "+ New poll", Hoehe der Laufzeit-Eintraege, und
-// dass sich der Bereich mit offener Tastatur rollen laesst. Alle gemessen,
-// alle mit Gegenprobe, alle gruen.
+// Tap target size of the "+ New poll" switch, height of the duration
+// entries, and whether the area can scroll with the keyboard open. All
+// measured, all with a control, all passing.
 //
-// Sie sind raus, weil die Sache selbst raus ist: Auf dem Handy gibt es kein
-// Formular mehr, dort steht ein Satz. Was sie geprueft haben, kann also nicht
-// mehr kaputtgehen – und eine Pruefung, die einen Zustand misst, den es nicht
-// gibt, faellt entweder durch oder wird gruen gehalten, indem man sie
-// zurechtbiegt. Beides ist schlechter als sie zu loeschen und dazuzuschreiben,
-// warum.
+// They're gone because the thing itself is gone: on the phone there's no
+// longer a form, there's a sentence instead. What they checked can
+// therefore no longer break - and a check that measures a state that
+// doesn't exist either fails or gets kept green by being bent out of
+// shape. Both are worse than deleting it and writing down why.
 //
-// Was an ihre Stelle tritt, steht weiter unten: dass der Schalter auf dem
-// Handy fehlt, dass der Satz da ist, dass ein erzwungen geoeffnetes Formular
-// zu bleibt – und die Gegenprobe, dass am Rechner alles beim Alten ist.
+// What takes their place is further below: that the switch is missing on
+// the phone, that the sentence is there, that a forcibly opened form stays
+// closed - and the control that on desktop everything is as before.
 //
-// Die Regeln im Blatt bleiben stehen (die vergroesserte Trefferflaeche, die
-// 44 px hohen Eintraege): Sie schaden am Rechner nicht und helfen dort, wo
-// jemand mit dem Finger auf einem grossen Bildschirm arbeitet.
+// The rules in the sheet stay in place (the enlarged tap target, the
+// 44 px tall entries): they don't hurt on desktop and help wherever
+// someone is working with a finger on a big screen.
 
 
 // ---------------------------------------------------------------------------
-// Kuerzel, Adresse und "Hide" stehen auf einer Linie
+// Handle, address and "Hide" sit on one line
 // ---------------------------------------------------------------------------
-// Gemeldet als "Hide steht versetzt weiter unten", gemessen: 5,3 px, auf
-// iPhone 15 und SE identisch. Die Ursache war kein Ausrichtungsfehler, sondern
-// ein asymmetrisches Polster: Auf dem Handy verlor die Titelzeile ihr oberes,
-// behielt aber ihr unteres – ihr Text sass damit oben in einem Kasten, den
-// .thread-kopf mittig setzte. Zentriert wurden also die Kaesten und nicht das,
-// was man sieht.
+// Reported as "Hide sits offset, further down", measured: 5.3 px, identical
+// on iPhone 15 and SE. The cause wasn't an alignment bug but an asymmetric
+// padding: on the phone the title row lost its top padding but kept its
+// bottom one - its text then sat at the top of a box that .thread-kopf
+// centered. So the boxes were centered, not what you actually see.
 //
-// Geprueft wird deshalb die Mitte des TEXTES gegen die Mitte des Knopfes und
-// nicht die der Kaesten. Eine Pruefung auf die Kaesten waere schon vor der
-// Behebung durchgelaufen – sie standen ja immer auf einer Linie.
-const zeile = await browser.newPage({
+// So what's checked here is the middle of the TEXT against the middle of
+// the button, not the middle of the boxes. A check on the boxes would have
+// passed even before the fix - they were always on one line.
+const line = await browser.newPage({
   viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
   isMobile: true, hasTouch: true,
 });
-await zeile.goto(base + '/', { waitUntil: 'load' });
-const kopfzeile = await zeile.evaluate(() => {
+await line.goto(base + '/', { waitUntil: 'load' });
+const headerLine = await line.evaluate(() => {
   const $ = (x) => document.querySelector(x);
   $('#login').hidden = true;
   $('#app').hidden = false;
@@ -762,42 +768,42 @@ const kopfzeile = await zeile.evaluate(() => {
   $('#thread-title').innerHTML =
     '<span class="h">7xK</span><span class="addr">7xKm9QpLvRt2sYwE4nBc6HjA1dFgZuVmTqXrPyNb3Ks</span>';
   $('#btn-hide-thread').hidden = false;
-  const mitte = (x) => {
+  const center = (x) => {
     const r = document.querySelector(x).getBoundingClientRect();
     return (r.top + r.bottom) / 2;
   };
   return {
-    kuerzel: mitte('.thread-title .h'),
-    adresse: mitte('.thread-title .addr'),
-    hide: mitte('#btn-hide-thread'),
-    // Die Kaesten – nur, um die Gegenprobe unten ehrlich zu machen.
-    titelKasten: mitte('#thread-title'),
+    kuerzel: center('.thread-title .h'),
+    adresse: center('.thread-title .addr'),
+    hide: center('#btn-hide-thread'),
+    // The boxes - only to keep the control below honest.
+    titelKasten: center('#thread-title'),
   };
 });
-await zeile.close();
+await line.close();
 
 check('"Hide" steht auf einer Linie mit dem Kuerzel',
-  Math.abs(kopfzeile.hide - kopfzeile.kuerzel) <= 1,
-  `${(kopfzeile.hide - kopfzeile.kuerzel).toFixed(1)} px Versatz`);
+  Math.abs(headerLine.hide - headerLine.kuerzel) <= 1,
+  `${(headerLine.hide - headerLine.kuerzel).toFixed(1)} px Versatz`);
 check('Und mit der Adresse',
-  Math.abs(kopfzeile.hide - kopfzeile.adresse) <= 1,
-  `${(kopfzeile.hide - kopfzeile.adresse).toFixed(1)} px Versatz`);
-// Gegenprobe an der Pruefung selbst: Der Text muss jetzt dort liegen, wo sein
-// Kasten liegt. Taete er das nicht, waere das Polster wieder asymmetrisch und
-// der Fehler zurueck, ohne dass die beiden Zeilen darueber es merken muessten.
-check('Und der Text sitzt mittig in seiner Zeile, nicht oben',
-  Math.abs(kopfzeile.kuerzel - kopfzeile.titelKasten) <= 1,
-  `${(kopfzeile.kuerzel - kopfzeile.titelKasten).toFixed(1)} px`);
+  Math.abs(headerLine.hide - headerLine.adresse) <= 1,
+  `${(headerLine.hide - headerLine.adresse).toFixed(1)} px Versatz`);
+// Control on the check itself: the text now has to sit where its box sits.
+// If it didn't, the padding would be asymmetric again and the bug back,
+// without the two checks above having any way to notice.
+check('Und der Text sitzt mittig in seiner Zeile, nicht peek',
+  Math.abs(headerLine.kuerzel - headerLine.titelKasten) <= 1,
+  `${(headerLine.kuerzel - headerLine.titelKasten).toFixed(1)} px`);
 
 // ---------------------------------------------------------------------------
-// Abstimmungen anlegen geht nur am Rechner
+// Creating polls only works on desktop
 // ---------------------------------------------------------------------------
-// Das Formular war auf dem Telefon mit offener Tastatur nicht zu bedienen, und
-// statt weiter daran zu ziehen ist der Weg dort jetzt zu. Geprueft wird beides
-// – dass er auf dem Handy zu ist UND dass er am Rechner offen bleibt. Nur
-// zusammen ist es eine Aussage: Eine Regel, die ueberall greift, haette die
-// Funktion abgeschafft statt sie zu verlegen.
-async function pollSchalter(w, h, handy) {
+// The form couldn't be used on the phone with the keyboard open, and
+// instead of pulling at it further, that path is now closed there. Both
+// are checked - that it's closed on the phone AND that it stays open on
+// desktop. Only together do they say anything: a rule that applies
+// everywhere would have abolished the feature instead of relocating it.
+async function pollSwitch(w, h, handy) {
   const p = await browser.newPage({
     viewport: { width: w, height: h }, deviceScaleFactor: 2,
     isMobile: handy, hasTouch: handy,
@@ -816,17 +822,17 @@ async function pollSchalter(w, h, handy) {
       return getComputedStyle(e).display !== 'none'
         && e.getBoundingClientRect().height > 0;
     };
-    // Und wenn das Formular doch offen ist – etwa weil jemand am Rechner
-    // aufgeklappt und dann das Fenster schmal gezogen hat?
+    // And what if the form is open after all - say, because someone
+    // opened it on desktop and then narrowed the window?
     $('#poll-admin-felder').hidden = false;
     const erzwungen = sicht('#poll-admin-felder');
     $('#poll-admin-felder').hidden = true;
     return {
-      knopf: sicht('#btn-poll-neu'),
+      button: sicht('#btn-poll-neu'),
       satz: sicht('.poll-nur-rechner'),
       text: ($('.poll-nur-rechner') || {}).textContent || '',
       erzwungen,
-      // Was auf dem Handy bleiben MUSS: die Liste und die Reiter.
+      // What MUST remain on the phone: the list and the tabs.
       liste: !!$('#poll-list'),
       reiter: sicht('.tabs'),
     };
@@ -835,41 +841,41 @@ async function pollSchalter(w, h, handy) {
   return r;
 }
 
-const handy = await pollSchalter(390, 844, true);
+const handy = await pollSwitch(390, 844, true);
 check('Auf dem Handy gibt es keinen Schalter fuer neue Abstimmungen',
-  !handy.knopf);
+  !handy.button);
 check('Stattdessen steht dort ein Satz', handy.satz, handy.text.trim());
 check('Und er nennt den Rechner beim Namen',
   /desktop/i.test(handy.text), handy.text.trim());
 check('Auch ein erzwungen geoeffnetes Formular bleibt zu', !handy.erzwungen);
-// Verlegt, nicht abgeschafft: Alles andere muss auf dem Handy bleiben.
+// Relocated, not abolished: everything else has to stay on the phone.
 check('Die Abstimmungsliste ist weiterhin da', handy.liste);
 check('Und die Reiter auch', handy.reiter);
 
-const rechner = await pollSchalter(1280, 900, false);
-check('Gegenprobe: am Rechner ist der Schalter da', rechner.knopf);
-check('Gegenprobe: und der Satz steht dort nicht', !rechner.satz);
-check('Gegenprobe: und das Formular laesst sich oeffnen', rechner.erzwungen);
+const computer = await pollSwitch(1280, 900, false);
+check('Gegenprobe: am Rechner ist der Schalter da', computer.button);
+check('Gegenprobe: und der Satz steht dort nicht', !computer.satz);
+check('Gegenprobe: und das Formular laesst sich oeffnen', computer.erzwungen);
 
 // ---------------------------------------------------------------------------
-// Was vor dem Start gehaertet wurde
+// What got hardened before launch
 // ---------------------------------------------------------------------------
-// Vier Sachen, die keine der 22 Reihen gesehen hat, weil sie alle einen
-// Browser voraussetzen, der sich normal verhaelt: gesperrter Speicher, ein
-// sehr schmales Fenster, eine Antwort ohne Leerzeichen, eine Tastatur.
+// Four things none of the 22 rows above caught, because all of them assume
+// a browser that behaves normally: locked storage, a very narrow window,
+// a response with no spaces in it, a keyboard.
 
-// 1. Gesperrter localStorage darf die Seite nicht schwarz machen
+// 1. Locked localStorage must not turn the page black
 // ---------------------------------------------------------------------------
-// Nicht "leer", sondern VERBOTEN: Safari mit "alle Cookies blockieren" wirft
-// beim blossen Zugriff. Die Zeile stand auf oberster Modulebene, der Fehler
-// fiel also vor dem ersten Bild – und der Besucher sah nichts. Kein Login,
-// keine Meldung, Neuladen half nie.
+// Not "empty", but FORBIDDEN: Safari with "block all cookies" throws on
+// mere access. The line sat at top module level, so the error hit before
+// the first frame - and the visitor saw nothing. No login, no message,
+// reloading never helped.
 //
-// Eigener Server dafuer: Der Server dieser Reihe liefert app.js absichtlich
-// LEER aus, weil die anderen Pruefungen den Zustand von Hand setzen. Genau das
-// waere hier aber der Fehler – zu pruefen ist ja, ob das echte app.js den
-// gesperrten Speicher ueberlebt. Ohne den zweiten Server misst diese Pruefung
-// eine leere Seite und meldet stolz, dass sie leer ist.
+// A dedicated server for this: the server for this row deliberately serves
+// app.js EMPTY, because the other checks set state by hand. That would be
+// exactly the wrong thing here though - what's being checked is whether
+// the real app.js survives locked storage. Without the second server, this
+// check would measure an empty page and proudly report that it's empty.
 const echtServer = http.createServer((req, res) => {
   const pfad = req.url.split('?')[0];
   const file = pfad === '/' ? '/index.html' : pfad;
@@ -894,7 +900,7 @@ await gesperrt.addInitScript(() => {
 const fehlerImLauf = [];
 gesperrt.on('pageerror', (e) => fehlerImLauf.push(e.message));
 await gesperrt.goto(echtBasis + '/', { waitUntil: 'load' });
-await gesperrt.waitForTimeout(3200);   // boot() fragt erst die Datenbank
+await gesperrt.waitForTimeout(3200);   // boot() asks the database first
 const beiSperre = await gesperrt.evaluate(() => ({
   login: !document.querySelector('#login').hidden,
   text: (document.body.innerText || '').trim().length,
@@ -907,12 +913,13 @@ check('Und es steht ueberhaupt etwas auf der Seite',
 check('Ohne unbehandelten Fehler beim Laden',
   fehlerImLauf.length === 0, fehlerImLauf.join(' | '));
 
-// 2. Eine Antwort ohne Leerzeichen frisst den Betrag nicht mehr
+// 2. A response with no spaces no longer eats the amount
 // ---------------------------------------------------------------------------
-// Gemessen war: bei 320 px reichten 17 Zeichen, damit der Dollarbetrag aus dem
-// Balken faellt. Nicht gequetscht – weg, weil .opt-bar abschneidet.
-async function betragSichtbar(breite, text) {
-  const p = await browser.newPage({ viewport: { width: breite, height: 800 } });
+// What was measured: at 320 px, 17 characters were enough to push the
+// dollar amount out of the bar. Not squeezed - gone, because .opt-bar
+// clips.
+async function amountVisible(width, text) {
+  const p = await browser.newPage({ viewport: { width: width, height: 800 } });
   await p.goto(base + '/', { waitUntil: 'load' });
   const r = await p.evaluate((label) => {
     const $ = (x) => document.querySelector(x);
@@ -931,22 +938,22 @@ async function betragSichtbar(breite, text) {
     const bar = $('.opt-bar').getBoundingClientRect();
     return {
       innerhalb: num.right <= bar.right + 1 && num.left >= bar.left,
-      breite: Math.round(num.width),
-      seite: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      width: Math.round(num.width),
+      page: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     };
   }, text);
   await p.close();
   return r;
 }
 const adresse = '7xKm9QpLvRt2sYwE4nBc6HjA1dFgZuVmTqXrPyNb3Ks';
-for (const breite of [320, 375, 390]) {
-  const r = await betragSichtbar(breite, adresse);
-  check(`Bei ${breite} px bleibt der Betrag im Balken (44-Zeichen-Adresse)`,
-    r.innerhalb, `${r.breite} px breit`);
-  check(`Und die Seite rollt bei ${breite} px nicht seitlich`, r.seite);
+for (const width of [320, 375, 390]) {
+  const r = await amountVisible(width, adresse);
+  check(`Bei ${width} px bleibt der Betrag im Balken (44-Zeichen-Adresse)`,
+    r.innerhalb, `${r.width} px wide`);
+  check(`Und die Seite rollt bei ${width} px nicht seitlich`, r.page);
 }
-// Gegenprobe: Diese Messung muss ueberhaupt etwas messen koennen – mit einer
-// kuenstlich abgeschalteten Regel muss sie durchfallen.
+// Control: this measurement has to be able to measure something at all -
+// with the rule artificially disabled, it has to fail.
 const ohneRegel = await browser.newPage({ viewport: { width: 320, height: 800 } });
 await ohneRegel.goto(base + '/', { waitUntil: 'load' });
 const kaputt = await ohneRegel.evaluate((label) => {
@@ -971,30 +978,30 @@ const kaputt = await ohneRegel.evaluate((label) => {
 await ohneRegel.close();
 check('Gegenprobe: ohne die Regel faellt der Betrag heraus', !kaputt);
 
-// 3. "Send" bleibt bei 320 px im Bild
-const schmal = await browser.newPage({ viewport: { width: 320, height: 700 } });
-await schmal.goto(base + '/', { waitUntil: 'load' });
-const senden = await schmal.evaluate(() => {
+// 3. "Send" stays in frame at 320 px
+const narrow = await browser.newPage({ viewport: { width: 320, height: 700 } });
+await narrow.goto(base + '/', { waitUntil: 'load' });
+const senden = await narrow.evaluate(() => {
   const $ = (x) => document.querySelector(x);
   $('#login').hidden = true; $('#app').hidden = false;
   document.querySelectorAll('.pane').forEach((x) => { x.hidden = true; });
   $('#pane-dms').hidden = false; $('#dm-user').hidden = false;
-  const knopf = document.querySelector('#dm-form .btn-primary')
+  const button = document.querySelector('#dm-form .btn-primary')
     || document.querySelector('#dm-form button');
-  const r = knopf.getBoundingClientRect();
-  return { rechts: Math.round(r.right), fenster: window.innerWidth };
+  const r = button.getBoundingClientRect();
+  return { right: Math.round(r.right), fenster: window.innerWidth };
 });
-await schmal.close();
+await narrow.close();
 check('Bei 320 px liegt "Send" im Bild',
-  senden.rechts <= senden.fenster, `Kante bei ${senden.rechts} von ${senden.fenster} px`);
+  senden.right <= senden.fenster, `Kante bei ${senden.right} von ${senden.fenster} px`);
 
-// 4. Abstimmen geht mit der Tastatur
+// 4. Voting works with the keyboard
 // ---------------------------------------------------------------------------
-// Die Antwortzeile war ein nacktes <div>: kein Fokus, keine Taste, und eine
-// Vorlesestimme meldete sie als Text. Das ist die zentrale Handlung der Seite.
-const tastaturSeite = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-await tastaturSeite.goto(base + '/', { waitUntil: 'load' });
-const bedienbar = await tastaturSeite.evaluate(() => {
+// The answer row was a bare <div>: no focus, no keypress, and a screen
+// reader announced it as plain text. This is the site's central action.
+const keyboardPage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+await keyboardPage.goto(base + '/', { waitUntil: 'load' });
+const bedienbar = await keyboardPage.evaluate(() => {
   const $ = (x) => document.querySelector(x);
   $('#login').hidden = true; $('#app').hidden = false;
   document.querySelectorAll('.pane').forEach((x) => { x.hidden = true; });
@@ -1017,14 +1024,14 @@ const bedienbar = await tastaturSeite.evaluate(() => {
     zuGemeldet: zu.getAttribute('aria-disabled') === 'true',
   };
 });
-await tastaturSeite.close();
+await keyboardPage.close();
 check('Eine Antwort bekommt den Fokus', bedienbar.fokussierbar);
 check('Und meldet sich als Knopf', bedienbar.rolle === 'button', bedienbar.rolle);
 check('Und sagt, ob sie die eigene Stimme ist', bedienbar.gedrueckt !== null);
 check('Eine geschlossene Antwort liegt nicht im Tab-Lauf', bedienbar.zuNichtImTab);
 check('Und meldet sich als nicht bedienbar', bedienbar.zuGemeldet);
-// Im Quelltext: Enter und Leertaste muessen wirklich verdrahtet sein. Die
-// Messung oben zeigt nur, dass das Element den Fokus nimmt.
+// In the source: Enter and Space really have to be wired up. The
+// measurement above only shows that the element takes focus.
 const appJsText = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 check("Enter und Leertaste sind am '.opt' verdrahtet",
   /\$\$\('\.opt'[\s\S]{0,900}addEventListener\('keydown'/.test(appJsText));

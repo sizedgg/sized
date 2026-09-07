@@ -1,23 +1,22 @@
 // ============================================================================
-// Wie in der Kopfzeile steht, WESSEN Raum das hier ist
+// How the header shows WHOSE room this is
 //
-// Das Problem: In "sized.gg" kommt Ansem nicht vor. Oben steht nur die Marke,
-// und wer über einen geteilten Abstimmungslink hereinkommt, erfährt nirgends,
-// wem der Raum gehört.
+// The problem: Ansem doesn't appear anywhere in "sized.gg". Only the brand
+// shows up at the top, and anyone arriving through a shared poll link
+// learns nowhere whose room this is.
 //
-// Die zweite Anforderung macht es interessanter: Es soll später mehr Räume
-// geben können. Damit ist die richtige Aussage nicht "SIZED ist Ansem",
-// sondern "SIZED, und dies ist Ansems Raum" – der Raum ist ein Platzhalter,
-// kein Teil der Marke. Die Entwürfe unterscheiden sich vor allem darin, ob man
-// ihnen das ansieht.
+// The second requirement makes it more interesting: there should be room
+// for more rooms later. So the right statement isn't "SIZED is Ansem" but
+// "SIZED, and this is Ansem's room" - the room is a placeholder, not part
+// of the brand. The drafts mainly differ in whether that shows.
 //
-// Gezeichnet wird mit der echten Kopfzeile aus index.html und der echten
-// styles.css. Nachgebaut wird nichts.
+// Drawn with the real header from index.html and the real styles.css.
+// Nothing here is rebuilt.
 //
-// Und jeder Entwurf wird ZWEIMAL gezeigt: auf dem Schreibtisch und auf 375 px.
-// Die Kopfzeile ist die engste Stelle der Seite – dort stehen Marke, zwei
-// Reiter, Kürzel, Betrag und der Abmeldeknopf nebeneinander. Ein Entwurf, der
-// nur auf dem großen Bild gut aussieht, ist keiner.
+// And every draft is shown TWICE: on desktop and at 375px. The header is
+// the tightest spot on the page - brand, two tabs, handle, balance and the
+// logout button all sit next to each other there. A draft that only looks
+// good in the big picture isn't one.
 //
 //   node scripts/vorschau-raum.mjs
 // ============================================================================
@@ -32,10 +31,10 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 const HANDLE = '@blknoiz06';
 
-// Der Zustand nach dem Anmelden, als normaler Nutzer – nicht als Ansem: Bei
-// ihm steht oben rechts sein Profilbild, und zwei Bilder desselben Gesichts in
-// einer Zeile wären ein eigener Fall. Wer den Hinweis braucht, ist ohnehin
-// nicht Ansem.
+// The state after logging in, as a normal user - not as Ansem: for him,
+// his own profile picture sits top right, and two images of the same face
+// in one line would be its own separate case. Whoever needs the hint
+// isn't Ansem anyway.
 const FIXTURE = `
   document.querySelector('#login').hidden = true;
   document.querySelector('#app').hidden = false;
@@ -50,13 +49,13 @@ const FASSUNGEN = [
   {
     nr: 1, name: 'Wie es jetzt ist',
     was: 'Nur die Marke. Wessen Raum das ist, steht nirgends.',
-    bau: '', css: '',
+    build: '', css: '',
   },
   {
     nr: 2, name: 'Wort neben der Marke',
     was: 'Ein kleines "ansem" hinter dem Namen, durch einen Punkt getrennt. '
        + 'Kostet keine Höhe und kein Bild.',
-    bau: `document.querySelector('.topbar > .brand-link')
+    build: `document.querySelector('.topbar > .brand-link')
             .insertAdjacentHTML('afterend',
               '<span class="raum-wort">· ansem</span>');`,
     css: `.raum-wort { justify-self: start; color: var(--dim); font-size: .8rem;
@@ -68,7 +67,7 @@ const FASSUNGEN = [
     nr: 3, name: 'Bild und Name als Schild',
     was: 'Ein Etikett neben der Marke, mit Ansems Bild. So lesen Leute auf X '
        + 'Identität – man erkennt es, ohne zu lesen.',
-    bau: `document.querySelector('.topbar > .brand-link')
+    build: `document.querySelector('.topbar > .brand-link')
             .insertAdjacentHTML('afterend',
               '<span class="raum-schild"><span class="raum-bild"></span>ansem</span>');`,
     css: `.raum-schild {
@@ -87,7 +86,7 @@ const FASSUNGEN = [
     nr: 4, name: 'Nur das Bild',
     was: 'Ohne Wort, nur das Gesicht neben der Marke. Am sparsamsten – und '
        + 'am unklarsten, solange niemand weiss, wer das ist.',
-    bau: `document.querySelector('.topbar > .brand-link')
+    build: `document.querySelector('.topbar > .brand-link')
             .insertAdjacentHTML('afterend', '<span class="raum-bild solo"></span>');`,
     css: `.raum-bild.solo { justify-self: start; width: 24px; height: 24px;
             border-radius: 50%; background: url('ansem.jpg') center/cover no-repeat;
@@ -96,12 +95,12 @@ const FASSUNGEN = [
           .topbar > .tabs { justify-self: center; }`,
   },
   {
-    nr: 5, name: 'Eigene Zeile unter der Kopfzeile',
-    was: 'Ein schmaler Streifen darunter, über die ganze Breite: Bild, Name '
+    nr: 5, name: 'Eigene Zeile under der Kopfzeile',
+    was: 'Ein narrower Streifen darunter, über die ganze Breite: Bild, Name '
        + 'und Konto. Drängelt sich nicht in die enge Zeile und sagt am '
        + 'deutlichsten, dass da auch ein anderer Raum stehen könnte. Kostet '
        + 'aber Höhe, auf dem Handy am meisten.',
-    bau: `document.querySelector('.topbar').insertAdjacentHTML('afterend',
+    build: `document.querySelector('.topbar').insertAdjacentHTML('afterend',
             '<div class="raum-leiste">' +
               '<span class="raum-bild"></span>' +
               '<strong>Ansem\\'s room</strong>' +
@@ -119,10 +118,10 @@ const FASSUNGEN = [
   },
   {
     nr: 6, name: 'Statt der Marke',
-    was: 'Gegenprobe: Der Raum steht oben, die Marke klein darunter. Dreht '
+    was: 'Gegenprobe: Der Raum steht peek, die Marke klein darunter. Dreht '
        + 'die Rangfolge um – der Raum ist die Seite, SIZED nur, worauf sie '
        + 'läuft.',
-    bau: `const b = document.querySelector('.topbar > .brand-link');
+    build: `const b = document.querySelector('.topbar > .brand-link');
           b.classList.add('umgedreht');
           b.insertAdjacentHTML('afterbegin',
             '<span class="raum-bild"></span>');
@@ -149,17 +148,17 @@ const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascrip
 const server = http.createServer((q, res) => {
   let pfad = decodeURIComponent(q.url.split('?')[0]);
   if (pfad === '/') pfad = '/index.html';
-  const datei = path.join(root, 'public', pfad);
-  if (!datei.startsWith(path.join(root, 'public')) || !fs.existsSync(datei)) {
+  const file = path.join(root, 'public', pfad);
+  if (!file.startsWith(path.join(root, 'public')) || !fs.existsSync(file)) {
     return res.writeHead(404).end('');
   }
-  // app.js bleibt aus: Es würde sofort versuchen, sich anzumelden. Die
-  // Zustände setzt die Fixture.
+  // app.js stays out: it would immediately try to log in. The fixture
+  // sets the states instead.
   if (pfad === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('');
   }
-  res.writeHead(200, { 'content-type': TYPEN[path.extname(datei)] ?? 'application/octet-stream' })
-     .end(fs.readFileSync(datei));
+  res.writeHead(200, { 'content-type': TYPEN[path.extname(file)] ?? 'application/octet-stream' })
+     .end(fs.readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -167,38 +166,38 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
 
-async function schuss(f, breite) {
-  const seite = await browser.newPage({
-    viewport: { width: breite, height: 340 }, deviceScaleFactor: 2,
+async function shoot(f, width) {
+  const page = await browser.newPage({
+    viewport: { width: width, height: 340 }, deviceScaleFactor: 2,
   });
-  await seite.goto(base);
-  if (f.css) await seite.addStyleTag({ content: f.css });
-  await seite.evaluate(FIXTURE);
-  if (f.bau) await seite.evaluate(f.bau);
+  await page.goto(base);
+  if (f.css) await page.addStyleTag({ content: f.css });
+  await page.evaluate(FIXTURE);
+  if (f.build) await page.evaluate(f.build);
   if (f.text) {
-    await seite.evaluate((t) => {
+    await page.evaluate((t) => {
       const b = document.querySelector('.topbar > .brand-link');
       for (const n of b.childNodes) if (n.nodeType === 3) n.textContent = t;
     }, f.text);
   }
-  await seite.waitForTimeout(150);
+  await page.waitForTimeout(150);
 
-  // Nur die Kopfzeile plus etwas Luft darunter – der Rest der Seite ist hier
-  // nicht die Frage.
-  const hoehe = await seite.evaluate(() => {
+  // Just the header plus a bit of room below it - the rest of the page
+  // isn't the question here.
+  const height = await page.evaluate(() => {
     const t = document.querySelector('.topbar').getBoundingClientRect();
     const l = document.querySelector('.raum-leiste')?.getBoundingClientRect();
     return Math.round((l ? l.bottom : t.bottom) + 14);
   });
-  const puffer = await seite.screenshot({ clip: { x: 0, y: 0, width: breite, height: hoehe } });
-  await seite.close();
+  const puffer = await page.screenshot({ clip: { x: 0, y: 0, width: width, height: height } });
+  await page.close();
   return `data:image/png;base64,${puffer.toString('base64')}`;
 }
 
 fs.mkdirSync(path.join(root, 'preview'), { recursive: true });
 const bilder = [];
 for (const f of FASSUNGEN) {
-  bilder.push({ ...f, gross: await schuss(f, 900), klein: await schuss(f, 375) });
+  bilder.push({ ...f, big: await shoot(f, 900), klein: await shoot(f, 375) });
 }
 
 const blatt = await browser.newPage({ viewport: { width: 1180, height: 1600 }, deviceScaleFactor: 2 });
@@ -212,17 +211,17 @@ await blatt.setContent(`
       max-width: 66rem; }
   .paar { display: flex; gap: 14px; align-items: flex-start; }
   .paar img { display: block; border-radius: 8px; border: 1px solid #23232a; }
-  .gross { width: 760px; }
+  .big { width: 760px; }
   .klein { width: 317px; }
-  .marke { font-size: 10px; color: #6b6b73; margin: 0 0 3px; }
+  .marker { font-size: 10px; color: #6b6b73; margin: 0 0 3px; }
 </style>
 ${bilder.map((b) => `
   <div class="fall">
     <h2>${b.nr}. ${b.name}</h2>
     <p>${b.was}</p>
     <div class="paar">
-      <div><p class="marke">Schreibtisch</p><img class="gross" src="${b.gross}"></div>
-      <div><p class="marke">375 px</p><img class="klein" src="${b.klein}"></div>
+      <div><p class="marker">Schreibtisch</p><img class="big" src="${b.big}"></div>
+      <div><p class="marker">375 px</p><img class="klein" src="${b.klein}"></div>
     </div>
   </div>`).join('')}
 `);

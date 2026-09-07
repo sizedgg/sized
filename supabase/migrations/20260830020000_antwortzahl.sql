@@ -1,61 +1,60 @@
 -- ============================================================================
--- Hoechstens vier Antworten je Abstimmung
+-- At most four options per poll
 --
 -- ----------------------------------------------------------------------------
--- Warum vier
+-- Why four
 --
--- Der Massstab ist wieder das Bild, das nach draussen geht – diesmal aber nicht
--- sein Inhalt, sondern sein FORMAT.
+-- The yardstick is again the image that goes out into the world - but this
+-- time not its content, its FORMAT.
 --
--- X zeigt ein Bild in der Zeitleiste bis 16:9 ungeschnitten und beschneidet
--- alles Hoehere oben und unten. Die Karte waechst mit jeder Antwort um eine
--- Zeile. Gemessen bei einzeiliger Frage (eine mehrzeilige drueckt die Zahl
--- weiter nach unten):
+-- X shows an image in the timeline uncropped up to 16:9 and crops anything
+-- taller at top and bottom. The card grows by one line with every option.
+-- Measured with a single-line question (a multi-line one pushes the number
+-- further down):
 --
---        4 Antworten   1,78 – genau 16:9, nichts faellt weg
---        5 Antworten   1,74 – ein schmaler Streifen
---        6 Antworten   1,58
---       10 Antworten   1,14 – fast quadratisch, ein gutes Stueck ist weg
+--        4 options    1.78 - exactly 16:9, nothing is lost
+--        5 options    1.74 - a narrow strip
+--        6 options    1.58
+--       10 options    1.14 - nearly square, a good chunk is gone
 --
--- Vier ist damit die letzte Zahl, bei der das gepostete Bild vollstaendig
--- ankommt. Dass Xs eigene Umfrage ebenfalls vier erlaubt, ist derselbe Grund
--- und keine Nachahmung.
+-- Four is therefore the last number at which the posted image arrives
+-- whole. That X's own polls also allow four is the same reason, not
+-- imitation.
 --
--- Es gibt einen zweiten Grund, der nichts mit dem Bild zu tun hat: Hier wird
--- nach Bestand gewichtet. Je mehr Antworten, desto weiter verteilt sich das
--- Gewicht, und desto eher entscheidet eine einzelne grosse Wallet. Bei zehn
--- Antworten sagt ein Ergebnis kaum noch etwas.
---
--- ----------------------------------------------------------------------------
--- Warum ein Trigger und kein check
---
--- Ein check prueft eine ZEILE. Die Zahl der Antworten steht aber in keiner
--- Zeile – sie ergibt sich aus den anderen Zeilen derselben Abstimmung. Also
--- muss beim Einfuegen gezaehlt werden.
---
--- Und warum ueberhaupt in der Datenbank, wo doch nur Ansem Abstimmungen
--- anlegt: Das Formular ist der Browser, und der Browser ist der Teil, den man
--- umgehen kann. PostgREST nimmt jeden insert an, der durch die Zeilenregeln
--- kommt. Wer das Anlegen von Hand aufruft, koennte fuenfzig Antworten anhaengen
--- und damit jede Karte unbrauchbar machen, die diese Abstimmung zeigt.
---
--- Der Trigger laeuft AFTER INSERT und pro ANWEISUNG, nicht pro Zeile: Die App
--- legt alle Antworten in EINEM insert an. Ein before-Trigger pro Zeile saehe
--- die eigene Zeile noch nicht mitgezaehlt und muesste umstaendlich rechnen;
--- nach der Anweisung steht die fertige Zahl da. Der Abbruch dreht den ganzen
--- insert zurueck – ein halb angelegtes Ergebnis kann also nicht entstehen.
+-- There is a second reason that has nothing to do with the image: this
+-- weights by holdings. The more options, the more spread out the weight,
+-- and the more likely a single large wallet decides it. At ten options a
+-- result barely says anything anymore.
 --
 -- ----------------------------------------------------------------------------
--- Bestehende Abstimmungen
+-- Why a trigger and not a check
 --
--- Es kann Testdaten mit mehr als vier Antworten geben. Sie werden NICHT
--- angefasst: An einer Antwort haengen Stimmen, und eine zu loeschen hiesse, ein
--- Ergebnis nachtraeglich zu aendern. Der Trigger greift nur beim Anlegen; alte
--- Abstimmungen laufen weiter wie bisher. Die Karte kommt damit zurecht, sie
--- wird nur hoeher.
+-- A check validates a ROW. But the number of options lives in no single
+-- row - it follows from the other rows of the same poll. So it has to be
+-- counted at insert time.
 --
--- Wie viele es sind, steht als Notiz im Protokoll – wer sie loswerden will,
--- loescht die Abstimmung als Ganzes.
+-- And why in the database at all, when only Ansem creates polls: the form
+-- is the browser, and the browser is the part that can be bypassed.
+-- PostgREST accepts any insert that passes the row policies. Whoever calls
+-- the creation directly could attach fifty options and make any card that
+-- shows this poll unusable.
+--
+-- The trigger runs AFTER INSERT and per STATEMENT, not per row: the app
+-- creates all options in ONE insert. A before-trigger per row would not
+-- yet see its own row counted and would have to compute around that;
+-- after the statement, the finished number is already there. The abort
+-- rolls back the whole insert - so a half-created result cannot occur.
+--
+-- ----------------------------------------------------------------------------
+-- Existing polls
+--
+-- There can be test data with more than four options. It is NOT touched:
+-- votes hang off an option, and deleting one would mean changing a result
+-- after the fact. The trigger only fires on creation; old polls keep
+-- running as before. The card copes with that, it just grows taller.
+--
+-- How many there are is noted in the log - whoever wants to get rid of
+-- them deletes the poll as a whole.
 -- ============================================================================
 
 do $$
@@ -80,10 +79,10 @@ as $$
 declare
   zuviel bigint;
 begin
-  -- Nur die Abstimmungen ansehen, die in DIESER Anweisung Antworten bekommen
-  -- haben. Ohne das waere es bei jedem insert eine Zaehlung ueber die ganze
-  -- Tabelle, und bestehende Abstimmungen mit mehr Antworten wuerden jeden
-  -- weiteren insert blockieren, auch einen fuer eine andere Abstimmung.
+  -- Only look at the polls that received options in THIS statement.
+  -- Without that, every insert would count over the whole table, and
+  -- existing polls with more options would block every further insert,
+  -- even one for a different poll.
   select count(*) into zuviel
     from (
       select o.poll_id
@@ -94,7 +93,7 @@ begin
     ) x;
 
   if zuviel > 0 then
-    -- Englisch: Die Meldung landet als Toast in der Oberflaeche.
+    -- English: the message ends up as a toast in the interface.
     raise exception 'A poll can have at most 4 options';
   end if;
   return null;

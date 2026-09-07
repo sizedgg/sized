@@ -1,59 +1,61 @@
 // ============================================================================
-// Vorschau: die Helligkeit der Sprechblasen in den DMs
+// Preview: the brightness of the speech bubbles in DMs
 //
-// Vierte Runde: das gedaempfte X-Blau in mehreren Staerken. Die Richtung
-// steht, es geht nur noch darum, wie weit das Blau in den Seitengrund
-// gemischt wird. Die eingehende Blase bleibt in allen Fassungen gleich –
-// sonst vergleicht man zwei Aenderungen auf einmal.
+// Fourth round: the muted X-blue at several strengths. The direction is
+// settled; the only open question now is how far the blue gets mixed into
+// the page background. The incoming bubble stays the same across all
+// versions - otherwise you're comparing two changes at once.
 //
-// Dritte Runde: einmal so, wie X seine DMs faerbt – die eigene Blase blau,
-// die eingehende dunkelgrau, der Text weiss. Die beiden Toene sind aus einem
-// Bildschirmfoto von X abgemessen und nicht aus dem Gedaechtnis: die eigene
-// Blase #4b9aea, die eingehende #212327, der Text darauf #ffffff und #e7e9ea,
-// der Grund dahinter reines Schwarz.
+// Third round: one version matching how X colors its DMs - your own bubble
+// blue, the incoming one dark gray, the text white. Both tones were measured
+// from a screenshot of X, not from memory: your own bubble #4b9aea, the
+// incoming one #212327, the text on them #ffffff and #e7e9ea, the
+// background behind it pure black.
 //
-// Zwei Dinge, die dabei auffallen und die man wissen sollte, bevor man es
-// uebernimmt: X setzt auf REINES Schwarz, die Seite hier auf #0a0b0f – das
-// Blau steht dort also einen Hauch weniger hart. Und die Seite hat sonst
-// nirgends einen gesaettigten Farbton; Violett ist ausdruecklich rausgeflogen.
-// Ein Blau nur in den DMs waere die einzige Farbe im ganzen Haus.
+// Two things stand out here, worth knowing before adopting this: X uses
+// PURE black, this page uses #0a0b0f - so the blue reads a touch less harsh
+// here. And the page otherwise has no saturated color anywhere; purple was
+// explicitly thrown out. A blue only in the DMs would be the only color in
+// the whole house.
 //
-// Zweite Runde. In der ersten ging es um die EINGEHENDE Blase, die zu dunkel
-// war; sie steht seitdem auf --line, der hellsten Flaeche der Palette. Jetzt
-// geht es um die EIGENE: Die ist nur umrissen und traegt den Seitengrund, also
-// gar keine Flaeche – und neben einer hellen Gegenueberliegenden liest sie
-// sich als Loch statt als Blase.
+// Second round. The first was about the INCOMING bubble, which was too
+// dark; it's been on --line since, the brightest surface in the palette.
+// Now it's about YOUR OWN: that one is only outlined and carries the page
+// background, so no surface at all - and next to a bright counterpart it
+// reads as a hole rather than a bubble.
 //
-// Alle Vorschlaege unten fuellen sie deshalb. Die Frage ist nur noch, womit.
+// So all the proposals below fill it in. The only remaining question is
+// with what.
 //
-// Die Schwierigkeit dahinter ist dieselbe wie im Polls-Tab, und sie ist der
-// Grund, warum die Auswahl hier so aussieht, wie sie aussieht: Alle Flaechen
-// der Palette liegen innerhalb von 1,4:1 zueinander.
+// The difficulty behind this is the same as in the Polls tab, and it's the
+// reason the selection here looks the way it does: every surface in the
+// palette sits within 1.4:1 of every other.
 //
 //   --bg    #0a0b0f
-//   --bg-1  #101218   Schritt 1,05:1
-//   --bg-2  #161923   Schritt 1,07:1
-//   --bg-3  #1d212d   Schritt 1,09:1
-//   --line  #262b39   Schritt 1,14:1
+//   --bg-1  #101218   step 1.05:1
+//   --bg-2  #161923   step 1.07:1
+//   --bg-3  #1d212d   step 1.09:1
+//   --line  #262b39   step 1.14:1
 //
-// Zwei benachbarte Stufen als die beiden Blasen zu nehmen bringt also fast
-// nichts – der Unterschied liegt unter dem, was als Absicht gelesen wird. Und
-// seit die eingehende Blase auf --line steht, ist das obere Ende der Palette
-// belegt: Fuer die eigene bleibt nur, wie weit sie darunter sitzt.
+// So taking two neighboring steps as the two bubbles buys almost nothing -
+// the difference sits below what reads as intentional. And since the
+// incoming bubble sits on --line, the top of the palette is already spoken
+// for: for your own bubble, all that's left is how far below it sits.
 //
-// Deshalb sind die Vorschlaege von drei verschiedenen Sorten:
+// So the proposals come in three different kinds:
 //
-//   * eine Palettenstufe darunter (1, 2)
-//   * gar kein Unterschied mehr, die Seite traegt ihn allein (3)
-//   * ein Ton ZWISCHEN den Stufen, ueber einen weissen Schleier – so macht es
-//     das Zitat in der Blase schon (4)
-//   * oder die beiden vertauschen, damit die eigene die hellere ist (5)
+//   * one palette step below (1, 2)
+//   * no difference at all anymore, the page carries it alone (3)
+//   * a tone BETWEEN the steps, via a white veil - the same way the quote
+//     inside the bubble already does it (4)
+//   * or swap the two, so your own bubble is the brighter one (5)
 //
-// Jede Fassung wird nachgerechnet: der Text auf beiden Blasen, der Abstand
-// der Blasen zueinander, und der Abstand jeder Blase zum Grund dahinter. Eine
-// Blase, die sich vom Grund nicht absetzt, ist keine Blase mehr.
+// Every version gets checked by the numbers: the text on both bubbles, the
+// gap between the two bubbles, and the gap between each bubble and the
+// background behind it. A bubble that doesn't stand out from the
+// background isn't a bubble anymore.
 //
-// Erzeugt preview/dmblasen-*.png und preview/dmblasen-uebersicht.png
+// Produces preview/dmblasen-*.png and preview/dmblasen-uebersicht.png
 //   node scripts/vorschau-dm-blasen.mjs
 // ============================================================================
 
@@ -73,7 +75,7 @@ const sn = (v, b) => {
   if (i < 0 || j < 0) throw new Error(`Nicht gefunden in app.js: ${v}`);
   return appJs.slice(i, j);
 };
-const zahlen = sn('const nfCompact =', '/* Ausgeschrieben statt');
+const numbers = sn('const nfCompact =', 'const nfGanz = new Intl.NumberFormat(\'en-US\', { maximumFractionDigits: 0 });');
 const escFn = sn('const esc = (s) =>', '\n\n');
 const linkify = sn('const LINK_MUSTER =', '\nfunction toast(');
 const tage = sn('const tagBeginn =', 'const handleOf');
@@ -83,54 +85,54 @@ const a = html.indexOf('<main id="pane-dms"');
 const b = html.indexOf('</main>', a);
 const pane = html.slice(a, b + 7).replace('class="pane" hidden', 'class="pane"');
 
-// --- Farbrechnung ----------------------------------------------------------
+// --- Color math --------------------------------------------------------------
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lum = ([r, g, b]) => { const f = (c) => (c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
 const kon = (a2, b2) => { const [x, y] = [lum(a2), lum(b2)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
-const hol = (n) => new RegExp(`--${n}:\\s*(#[0-9a-f]{6})`, 'i').exec(css)[1];
+const get = (n) => new RegExp(`--${n}:\\s*(#[0-9a-f]{6})`, 'i').exec(css)[1];
 const mix = (v, al, h) => v.map((c, i) => Math.round(al * c + (1 - al) * h[i]));
-const schleier = (anteil, grund) => mix([255, 255, 255], anteil, grund);
+const veil = (anteil, grund) => mix([255, 255, 255], anteil, grund);
 
-const BG = hex(hol('bg')), BG1 = hex(hol('bg-1')), BG2 = hex(hol('bg-2'));
-const BG3 = hex(hol('bg-3')), LINE = hex(hol('line')), DIM = hex(hol('dim'));
+const BG = hex(get('bg')), BG1 = hex(get('bg-1')), BG2 = hex(get('bg-2'));
+const BG3 = hex(get('bg-3')), LINE = hex(get('line')), DIM = hex(get('dim'));
 
-// Im Verlauf des Nutzers liegt alles auf dem Seitengrund.
+// In the user's own conversation, everything sits on the page background.
 const GRUND = BG;
 
-// Aus dem Bildschirmfoto abgemessen, nicht geschaetzt.
+// Measured from the screenshot, not estimated.
 const X_BLAU = hex('#4b9aea');
-const TEXT = hex(hol('text'));
+const TEXT = hex(get('text'));
 const hx = (a2) => '#' + a2.map((v) => v.toString(16).padStart(2, '0')).join('');
 
-// Die eingehende Blase bleibt in allen Fassungen dieselbe – sonst vergleicht
-// man zwei Aenderungen auf einmal und weiss am Ende nicht, welche gewirkt hat.
-const EIN = { css: 'background: var(--line);', farbe: LINE, rand: null, text: DIM };
+// The incoming bubble stays the same across all versions - otherwise you're
+// comparing two changes at once and end up not knowing which one worked.
+const EIN = { css: 'background: var(--line);', color: LINE, margin: null, text: DIM };
 
-const stufe = (anteil, text = TEXT, name = null, hinweis = '') => {
+const tier = (anteil, text = TEXT, name = null, hinweis = '') => {
   const f = mix(X_BLAU, anteil, GRUND);
   return {
-    datei: `blau-${Math.round(anteil * 100)}${text === DIM ? '-dim' : ''}`,
+    file: `blau-${Math.round(anteil * 100)}${text === DIM ? '-dim' : ''}`,
     name: name ?? `${Math.round(anteil * 100)} % Blau`,
     ein: EIN,
     eig: { css: `background: ${hx(f)}; border-color: ${hx(f)}; color: ${text === DIM ? 'var(--dim)' : 'var(--text)'};`,
-           farbe: f, rand: f, text },
+           color: f, margin: f, text },
     hinweis: `${hinweis}${hinweis ? ' ' : ''}Gemischt: ${hx(f)}.`,
   };
 };
 
 const FASSUNGEN = [
-  stufe(.28, TEXT, '28 % – sehr leise',
+  tier(.28, TEXT, '28 % – sehr leise',
     'Kaum mehr als ein kühler Hauch auf dem Seitengrund. Wer nicht danach sucht, hält es für Grau.'),
-  stufe(.35, TEXT, '35 %',
+  tier(.35, TEXT, '35 %',
     'Als Farbe erkennbar, ohne dass sie sich meldet.'),
-  stufe(.42, TEXT, '42 % – die Fassung von vorhin',
+  tier(.42, TEXT, '42 % – die Fassung von vorhin',
     'Der Stand, den du gewählt hast. Alles darunter und darüber ist zum Vergleich da.'),
-  stufe(.55, TEXT, '55 %',
+  tier(.55, TEXT, '55 %',
     'Deutlich blau. Die Blase wird zum farbigen Element der Seite statt zu einer Fläche mit Stich.'),
-  stufe(.70, TEXT, '70 % – nahe am vollen Blau',
+  tier(.70, TEXT, '70 % – nahe am vollen Blau',
     'Fast das X-Blau. Hier fängt es an, gegen den fast schwarzen Rest der Seite zu stehen statt in ihr zu liegen.'),
-  stufe(.42, DIM, '42 %, Text wie im Chat',
+  tier(.42, DIM, '42 %, Text wie im Chat',
     'Dieselbe Fläche wie Fassung 2, aber der Text bleibt --dim statt --text. Zeigt, wie viel von der Wirkung an der Fläche hängt und wie viel an der helleren Schrift darauf.'),
 ];
 
@@ -140,22 +142,22 @@ console.log('  ' + 'Fassung'.padEnd(30) + 'Text ein.'.padEnd(11) + 'Text eig.'.p
 console.log('  ' + ' '.repeat(52) + 'einander'.padEnd(12) + 'Grund'.padEnd(10) + 'Grund');
 
 for (const f of FASSUNGEN) {
-  f.tEin = kon(f.ein.text ?? DIM, f.ein.farbe);
-  f.tEig = kon(f.eig.text ?? DIM, f.eig.farbe);
-  f.zwischen = kon(f.ein.farbe, f.eig.farbe);
-  f.einGrund = f.ein.rand ? kon(f.ein.rand, GRUND) : kon(f.ein.farbe, GRUND);
-  f.eigGrund = f.eig.rand ? kon(f.eig.rand, GRUND) : kon(f.eig.farbe, GRUND);
+  f.tEin = kon(f.ein.text ?? DIM, f.ein.color);
+  f.tEig = kon(f.eig.text ?? DIM, f.eig.color);
+  f.zwischen = kon(f.ein.color, f.eig.color);
+  f.einGrund = f.ein.margin ? kon(f.ein.margin, GRUND) : kon(f.ein.color, GRUND);
+  f.eigGrund = f.eig.margin ? kon(f.eig.margin, GRUND) : kon(f.eig.color, GRUND);
   f.knapp = f.tEin < 4.5 || f.tEig < 4.5;
   console.log('  ' + f.name.padEnd(30)
     + `${f.tEin.toFixed(1)}:1`.padEnd(11) + `${f.tEig.toFixed(1)}:1`.padEnd(11)
     + `${f.zwischen.toFixed(2)}:1`.padEnd(12)
     + `${f.einGrund.toFixed(2)}:1`.padEnd(10) + `${f.eigGrund.toFixed(2)}:1`
-    + (f.knapp ? '   ACHTUNG: Text unter 4,5:1' : ''));
+    + (f.knapp ? '   ACHTUNG: Text under 4,5:1' : ''));
 }
 console.log('\n  "zu Grund" ist der Abstand zum Seitengrund – bei umrissenen Blasen'
   + '\n  gerechnet ueber den Rand, denn der traegt dort die Form.\n');
 
-// --- Bilder ----------------------------------------------------------------
+// --- Images ------------------------------------------------------------
 const std = (h) => Date.now() - h * 3600e3, min = (m) => Date.now() - m * 60_000;
 const DM = [
   { id: 1, from_admin: false, body: 'hey — congrats on the launch', created_at: std(30) },
@@ -180,25 +182,25 @@ fs.mkdirSync(ausgabe, { recursive: true });
 
 const bilder = [];
 for (const f of FASSUNGEN) {
-  const seite = await browser.newPage({ viewport: { width: 720, height: 620 }, deviceScaleFactor: 2 });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  // Nur die beiden Deklarationen werden ersetzt – der Rest des Blattes bleibt echt.
-  await seite.addStyleTag({ content: `
+  const page = await browser.newPage({ viewport: { width: 720, height: 620 }, deviceScaleFactor: 2 });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  // Only these two declarations get replaced - the rest of the stylesheet stays real.
+  await page.addStyleTag({ content: `
     .msg.dm { ${f.ein.css} }
     .msg.dm.mine { ${f.eig.css} }` });
-  await seite.addScriptTag({ content: `
+  await page.addScriptTag({ content: `
     const state = { me: { isAdmin: false }, dmMessages: [], dmRepliesAvailable: true };
-    ${zahlen}${escFn}${linkify}${tage}${dmBau}
+    ${numbers}${escFn}${linkify}${tage}${dmBau}
     document.querySelector('#dm-user').hidden = false;
     document.querySelector('#dm-admin').hidden = true;
     state.dmMessages = ${JSON.stringify(DM)};
     document.querySelector('#dm-thread').innerHTML = dmListeHtml(state.dmMessages);
     document.querySelector('#dm-thread').scrollTop = 1e6;` });
-  await seite.mouse.move(0, 0);
-  await seite.waitForTimeout(300);
-  const bild = await seite.locator('#dm-user').screenshot();
-  await seite.close();
-  fs.writeFileSync(path.join(ausgabe, `dmblasen-${f.datei}.png`), bild);
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(300);
+  const bild = await page.locator('#dm-user').screenshot();
+  await page.close();
+  fs.writeFileSync(path.join(ausgabe, `dmblasen-${f.file}.png`), bild);
   bilder.push('data:image/png;base64,' + bild.toString('base64'));
 }
 
@@ -207,7 +209,7 @@ const blatt = `<!doctype html><meta charset="utf-8"><style>${css}</style>
   body { background: #07080b; padding: 30px; }
   h1 { font-size: 1.15rem; margin: 0 0 .25rem; }
   .lead { margin: 0 0 1.7rem; font-size: .86rem; color: var(--dim); max-width: 112ch; line-height: 1.6; }
-  .reihe { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 26px; align-items: start; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 26px; align-items: start; }
   h2 { margin: 0 0 .1rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .nr { display: inline-flex; align-items: center; justify-content: center;
         width: 1.5rem; height: 1.5rem; border-radius: 999px; background: var(--bg-3);
@@ -219,14 +221,14 @@ const blatt = `<!doctype html><meta charset="utf-8"><style>${css}</style>
   .buehne { background: #16181c; padding: 10px; border-radius: 12px; }
 </style>
 <h1>Wie hell die Sprechblasen sind</h1>
-<p class="lead">In jedem Bild stehen die <b>eingehenden</b> Nachrichten links und die <b>eigenen</b> rechts.
-Alle Fassungen zeigen dasselbe X-Blau (<b>#4b9aea</b>), unterschiedlich weit in den Seitengrund gemischt.
+<p class="lead">In jedem Bild stehen die <b>eingehenden</b> Nachrichten left und die <b>eigenen</b> right.
+Alle Fassungen show dasselbe X-Blau (<b>#4b9aea</b>), unterschiedlich far in den Seitengrund gemischt.
 Die eingehende Blase bleibt überall gleich – sonst vergleicht man zwei Änderungen auf einmal.
 Die Seite hat sonst nirgends einen gesättigten Farbton – Violett ist ausdrücklich rausgeflogen –, ein Blau nur
 in den DMs wäre also die einzige Farbe im ganzen Haus. Dafür löst es ein Problem, an dem alle bisherigen
 Fassungen scheiterten: Zwischen dem dunkelsten und dem hellsten Grau der Seite liegen 1,4:1, und zwei Grautöne
 so dicht beieinander liest niemand als Absicht. Eine Farbe braucht diesen Abstand nicht.</p>
-<div class="reihe">
+<div class="row">
 ${FASSUNGEN.map((f, i) => `
 <div>
   <h2><span class="nr">${i}</span>${f.name}

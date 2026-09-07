@@ -1,28 +1,28 @@
 // ============================================================================
-// Vorschaubild: Wie weiß ist "etwas weißer"?
+// Preview image: how white is "a bit whiter"?
 //
-// Entschieden ist: kein zweiter Umriss um das Feld herum, kein Schein. Nur der
-// Rahmen, den das Feld ohnehin hat, wird beim Tippen heller.
+// Decided already: no second outline around the field, no glow. Only the
+// border the field already has gets brighter while typing.
 //
-// Offen ist der Wert. Und das ist bei einem Rahmen weniger beliebig als bei
-// Text, weil er nur 1 px breit ist: Ein mittleres Grau, das als Fläche
-// deutlich wäre, verschwindet als Haarlinie fast. Zu wenig Unterschied heißt
-// hier nicht "dezent", sondern "man sieht nicht, in welchem Feld man tippt" –
-// und im "New poll"-Kasten stehen drei bis zehn gleich aussehende Felder
-// untereinander.
+// The value is still open. And for a border that's less arbitrary than for
+// text, because it's only 1px wide: a mid gray that would be plainly
+// visible as a fill nearly disappears as a hairline. Too little difference
+// here doesn't mean "subtle", it means "you can't tell which field you're
+// typing in" - and the "New poll" box has three to ten identical-looking
+// fields stacked on top of each other.
 //
-// Unten steht deshalb bei jeder Stufe der Kontrast gegen den Feldgrund. 3:1
-// ist die Grenze, ab der ein Rahmen als Zustandsanzeige noch zuverlässig
-// erkennbar ist; darunter wird geraten statt gesehen.
+// So below, every step lists its contrast against the field background.
+// 3:1 is the threshold above which a border still reliably reads as a
+// state indicator; below it you're guessing, not seeing.
 //
-// Erzeugt preview/fokus-rand.png
+// Produces preview/fokus-rand.png
 // ============================================================================
 
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 
-const FELDGRUND = '#0a0b0f';
-const RUHE = '#262b39';          // --line, der Rahmen ohne Fokus
+const FIELD_GROUND = '#0a0b0f';
+const RUHE = '#262b39';          // --line, the border without focus
 
 const kanal = (v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 const leucht = (hex) => {
@@ -34,22 +34,22 @@ const kontrast = (a, b) => {
   return (x + 0.05) / (y + 0.05);
 };
 
-const STUFEN = [
-  { name: 'Jetzt', farbe: '#eceff5', schein: true,
-    hinweis: 'Was gerade eingebaut ist: voller Akzent plus Schein. Der Schein ist genau der zweite Umriss, der weg soll.' },
-  { name: 'Voller Akzent', farbe: '#eceff5',
+const TIERS = [
+  { name: 'Jetzt', color: '#eceff5', schein: true,
+    hinweis: 'Was gerade eingebaut ist: voller Akzent plus Schein. Der Schein ist genau der zweite Umriss, der weg expected.' },
+  { name: 'Voller Akzent', color: '#eceff5',
     hinweis: 'Nur der Schein fällt weg. Der Rahmen bleibt volles Knochenweiß – das, was Login, Chat und die DM-Felder heute schon tun.' },
-  { name: 'Hell', farbe: '#b9c0d0',
+  { name: 'Hell', color: '#b9c0d0',
     hinweis: 'Eine Stufe zurück, derselbe Ton wie die Beträge im Chat. Deutlich abgesetzt, aber nicht mehr das Hellste im Kasten.' },
-  { name: 'Mittel', farbe: '#8b93a7',
+  { name: 'Mittel', color: '#8b93a7',
     hinweis: 'Der Ton von --dim. Der Rahmen ist sichtbar heller als die anderen Felder, drängt sich aber nicht auf.' },
-  { name: 'Gedämpft', farbe: '#6f778f',
+  { name: 'Gedämpft', color: '#6f778f',
     hinweis: 'Zurückhaltend. Man sieht den Unterschied noch, muss aber schon hinschauen – bei zehn Feldern untereinander wird das mühsam.' },
-  { name: 'Kaum', farbe: '#4a5266',
-    hinweis: 'Zu wenig. Als Haarlinie ist der Unterschied zum Ruhezustand fast weg – hier nur, um die Untergrenze zu zeigen.' },
+  { name: 'Kaum', color: '#4a5266',
+    hinweis: 'Zu wenig. Als Haarlinie ist der Unterschied zum Ruhezustand fast weg – hier nur, um die Untergrenze zu show.' },
 ];
 
-const kasten = (i) => `
+const panel = (i) => `
   <div class="poll-admin" id="v${i}">
     <h3>New poll</h3>
     <input type="text" value="Which coin next?" class="fokus">
@@ -63,10 +63,10 @@ const kasten = (i) => `
     </div>
   </div>`;
 
-// Fokus hat immer nur ein Element. Damit alle Stufen nebeneinander stehen
-// koennen, wird der Zustand ueber eine Klasse nachgestellt statt ueber :focus.
-const regeln = STUFEN.map((s, i) =>
-  `#v${i} input.fokus { border-color: ${s.farbe};`
+// Only one element ever has focus. So that all the steps can stand side by
+// side, the state is faked with a class instead of using :focus.
+const regeln = TIERS.map((s, i) =>
+  `#v${i} input.fokus { border-color: ${s.color};`
   + (s.schein ? ` box-shadow: 0 0 0 3px rgba(236, 239, 245, .16);` : '')
   + ' }'
 ).join('\n');
@@ -77,7 +77,7 @@ const html = `<!doctype html>
 <style>
   body { padding: 26px 26px 40px; background: var(--bg); }
   .raster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px 22px; max-width: 1400px; }
-  .karte h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .card h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
   .nr {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; border-radius: 999px;
@@ -92,14 +92,14 @@ const html = `<!doctype html>
 </style>
 <style>${regeln}</style>
 <h1>Der Rahmen des Feldes, in dem getippt wird</h1>
-<p class="lead">Jeweils das obere Feld. Kein Schein mehr außer bei Nummer 0 – nur der Rahmen wird heller. Der Wert dahinter ist der Kontrast gegen den Feldgrund; ohne Fokus liegt der Rahmen bei ${kontrast(RUHE, FELDGRUND).toFixed(1)}:1.</p>
+<p class="lead">Jeweils das obere Feld. Kein Schein mehr außer bei Nummer 0 – nur der Rahmen wird heller. Der Wert dahinter ist der Kontrast gegen den Feldgrund; ohne Fokus liegt der Rahmen bei ${kontrast(RUHE, FIELD_GROUND).toFixed(1)}:1.</p>
 <div class="raster">
-  ${STUFEN.map((s, i) => `
-  <section class="karte">
+  ${TIERS.map((s, i) => `
+  <section class="card">
     <h2><span class="nr">${i}</span>${s.name}
-      <span class="werte">${s.farbe} · ${kontrast(s.farbe, FELDGRUND).toFixed(1)}:1</span></h2>
+      <span class="werte">${s.color} · ${kontrast(s.color, FIELD_GROUND).toFixed(1)}:1</span></h2>
     <p class="hinweis">${s.hinweis}</p>
-    ${kasten(i)}
+    ${panel(i)}
   </section>`).join('')}
 </div>`;
 
@@ -110,16 +110,16 @@ writeFileSync(tmp, html);
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 1460, height: 900 }, deviceScaleFactor: 2 });
-await seite.goto(`file://${tmp}`);
-await seite.waitForTimeout(400);
-await seite.screenshot({ path: `${ausgabe}fokus-rand.png`, fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1460, height: 900 }, deviceScaleFactor: 2 });
+await page.goto(`file://${tmp}`);
+await page.waitForTimeout(400);
+await page.screenshot({ path: `${ausgabe}fokus-rand.png`, fullPage: true });
 await browser.close();
 rmSync(tmp);
 
 console.log('');
-console.log(`  ohne Fokus  ${RUHE}  ${kontrast(RUHE, FELDGRUND).toFixed(1)}:1`);
-for (const [i, s] of STUFEN.entries()) {
-  console.log(`  ${i}  ${s.name.padEnd(15)} ${s.farbe}  ${kontrast(s.farbe, FELDGRUND).toFixed(1)}:1`);
+console.log(`  ohne Fokus  ${RUHE}  ${kontrast(RUHE, FIELD_GROUND).toFixed(1)}:1`);
+for (const [i, s] of TIERS.entries()) {
+  console.log(`  ${i}  ${s.name.padEnd(15)} ${s.color}  ${kontrast(s.color, FIELD_GROUND).toFixed(1)}:1`);
 }
 console.log(`\n  ${ausgabe}fokus-rand.png\n`);

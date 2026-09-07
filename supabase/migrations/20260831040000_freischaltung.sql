@@ -1,75 +1,77 @@
 -- ============================================================================
--- Die Seite ist online, aber noch zu
+-- The site is online, but still closed
 --
--- Neue Spalte app_config.open_to_public. Solange sie false ist, laesst die
--- Edge Function verify niemanden mehr herein ausser der Wallet, die in
--- admin_wallet steht.
---
--- ----------------------------------------------------------------------------
--- Warum die Sperre hier sitzt und nicht im Blatt
---
--- Das Blatt liegt auf einem oeffentlichen Webspace. Alles, was es weiss, kann
--- man lesen, und alles, was es verbirgt, kann man wieder einblenden. Eine
--- Seite, die sich selbst fuer geschlossen haelt, ist deshalb keine Sperre.
---
--- Die Anmeldung dagegen laeuft ueber genau ein Tor: verify stellt eine
--- Challenge aus, und ohne Challenge gibt es keinen Betrag, auf den die
--- Treasury horcht. Wer dort abgewiesen wird, kommt nicht herein – egal, was er
--- im Browser anstellt.
+-- New column app_config.open_to_public. As long as it is false, the verify
+-- edge function lets nobody in anymore except the wallet stored in
+-- admin_wallet.
 --
 -- ----------------------------------------------------------------------------
--- Warum das Nein VOR der Zahlung kommen muss
+-- Why the lock sits here and not in the sheet
 --
--- Die Anmeldung ist eine Ueberweisung. Wuerde erst die Zahlung geprueft und
--- dann die Freischaltung, haette der Abgewiesene Geld fuer nichts geschickt.
--- Die Absage steht deshalb ganz am Anfang von createChallenge – vor der
--- Zeile, die einen Betrag nennt.
+-- The sheet lives on a public web space. Anything it knows can be read,
+-- and anything it hides can be unhidden again. A page that merely
+-- considers itself closed is therefore no lock at all.
 --
--- Aus demselben Grund prueft checkStatus NICHT: Wer eine Challenge in der Hand
--- hat, hat einen Betrag genannt bekommen. Wird zwischendurch zugesperrt und er
--- zahlt, bekommt er seine Sitzung. Das ist die richtige Reihenfolge – ein
--- zugesagter Preis gilt, auch wenn der Laden gerade schliesst. Es sind
--- hoechstens 15 Minuten (CHALLENGE_TTL_MIN).
+-- Login, on the other hand, runs through exactly one gate: verify issues a
+-- challenge, and without a challenge there is no amount for the treasury
+-- to listen for. Whoever is turned away there does not get in - no matter
+-- what they do in the browser.
 --
 -- ----------------------------------------------------------------------------
--- Vorgabe true: Diese Migration aendert von sich aus NICHTS
+-- Why the no has to come BEFORE the payment
 --
--- Sie legt nur den Schalter an, sie legt ihn nicht um. Die Seite bleibt offen,
--- bis jemand sie ausdruecklich zusperrt:
+-- Logging in is a transfer. If the payment were checked first and the
+-- gating second, whoever got rejected would have sent money for nothing.
+-- The refusal therefore sits right at the start of createChallenge - before
+-- the line that names an amount.
 --
---   update public.app_config set open_to_public = false where id = 1;   -- zu
---   update public.app_config set open_to_public = true  where id = 1;   -- auf
---
--- Beides wirkt sofort, ohne neuen Upload und ohne Deployment.
---
--- Hier stand als Vorgabe false, und die Function las eine fehlende Spalte
--- ebenfalls als "zu" – aus dem Gedanken heraus, im Zweifel lieber niemanden
--- hereinzulassen. Das war richtig, solange die Seite vor dem Start
--- dichtgehalten werden sollte.
---
--- Danach dreht sich der schlimmere Fall um: Dann sperrt ein Ausrollen, das mit
--- alldem gar nichts zu tun hat, die laufende Seite zu – weil jemand vergessen
--- hat, die Migration mitzunehmen. Ein Fallstrick, der auf ein Vergessen
--- reagiert, ist schlechter als einer, der auf eine Entscheidung reagiert.
+-- For the same reason checkStatus does NOT check: whoever holds a challenge
+-- has already been told an amount. If the site is locked in the meantime
+-- and they pay, they get their session. That is the right order - a price
+-- once quoted holds, even if the shop happens to be closing. It is at most
+-- 15 minutes (CHALLENGE_TTL_MIN).
 --
 -- ----------------------------------------------------------------------------
--- Zwei Adressen kommen durch, nicht eine
+-- Default true: this migration changes NOTHING by itself
 --
--- admin_wallet und die neue Spalte test_wallet. Der Grund ist keine
--- Bequemlichkeit: Die Seite verhaelt sich von den beiden Seiten VERSCHIEDEN.
--- Ansem sieht einen Posteingang und stellt die Schwelle, ein Nutzer sieht die
--- Schwelle von unten. Nur mit Ansems Wallet zu pruefen hiesse, die Haelfte nie
--- zu sehen, die alle anderen sehen.
+-- It only installs the switch, it does not flip it. The site stays open
+-- until someone explicitly closes it:
 --
--- Genau eine Testadresse, kein Feld mit mehreren: Eine Liste waere die Stelle,
--- an der am Ende jemand steht, den man vergessen hat auszutragen.
+--   update public.app_config set open_to_public = false where id = 1;   -- close
+--   update public.app_config set open_to_public = true  where id = 1;   -- open
+--
+-- Both take effect immediately, with no new upload and no deployment.
+--
+-- The default here used to be false, and the function also read a missing
+-- column as "closed" - on the reasoning that when in doubt, better let
+-- nobody in. That was right as long as the site needed to stay locked
+-- before launch.
+--
+-- After that, the worse case flips around: then a rollout that has nothing
+-- to do with any of this locks the running site - because someone forgot
+-- to bring the migration along. A trap that reacts to a forgotten step is
+-- worse than one that reacts to a decision.
 --
 -- ----------------------------------------------------------------------------
--- Ein Zusammenhang, der leicht uebersehen wird
+-- Two addresses get through, not one
 --
--- Bis zum Start steht in admin_wallet noch die eigene Wallet. Wird sie auf
--- Ansems echte Adresse umgestellt, SOLANGE die Seite zu ist, sperrt man sich
--- selbst aus – ausser die eigene Adresse steht dann in test_wallet.
+-- admin_wallet and the new column test_wallet. The reason is not
+-- convenience: the site behaves DIFFERENTLY for the two sides. Ansem sees
+-- an inbox and sets the threshold, a user sees the threshold from below.
+-- Checking only against Ansem's wallet would mean never seeing the half
+-- that everyone else sees.
+--
+-- Exactly one test address, not a field with several: a list would be the
+-- spot where, eventually, someone is left standing who was forgotten and
+-- never removed.
+--
+-- ----------------------------------------------------------------------------
+-- A connection that is easy to miss
+--
+-- Until launch, admin_wallet still holds the operator's own wallet. If it
+-- gets switched to Ansem's real address WHILE the site is closed, that
+-- locks the operator out themselves - unless their own address is then in
+-- test_wallet.
 -- ============================================================================
 
 alter table public.app_config

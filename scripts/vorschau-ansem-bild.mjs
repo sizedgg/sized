@@ -1,29 +1,30 @@
 // ============================================================================
-// Vorschau: Ansem mit rundem Profilbild statt der drei Zeichen
+// Preview: Ansem with a round profile picture instead of the three characters
 //
-// Die Frage klingt nach einer Bildfrage und ist in Wahrheit eine Layoutfrage.
-// Der Grund steht im Blatt, in einem Kommentar ueber .msg:
+// The question sounds like a picture question and is really a layout
+// question. The reason is in the stylesheet, in a comment above .msg:
 //
 //   grid-template-columns: 1.75rem minmax(0, 1fr) auto auto;
 //
-// Die erste Spalte ist 28 px breit und FEST. Sie ist genau so breit, weil ein
-// Kuerzel aus drei Schreibmaschinenzeichen 25 px misst – und weil alle echten
-// Kuerzel exakt drei Zeichen lang sind, beginnt der Text in jeder Zeile der
-// Liste an derselben Stelle. Das ist der Grund, warum der Chat als Liste liest
-// und nicht als Sammlung von Absaetzen.
+// The first column is 28 px wide and FIXED. It's exactly that wide because a
+// handle made of three monospace characters measures 25 px - and because
+// every real handle is exactly three characters long, the text in every row
+// of the list starts at the same spot. That's the reason the chat reads as a
+// list and not as a pile of paragraphs.
 //
-// Ein Bild in diese Spalte zu setzen heisst deshalb: entweder es passt in
-// 28 px – dann aendert sich am Aufbau der Liste nichts –, oder die Spalte
-// waechst, und dann rueckt der Text ALLER Zeilen nach rechts, nicht nur
-// Ansems. Genau das wird hier gemessen und nicht geschaetzt.
+// So putting a picture into that column means: either it fits in 28 px -
+// then nothing about the list's structure changes - or the column grows,
+// and then the text of EVERY row shifts right, not just Ansem's. That's
+// exactly what gets measured here, not guessed.
 //
-// Die zweite Sache, die man sehen muss: align-items: baseline. Text hat eine
-// Schriftlinie, ein Bild nicht – der Browser nimmt dann seine Unterkante. Ein
-// Bild sitzt in einer Zeile mit Schriftlinie also anders, als man erwartet.
+// The second thing to watch for: align-items: baseline. Text has a
+// baseline, a picture doesn't - the browser then uses its bottom edge. So a
+// picture sitting in a row with a text baseline behaves differently than
+// you'd expect.
 //
-// Nichts hiervon ist eingebaut, und das Bild liegt nur in preview/.
+// None of this is wired in; the picture only lives under preview/.
 //
-// Erzeugt preview/ansembild-*.png und preview/ansembild-uebersicht.png
+// Produces preview/ansembild-*.png and preview/ansembild-uebersicht.png
 //   node scripts/vorschau-ansem-bild.mjs
 // ============================================================================
 
@@ -38,55 +39,54 @@ const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 
-const bildDatei = path.join(root, 'preview', 'ansem-avatar.jpg');
-if (!fs.existsSync(bildDatei)) throw new Error(`Fehlt: ${bildDatei}`);
-const AVATAR = 'data:image/jpeg;base64,' + fs.readFileSync(bildDatei).toString('base64');
+const imageFile = path.join(root, 'preview', 'ansem-avatar.jpg');
+if (!fs.existsSync(imageFile)) throw new Error(`Fehlt: ${imageFile}`);
+const AVATAR = 'data:image/jpeg;base64,' + fs.readFileSync(imageFile).toString('base64');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-const stueck = (von, bis) => {
+const piece = (von, bis) => {
   const a = html.indexOf(von);
   const b = html.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in index.html: ${von}`);
   return html.slice(a, b + bis.length);
 };
 
-const zahlen = schneide('const nfCompact =', '/* Ausgeschrieben statt');
-const kurz = schneide('const STUFEN =', '\n/**\n * Datumstrenner');
-const tage = schneide('const tagBeginn =', 'const handleOf');
-const namen = schneide('const handleOf =', '\nconst esc =');
-const escFn = schneide('const esc = (s) =>', '\n\n');
-const linkify = schneide('const LINK_MUSTER =', '\nfunction toast(');
-const chatBau = schneide('const istAdmin =', '\nfunction appendMessage');
-const chatGeruest = stueck('<main id="pane-chat"', '</main>');
+const numbers = cut('const nfCompact =', 'const nfGanz = new Intl.NumberFormat(\'en-US\', { maximumFractionDigits: 0 });');
+const short = cut('const TIERS =', 'const tagBeginn = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();');
+const tage = cut('const tagBeginn =', 'const handleOf');
+const namen = cut('const handleOf =', '\nconst esc =');
+const escFn = cut('const esc = (s) =>', '\n\n');
+const linkify = cut('const LINK_MUSTER =', '\nfunction toast(');
+const chatBau = cut('const istAdmin =', '\nfunction appendMessage');
+const chatScaffold = piece('<main id="pane-chat"', '</main>');
 
-// Die Spaltenbreite aus dem Blatt lesen statt sie zu kennen – sie ist einmal
-// von 3,4rem auf 1,75rem geaendert worden, und beim naechsten Mal soll dieser
-// Text nicht luegen.
+// Read the column width from the stylesheet rather than hardcoding it - it
+// has already been changed once, from 3.4rem to 1.75rem, and this text
+// shouldn't lie about it next time either.
 //
-// Und rem ist hier NICHT 16 px: html, body stehen auf 15 px. 1,75rem sind
-// damit 26 und nicht 28 – ein Bild in "28 px, passt genau" haette also zwei
-// Pixel ueber die Spalte gestanden. Auch die Grundgroesse wird deshalb
-// gelesen und nicht angenommen.
-const SPALTE = /grid-template-columns: ([\d.]+)rem minmax/.exec(css)?.[1];
-if (!SPALTE) throw new Error('Die erste Spalte von .msg sieht anders aus als erwartet');
-const GRUNDGROESSE = Number(/font-family: var\(--mono\); font-size: (\d+)px/.exec(css)?.[1]);
-if (!GRUNDGROESSE) throw new Error('Die Grundgroesse steht nicht mehr, wo sie stand');
-const SPALTE_PX = Math.round(Number(SPALTE) * GRUNDGROESSE);
+// And rem is NOT 16 px here: html, body are set to 15 px. So 1.75rem comes
+// to 26, not 28 - a picture sized "28 px, fits exactly" would have stuck out
+// two pixels past the column. So the base size gets read too, not assumed.
+const COLUMN = /grid-template-columns: ([\d.]+)rem minmax/.exec(css)?.[1];
+if (!COLUMN) throw new Error('Die first Spalte von .msg sieht anders aus als erwartet');
+const BASE_SIZE = Number(/font-family: var\(--mono\); font-size: (\d+)px/.exec(css)?.[1]);
+if (!BASE_SIZE) throw new Error('Die Grundgroesse steht nicht mehr, wo sie stand');
+const COLUMN_PX = Math.round(Number(COLUMN) * BASE_SIZE);
 
-// Das Bild wird per CSS in die Zeile gesetzt, ohne app.js anzufassen: Die drei
-// Zeichen bleiben im Markup stehen und werden nur unsichtbar gemacht. Fuer
-// eine Vorschau reicht das – und es zeigt ehrlich, was das Layout tut, weil
-// der Rest der Zeile echt bleibt.
+// The picture gets placed in the row via CSS, without touching app.js: the
+// three characters stay in the markup and just get made invisible. That's
+// enough for a preview - and it shows honestly what the layout does, since
+// the rest of the row stays real.
 const alsBild = (groesse, mitZeichen) => `
-  /* align-self: center und nicht die Schriftlinie der Zeile.
-     Ein Bild hat keine Schriftlinie – der Browser nimmt dann seine Unterkante,
-     und das Bild ragt ueber die Zeile hinaus, statt in ihr zu sitzen. Ohne
-     diese eine Zeile wird Ansems Zeile hoeher als noetig. */
+  /* align-self: center, not the row's text baseline.
+     A picture has no baseline - the browser then uses its bottom edge, and
+     the picture sticks out past the row instead of sitting inside it.
+     Without this one line, Ansem's row ends up taller than it needs to be. */
   .msg.is-admin .who { align-self: center; }
   .msg.is-admin .who .admin-name {
     ${mitZeichen ? '' : 'font-size: 0;'}
@@ -98,18 +98,18 @@ const alsBild = (groesse, mitZeichen) => `
     background: url('${AVATAR}') center/cover no-repeat;
   }`;
 
-const spaltenRegel = (px) => px <= SPALTE_PX ? ''
+const columnRule = (px) => px <= COLUMN_PX ? ''
   : `.msg, .msg.has-quote { grid-template-columns: ${px}px minmax(0, 1fr) auto auto; }`;
 
 const FASSUNGEN = [
   {
-    datei: 'jetzt', name: 'Jetzt – drei Zeichen', css: '',
-    text: 'Der Stand. Die erste Spalte ist ' + SPALTE_PX + ' px breit und fest; alle Kürzel '
-      + 'sind exakt drei Zeichen lang, deshalb beginnt der Text in jeder Zeile an derselben '
+    file: 'jetzt', name: 'Jetzt – drei Zeichen', css: '',
+    text: 'Der Stand. Die first Spalte ist ' + COLUMN_PX + ' px wide und fest; alle Kürzel '
+      + 'sind exakt drei Zeichen long, deshalb beginnt der Text in jeder Zeile an derselben '
       + 'Stelle.',
   },
   {
-    datei: 'zeilenhoch', name: 'Bild in 20 px – so hoch wie die Zeile',
+    file: 'zeilenhoch', name: 'Bild in 20 px – so hoch wie die Zeile',
     css: alsBild(20, false),
     text: 'Klein genug, dass es in die Zeile passt, die ohnehin da ist. Als einzige Fassung '
       + 'lässt sie den Aufbau der Liste in Ruhe: gleiche Spalte, gleicher Textanfang, und '
@@ -117,27 +117,27 @@ const FASSUNGEN = [
       + 'Zeichen wegfallen). Dafür ist ein Gesicht in 20 px kaum mehr als ein Fleck.',
   },
   {
-    datei: 'klein', name: `Bild in ${SPALTE_PX} px – so breit wie die Spalte`,
-    css: alsBild(SPALTE_PX, false),
-    text: 'So breit, wie die Spalte ohnehin ist – die Spalte hält also, und der Text aller '
-      + 'Zeilen beginnt weiter an derselben Stelle. Aber: Ansems Zeilen werden 3 px höher '
+    file: 'klein', name: `Bild in ${COLUMN_PX} px – so wide wie die Spalte`,
+    css: alsBild(COLUMN_PX, false),
+    text: 'So wide, wie die Spalte ohnehin ist – die Spalte hält also, und der Text aller '
+      + 'Zeilen beginnt next an derselben Stelle. Aber: Ansems Zeilen werden 3 px höher '
       + 'als die anderen, weil das Bild höher ist als eine Textzeile. Bei drei Nachrichten '
       + 'in einer langen Liste ist das ein leicht unruhiger Rhythmus, kein Bruch.',
   },
   {
-    datei: 'gross', name: 'Bild in 34 px – die Spalte wächst',
-    css: alsBild(34, false) + spaltenRegel(34),
-    text: 'Deutlich erkennbar, aber die erste Spalte muss dafür wachsen – und die gilt für '
-      + 'ALLE Zeilen. Der Text jeder Nachricht rückt 8 px nach rechts, auch der von Leuten '
+    file: 'big', name: 'Bild in 34 px – die Spalte wächst',
+    css: alsBild(34, false) + columnRule(34),
+    text: 'Deutlich erkennbar, aber die first Spalte muss dafür wachsen – und die gilt für '
+      + 'ALLE Zeilen. Der Text jeder Nachricht rückt 8 px nach right, auch der von Leuten '
       + 'ohne Bild, und hinter deren drei Zeichen steht dann eine Lücke. Genau dieser '
       + 'Zustand war schon einmal da (3,4rem Spalte für Ansems Tokenkürzel) und wurde '
       + 'abgeschafft.',
   },
   {
-    datei: 'beides', name: 'Bild und Zeichen',
-    css: alsBild(22, true) + spaltenRegel(60),
+    file: 'beides', name: 'Bild und Zeichen',
+    css: alsBild(22, true) + columnRule(60),
     text: 'Bild plus Kürzel. Ansems Zeilen bleiben genauso hoch wie die anderen – aber die '
-      + 'Spalte wächst auf 60 px, und der Text jeder Nachricht rückt 34 px nach rechts. '
+      + 'Spalte wächst auf 60 px, und der Text jeder Nachricht rückt 34 px nach right. '
       + 'Das ist die teuerste Fassung, und die drei Zeichen sagen neben einem Gesicht kaum '
       + 'noch etwas, das man nicht schon sieht.',
   },
@@ -172,7 +172,7 @@ const server = http.createServer((_q, res) =>
      .end(`<!doctype html><meta charset="utf-8"><style>${css}</style>
        <body style="margin:0">
        <div id="app" style="display:flex;flex-direction:column;height:100vh;
-            background:var(--bg);padding:14px;box-sizing:border-box">${chatGeruest}</div>`));
+            background:var(--bg);padding:14px;box-sizing:border-box">${chatScaffold}</div>`));
 await new Promise((r) => server.listen(0, r));
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -181,14 +181,14 @@ const ausgabe = path.join(root, 'preview');
 
 const bilder = [];
 for (const f of FASSUNGEN) {
-  // 900 px und nicht weniger. Unter 761 px greift @media (max-width: 760px),
-  // und dort hat .msg ein ANDERES Raster – Kuerzel und Betrag in einer Zeile,
-  // der Text darunter. Wer hier schmaler misst, misst das Handy-Layout und
-  // beantwortet die Spaltenfrage gar nicht. (Diese Falle ist in diesem Projekt
-  // schon einmal zugeschnappt, damals bei genau 760 px.)
-  const seite = await browser.newPage({ viewport: { width: 900, height: 560 }, deviceScaleFactor: 2 });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.addScriptTag({ content: `
+  // 900 px, not less. Below 761 px, @media (max-width: 760px) kicks in, and
+  // there .msg has a DIFFERENT grid - handle and amount on one line, the
+  // text below. Measuring narrower than that measures the phone layout and
+  // doesn't answer the column question at all. (This trap has already
+  // snapped shut once in this project, back then at exactly 760 px.)
+  const page = await browser.newPage({ viewport: { width: 900, height: 560 }, deviceScaleFactor: 2 });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.addScriptTag({ content: `
     const $  = (s, r = document) => r.querySelector(s);
     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
     const state = {
@@ -197,39 +197,41 @@ for (const f of FASSUNGEN) {
       live: new Map(), quoted: new Map(), filters: { usd: 0 },
     };
     const toast = () => {};
-    ${escFn}${zahlen}${kurz}${tage}${namen}${linkify}${chatBau}
+    ${escFn}${numbers}${short}${tage}${namen}${linkify}${chatBau}
     const usdOf = (m) => m.usd;
     const passesFilter = () => true;
     const daten = ${JSON.stringify(CHAT)};
     for (const m of daten) state.quoted.set(m.id, m);
     document.querySelector('#chat-list').innerHTML = daten.map(msgHtml).join('');
     document.querySelector('#chat-list').scrollTop = 1e6;` });
-  if (f.css) await seite.addStyleTag({ content: f.css });
-  await seite.mouse.move(0, 0);
-  await seite.waitForTimeout(400);
+  if (f.css) await page.addStyleTag({ content: f.css });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
 
-  // Gemessen statt behauptet: Wo faengt der Text an, wie hoch ist eine Zeile
-  // mit Bild gegen eine ohne, und steht die Geldspalte noch untereinander?
-  f.mass = await seite.evaluate(() => {
-    const zeilen = [...document.querySelectorAll('.msg')];
-    const ansem = zeilen.find((z) => z.classList.contains('is-admin'));
-    const andere = zeilen.find((z) => !z.classList.contains('is-admin'));
-    const links = (z) => Math.round(z.querySelector('.body').getBoundingClientRect().left);
+  // Measured, not assumed: where does the text start, how tall is a row
+  // with a picture versus one without, and does the money column still
+  // line up?
+  f.mass = await page.evaluate(() => {
+    const lines = [...document.querySelectorAll('.msg')];
+    const ansem = lines.find((z) => z.classList.contains('is-admin'));
+    const andere = lines.find((z) => !z.classList.contains('is-admin'));
+    const left = (z) => Math.round(z.querySelector('.body').getBoundingClientRect().left);
     const hoch = (z) => Math.round(z.getBoundingClientRect().height);
-    // Die Geldspalte wird hier bewusst NICHT gemessen. Jede Nachricht ist ein
-    // eigenes Grid; die rechte Kante haengt an der Breite der Uhrzeit daneben,
-    // und die schwankt in den Testdaten. Ein Messwert, der schon im
-    // Ist-Zustand "gebrochen" meldet, misst die Testdaten und nicht die Frage.
+    // The money column is deliberately NOT measured here. Every message is
+    // its own grid; the right edge depends on the width of the timestamp
+    // next to it, and that varies in the test data. A measurement that
+    // already reports "broken" in the current state is measuring the test
+    // data, not the question at hand.
     return {
-      textAb: links(andere), textAbAnsem: links(ansem),
+      textAb: left(andere), textAbAnsem: left(ansem),
       hochAnsem: hoch(ansem), hochAndere: hoch(andere),
-      spalte: Math.round(parseFloat(getComputedStyle(zeilen[0]).gridTemplateColumns.split(' ')[0])),
+      column: Math.round(parseFloat(getComputedStyle(lines[0]).gridTemplateColumns.split(' ')[0])),
     };
   });
 
-  const bild = await seite.locator('#chat-list').screenshot();
-  await seite.close();
-  fs.writeFileSync(path.join(ausgabe, `ansembild-${f.datei}.png`), bild);
+  const bild = await page.locator('#chat-list').screenshot();
+  await page.close();
+  fs.writeFileSync(path.join(ausgabe, `ansembild-${f.file}.png`), bild);
   bilder.push('data:image/png;base64,' + bild.toString('base64'));
 }
 
@@ -240,14 +242,14 @@ console.log('  ' + ' '.repeat(34) + ''.padEnd(9) + 'andere/Ansem'.padEnd(10)
   + 'Ansem/andere'.padEnd(13) + '');
 for (const f of FASSUNGEN) {
   const m = f.mass;
-  console.log('  ' + f.name.padEnd(34) + `${m.spalte} px`.padEnd(9)
+  console.log('  ' + f.name.padEnd(34) + `${m.column} px`.padEnd(9)
     + `${m.textAb}/${m.textAbAnsem}`.padEnd(10)
     + `${m.hochAnsem}/${m.hochAndere} px`
     + (m.hochAnsem > m.hochAndere ? '   Ansems Zeilen sind höher' : ''));
 }
 const grund = FASSUNGEN[0].mass;
 console.log(`\n  "Text ab" ist der linke Rand des Nachrichtentextes. Steht dort in einer`
-  + `\n  Fassung eine groessere Zahl als ${grund.textAb}, ist die ganze Liste nach rechts`
+  + `\n  Fassung eine groessere Zahl als ${grund.textAb}, ist die ganze Liste nach right`
   + `\n  gerueckt – auch fuer alle, die gar kein Bild haben.\n`);
 
 const blatt = `<!doctype html><meta charset="utf-8"><style>${css}</style>
@@ -255,7 +257,7 @@ const blatt = `<!doctype html><meta charset="utf-8"><style>${css}</style>
   body { background: #07080b; padding: 30px; }
   h1 { font-size: 1.15rem; margin: 0 0 .25rem; }
   .lead { margin: 0 0 1.7rem; font-size: .86rem; color: var(--dim); max-width: 112ch; line-height: 1.6; }
-  .reihe { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 26px; align-items: start; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 26px; align-items: start; }
   h2 { margin: 0 0 .1rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .nr { display: inline-flex; align-items: center; justify-content: center;
         width: 1.5rem; height: 1.5rem; border-radius: 999px; background: var(--bg-3);
@@ -268,15 +270,15 @@ const blatt = `<!doctype html><meta charset="utf-8"><style>${css}</style>
 </style>
 <h1>Ansem mit rundem Profilbild</h1>
 <p class="lead">Dieselben zehn Nachrichten, drei davon von Ansem. Die Frage sieht nach einer Bildfrage aus und
-ist eine Layoutfrage: Die erste Spalte im Chat ist <b>${SPALTE_PX} px breit und fest</b>, weil alle Kürzel
-exakt drei Zeichen lang sind – deshalb beginnt der Text in jeder Zeile an derselben Stelle. Ein Bild passt
-entweder hinein, oder die Spalte wächst, und dann rückt der Text <i>aller</i> Zeilen nach rechts, auch der von
+ist eine Layoutfrage: Die first Spalte im Chat ist <b>${COLUMN_PX} px wide und fest</b>, weil alle Kürzel
+exakt drei Zeichen long sind – deshalb beginnt der Text in jeder Zeile an derselben Stelle. Ein Bild passt
+entweder hinein, oder die Spalte wächst, und dann rückt der Text <i>aller</i> Zeilen nach right, auch der von
 Leuten ohne Bild. Unter jeder Fassung stehen die gemessenen Werte. Nichts hiervon ist eingebaut.</p>
-<div class="reihe">
+<div class="row">
 ${FASSUNGEN.map((f, i) => `
 <div>
   <h2><span class="nr">${i}</span>${f.name}
-    <span class="werte ${f.mass.textAb > grund.textAb ? 'knapp' : ''}">Spalte ${f.mass.spalte} px
+    <span class="werte ${f.mass.textAb > grund.textAb ? 'knapp' : ''}">Spalte ${f.mass.column} px
       · Text ab ${f.mass.textAb} px${f.mass.textAb > grund.textAb ? ` (statt ${grund.textAb})` : ''}
       · Zeile ${f.mass.hochAnsem} px gegen ${f.mass.hochAndere} px</span></h2>
   <p class="t">${f.text}</p>

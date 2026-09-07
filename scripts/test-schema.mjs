@@ -1,9 +1,9 @@
 /**
- * Testet die Migration gegen eine echte Postgres-Instanz.
+ * Tests the migrations against a real Postgres instance.
  *
- * Es geht dabei ausdrücklich nicht um "läuft das SQL durch", sondern um die
- * Frage: Was kann ein Nutzer, der direkt mit PostgREST spricht, fälschen?
- * Jeder Test simuliert deshalb einen Client mit gesetztem JWT-Claim.
+ * The point is explicitly not "does the SQL run", but the question: what
+ * can a user who talks to PostgREST directly forge? Every test therefore
+ * simulates a client with a set JWT claim.
  *
  *   PGURL=postgres://user@host/db node scripts/test-schema.mjs
  */
@@ -30,7 +30,7 @@ const check = (label, cond, extra = '') => {
 const client = new pg.Client(url);
 await client.connect();
 
-/** Führt Statements als "authenticated" mit gesetztem Wallet-Claim aus. */
+/** Runs statements as "authenticated" with a set wallet claim. */
 async function asWallet(wallet, fn) {
   await client.query('begin');
   try {
@@ -47,7 +47,7 @@ async function asWallet(wallet, fn) {
   }
 }
 
-/** Erwartet, dass die Operation scheitert. Gibt die Fehlermeldung zurück. */
+/** Expects the operation to fail. Returns the error message. */
 async function expectFail(label, wallet, fn) {
   try {
     await asWallet(wallet, fn);
@@ -62,20 +62,20 @@ async function expectFail(label, wallet, fn) {
 // ---------------------------------------------------------------------------
 
 console.log('\n── Migration ──');
-// Restlos abräumen, nicht Tabelle für Tabelle.
+// Wipe everything, not table by table.
 //
-// Hier stand einmal eine von Hand gepflegte Liste: drop table dms, votes,
-// poll_options, ... Und genau daran ist etwas vorbeigerutscht. Eine neue
-// Tabelle (public.poll_totals) stand nicht auf der Liste, überlebte den
-// Aufräumvorgang und liess "create table if not exists" in der Wanderung
-// stillschweigend AUSSETZEN. Ergebnis: eine Tabelle ohne ihre Fremdschlüssel,
-// und ein Test, der etwas anderes prüfte als das, was in der Wanderung steht.
+// There used to be a hand-maintained list here: drop table dms, votes,
+// poll_options, ... And that's exactly where something slipped through. A
+// new table (public.poll_totals) wasn't on the list, survived the cleanup,
+// and let "create table if not exists" in the migration silently NO-OP.
+// Result: a table without its foreign keys, and a test that was checking
+// something other than what the migration actually says.
 //
-// Diesmal ist es ein Befund geworden. Es hätte genauso gut andersherum
-// ausgehen können – ein grüner Haken für eine Wanderung, die nie lief.
+// This time it turned into a finding. It could just as easily have gone
+// the other way - a green check for a migration that never ran.
 //
-// Also: das ganze Schema weg und neu. Was die Wanderungen nicht selbst
-// anlegen, gibt es danach nicht.
+// So: the whole schema gone and rebuilt. Whatever the migrations don't
+// create themselves doesn't exist afterward.
 await client.query(`
   drop schema if exists app cascade;
   drop schema if exists public cascade;
@@ -91,13 +91,13 @@ for (const role of ['anon', 'authenticated', 'service_role']) {
 await client.query(`grant ${'authenticated'} to current_user;`).catch(() => {});
 await client.query(`grant anon, service_role to current_user;`).catch(() => {});
 
-// Der Speicher-Teil von Supabase, so weit die Migration ihn braucht.
+// The storage part of Supabase, as far as the migration needs it.
 //
-// Ohne das lief dieses Skript seit 20260827010000_og_bilder.sql ueberhaupt
-// nicht mehr an: Die Migration legt einen Bucket an und haengt Regeln an
-// storage.objects, und beides gibt es in einem nackten Postgres nicht. Der
-// Abbruch kam in der ERSTEN Zeile, also sind auch alle Pruefungen darunter
-// seitdem nie gelaufen – sie standen nur da.
+// Without this, this script hasn't even started running since
+// 20260827010000_og_bilder.sql: the migration creates a bucket and attaches
+// policies to storage.objects, and neither exists in a bare Postgres. The
+// failure hit on the FIRST line, so every check below it had also never run
+// since then - they were just sitting there.
 await client.query(`
   create schema if not exists storage;
   create table if not exists storage.buckets (
@@ -114,15 +114,15 @@ await client.query(`
   grant insert, update, delete on storage.objects to authenticated;
 `);
 
-// Der Realtime-Teil von Supabase, so weit die Migrationen ihn brauchen.
+// The realtime part of Supabase, as far as the migrations need it.
 //
-// Dieselbe Geschichte wie beim Speicher darueber: 20260904010000_dm_broadcast
-// haengt eine Zugangsregel an realtime.messages und ruft realtime.send() im
-// Trigger auf. Beides gibt es in einem nackten Postgres nicht.
+// Same story as storage above: 20260904010000_dm_broadcast attaches an
+// access policy to realtime.messages and calls realtime.send() from a
+// trigger. Neither exists in a bare Postgres.
 //
-// realtime.send() schreibt hier nicht ins Nichts, sondern in eine Tabelle –
-// so laesst sich nachher pruefen, WELCHE Stupse der Trigger wirklich
-// losgeschickt hat. Eine Attrappe, die alles schluckt, wuerde nichts messen.
+// realtime.send() here doesn't write into the void, it writes into a table -
+// that way it's possible to check afterward WHICH pings the trigger actually
+// sent out. A stub that swallows everything would measure nothing.
 await client.query(`
   create schema if not exists realtime;
   create table if not exists realtime.messages (
@@ -139,8 +139,8 @@ await client.query(`
     values (topic, 'broadcast', event, payload, private);
   $rt$;
 
-  -- Was Supabase im Rechte-Check als Kanalnamen einsetzt. Hier ueber eine
-  -- Sitzungsvariable, damit der Test verschiedene Kanaele durchspielen kann.
+  -- What Supabase plugs in as the channel name in its permission check. Here
+  -- it's a session variable, so the test can run through different channels.
   create or replace function realtime.topic() returns text
   language sql stable as $rt$
     select nullif(current_setting('realtime.topic', true), '')
@@ -157,11 +157,11 @@ const migrations = files.map((f) => fs.readFileSync(path.join(dir, f), 'utf8'));
 for (let i = 0; i < files.length; i++) await client.query(migrations[i]);
 check(`${files.length} Migrationen laufen der Reihe nach durch`, true, files.join(', '));
 
-// Zweiter Durchlauf: Migrationen müssen idempotent sein.
+// Second pass: migrations must be idempotent.
 for (let i = 0; i < files.length; i++) await client.query(migrations[i]);
 check('Migrationen sind idempotent (zweiter Lauf ohne Fehler)', true);
 
-// --- Seed als "Service Role" (RLS wird hier bewusst umgangen) ---
+// --- Seed as "service role" (RLS is deliberately bypassed here) ---
 await client.query(
   `update public.app_config set admin_wallet=$1, treasury=$2, ansem_mint=$3 where id=1`,
   [ADMIN, 'Trea5ury1111111111111111111111111111111111', 'An5emMint111111111111111111111111111111111']);
@@ -173,42 +173,42 @@ for (const [addr, amt, usd] of [[ADMIN, 1_434, 6.02], [WHALE, 903_302, 3_793.87]
     [addr, amt, usd]);
 }
 
-// ── messages: die Tabelle steht noch, die Oberflaeche nicht mehr ──
+// ── messages: the table is still there, the UI isn't ──
 //
-// Der Chat ist aus der App entfernt worden. Geloescht wurde in der Datenbank
-// nichts: Tabelle, RLS-Regeln, Linksperre und Taktgrenze stehen unveraendert,
-// und die Nachrichten liegen weiter da. Das war die Entscheidung – so bleibt
-// alles umkehrbar.
+// Chat was removed from the app. Nothing was deleted in the database: the
+// table, the RLS policies, the link block, and the rate limit are all
+// unchanged, and the messages are still sitting there. That was the
+// decision - this way everything stays reversible.
 //
-// Deshalb laeuft dieser Abschnitt weiter: Er prueft, ob die Regeln noch das
-// tun, was sie sollen, falls jemand die Tabelle wieder anfasst. Er prueft
-// NICHT mehr etwas, das ein Nutzer gerade erreichen koennte – der Weg dorthin
-// existiert in der Oberflaeche nicht.
+// So this section keeps running: it checks whether the rules still do what
+// they're supposed to, in case someone touches the table again. It no
+// longer checks anything a user could actually reach right now - the path
+// there doesn't exist in the UI.
 console.log('\n── messages (Tabelle steht, Oberflaeche entfernt) ──');
 
-// Seit 20260907010000 darf ein Client gar nicht mehr hineinschreiben.
+// Since 20260907010000, a client can no longer write into it at all.
 // ---------------------------------------------------------------------------
-// Der Grund steht in der Migration: Eine tote Tabelle mit offenen
-// Schreibrechten ist eine Flaeche, auf der jemand unbegrenzt Zeilen ablegen
-// kann, die niemand ansieht – und jede davon ging zusaetzlich als
-// Realtime-Ereignis hinaus.
+// The reason is in the migration: a dead table with open write access is a
+// surface where anyone can drop an unlimited number of rows that nobody
+// looks at - and each one also went out as a realtime event on top.
 //
-// Das wird hier zuerst geprueft, denn es ist der Zustand, mit dem die Seite
-// live geht.
+// This is checked first here, because it's the state the site goes live
+// with.
 await expectFail('Ein Client kann nicht mehr in messages schreiben', WHALE, () =>
   client.query(`insert into public.messages (wallet, body) values ($1, $2)`,
     [WHALE, 'geht nicht mehr']));
 
-// Und JETZT das Recht befristet zurueckgeben, um die Regeln selbst zu pruefen.
+// And NOW grant the right back temporarily, to check the rules themselves.
 // ---------------------------------------------------------------------------
-// Die Linksperre, die Taktgrenze, der serverseitige Bestandsstempel: Die
-// Regeln stehen alle noch, und sie sollen weiter stimmen – sonst waere der
-// Chat nicht "umkehrbar entfernt", sondern kaputt und niemand wuesste es.
+// The link block, the rate limit, the server-side balance stamp: the rules
+// are all still there, and they should still be correct - otherwise chat
+// wouldn't be "reversibly removed", it would just be broken and nobody
+// would know.
 //
-// Ohne diesen Kunstgriff gaebe es nur zwei Moeglichkeiten, und beide sind
-// schlecht: die fuenfzehn Pruefungen loeschen (dann faellt beim Zurueckdrehen
-// niemandem etwas auf), oder das Recht dauerhaft lassen (dann ist das Loch
-// wieder da).
+// Without this trick there would only be two options, and both are bad:
+// delete the fifteen checks (then nobody notices anything if this ever gets
+// turned back on), or leave the grant in place permanently (then the hole
+// is back).
 await client.query('grant insert, delete on public.messages to authenticated');
 await client.query('drop policy if exists messages_insert on public.messages');
 await client.query('drop policy if exists messages_admin_delete on public.messages');
@@ -219,7 +219,7 @@ await client.query(`create policy messages_admin_delete on public.messages
   for delete to authenticated using (app.is_admin())`);
 
 await asWallet(WHALE, () =>
-  client.query(`insert into public.messages (wallet, body) values ($1, $2)`, [WHALE, 'endlich. warte seit wochen.']));
+  client.query(`insert into public.messages (wallet, body) values ($1, $2)`, [WHALE, 'endlich. wait seit wochen.']));
 await asWallet(SHRIMP, () =>
   client.query(`insert into public.messages (wallet, body) values ($1, $2)`, [SHRIMP, 'wen muss ich bestechen für ein airdrop']));
 await asWallet(ADMIN, () =>
@@ -274,9 +274,9 @@ await asWallet(WHALE, () => client.query(
 await asWallet(SHRIMP, () => client.query(
   `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
   [poll.id, poll.options[1], SHRIMP]));
-// Hier stimmte Ansem noch mit, und die Zahlen darunter rechneten mit seiner
-// Stimme. Seit 20260825060000_admin_does_not_vote.sql weist die Datenbank sie
-// ab – er stellt die Frage, legt die Antworten fest und schliesst ab.
+// Ansem used to vote here too, and the numbers below counted his vote. Since
+// 20260825060000_admin_does_not_vote.sql the database rejects it - he asks
+// the question, sets the answers, and closes it out.
 await expectFail('Ansem stimmt in seiner eigenen Abstimmung nicht mit', ADMIN, () =>
   client.query(`insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
     [poll.id, poll.options[1], ADMIN]));
@@ -299,7 +299,7 @@ const afterSwitch = await asWallet(WHALE, () => client.query(
   `select sum(votes)::int v from public.poll_results where poll_id=$1`, [poll.id]));
 check('Umentscheiden erzeugt keine zweite Stimme', afterSwitch.rows[0].v === 2, `${afterSwitch.rows[0].v} Stimmen`);
 
-await expectFail('Für eine fremde Wallet abstimmen geht nicht', SHRIMP, () =>
+await expectFail('Für eine fremde Wallet castVote geht nicht', SHRIMP, () =>
   client.query(`insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
     [poll.id, poll.options[0], WHALE]));
 
@@ -324,7 +324,7 @@ await expectFail('Beendete Abstimmung nimmt keine Stimmen mehr', GHOST, () =>
 
 console.log('\n── Stimmgewicht folgt dem Bestand ──');
 
-/** Direkt als Service-Role gelesen, ohne RLS. */
+/** Read directly as service role, without RLS. */
 const weightOf = async (pollId, wallet) => (await client.query(
   `select weight_tokens t, weight_usd u from public.votes where poll_id=$1 and wallet=$2`,
   [pollId, wallet])).rows[0] ?? null;
@@ -353,16 +353,16 @@ check('Verkauf der Hälfte halbiert das Stimmgewicht sofort',
   Number((await weightOf(live.id, WHALE)).u) === 1896.94,
   `$${(await weightOf(live.id, WHALE)).u}`);
 
-// Der eigentliche Angriff: dasselbe Guthaben zweimal abstimmen lassen,
-// indem man es an eine zweite Wallet weiterschickt.
+// The actual attack: getting the same balance to vote twice by forwarding
+// it to a second wallet.
 await asWallet(DOLPHIN, () => client.query(
   `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
   [live.id, live.options[1], DOLPHIN]));
 const before = Number((await client.query(
   `select coalesce(sum(weight_usd),0) s from public.votes where poll_id=$1`, [live.id])).rows[0].s);
 
-await setBalance(WHALE, 0, 0);                         // Wal schickt alles weg
-await setBalance(DOLPHIN, 572_051, 2_402.62);          // und es kommt beim Delfin an
+await setBalance(WHALE, 0, 0);                         // whale sends it all away
+await setBalance(DOLPHIN, 572_051, 2_402.62);          // and it lands on the dolphin
 
 check('Geleerte Wallet verliert ihre Stimme', (await weightOf(live.id, WHALE)) === null);
 const after = Number((await client.query(
@@ -371,7 +371,7 @@ check('Weiterschicken erzeugt kein zusätzliches Gewicht',
   Math.abs(after - 2402.62) < 0.01,
   `vorher $${before.toFixed(2)} (zwei Wallets), nachher $${after.toFixed(2)} (eine)`);
 
-// Beendete Abstimmungen dürfen sich nicht rückwirkend ändern.
+// Closed polls must not change retroactively.
 const frozenBefore = Number((await weightOf(poll.id, SHRIMP)).u);
 await setBalance(SHRIMP, 0, 0);
 const frozenAfter = await weightOf(poll.id, SHRIMP);
@@ -379,7 +379,7 @@ check('Beendete Abstimmung bleibt eingefroren',
   frozenAfter !== null && Number(frozenAfter.u) === frozenBefore,
   `$${frozenBefore} bleibt $${frozenAfter?.u}`);
 
-// Ausgangszustand wiederherstellen – der Wal kauft zurück.
+// Restore the starting state - the whale buys back in.
 await setBalance(SHRIMP, 7_739, 32.5);
 await setBalance(WHALE, 903_302, 3_793.87);
 check('Zurückgekaufte Token bringen die gelöschte Stimme nicht zurück',
@@ -388,18 +388,19 @@ check('Zurückgekaufte Token bringen die gelöschte Stimme nicht zurück',
 // ---------------------------------------------------------------------------
 console.log('\n── Das Gewicht selbst schreiben ──');
 //
-// Die Prüfungen darüber gehen alle den vorgesehenen Weg: abstimmen, umstimmen,
-// Bestand ändern. Hier geht es um den Weg daneben – ein PATCH über PostgREST
-// mit dem öffentlichen anon-Key und der eigenen Sitzung.
+// The checks above all take the intended path: vote, change your vote,
+// change your balance. This is about the path beside it - a PATCH over
+// PostgREST with the public anon key and one's own session.
 //
-// Das ging bis Migration 20260903010000. Der Stempel-Trigger hing an
-// "before insert or update OF option_id"; wer option_id in Ruhe ließ und nur
-// weight_usd schrieb, löste ihn nicht aus. Eine Wallet mit $32,50 konnte sich
-// $99.999.999 Stimmgewicht eintragen, und poll_results meldete es weiter.
+// That worked up through migration 20260903010000. The stamping trigger was
+// attached to "before insert or update OF option_id"; whoever left option_id
+// alone and only wrote weight_usd never triggered it. A wallet with $32.50
+// could set its own vote weight to $99,999,999, and poll_results reported it
+// right along.
 //
-// Von selbst geheilt hätte es sich nicht: sync_votes_with_balance läuft nur,
-// wenn sich der BESTAND ändert. Wer danach nichts mehr bewegt, behält seine
-// Zahl – bei geschlossenen Abstimmungen für immer.
+// It wouldn't have healed itself: sync_votes_with_balance only runs when the
+// BALANCE changes. Whoever moves nothing after that keeps their number - on
+// closed polls, forever.
 const gewichtVon = async (pollId, wallet) => Number((await client.query(
   `select weight_usd u from public.votes where poll_id=$1 and wallet=$2`,
   [pollId, wallet])).rows[0]?.u);
@@ -410,9 +411,9 @@ await asWallet(DOLPHIN, () => client.query(
   [live.id, live.options[0], DOLPHIN]));
 const ehrlich = await gewichtVon(live.id, DOLPHIN);
 
-// Kein expectFail: Ein mitgeschickter Wert wird ÜBERSCHRIEBEN, nicht
-// abgelehnt. Absichtlich so – ein PostgREST-Client schickt beim upsert ganze
-// Zeilen mit, und eine Absage träfe auch den ehrlichen Fall.
+// No expectFail: a value sent along gets OVERWRITTEN, not rejected.
+// Deliberately so - a PostgREST client sends whole rows on an upsert, and a
+// rejection would also hit the honest case.
 await asWallet(DOLPHIN, () => client.query(
   `update public.votes set weight_usd = 99999999, weight_tokens = 24000000000
     where poll_id=$1 and wallet=$2`, [live.id, DOLPHIN]));
@@ -420,8 +421,8 @@ check('Ein selbst geschriebenes Gewicht wird überschrieben',
   (await gewichtVon(live.id, DOLPHIN)) === ehrlich,
   `$${ehrlich} bleibt $${await gewichtVon(live.id, DOLPHIN)}`);
 
-// Die Gegenprobe, dass hier überhaupt etwas geprüft wird: Die ehrliche Zahl
-// darf nicht zufällig auch die gefälschte sein.
+// The control check that anything is even being verified here: the honest
+// number must not accidentally also be the forged one.
 check('Vorprobe: die ehrliche Zahl ist eine andere', ehrlich > 0 && ehrlich < 99999999,
   `$${ehrlich}`);
 
@@ -430,16 +431,16 @@ await expectFail('Eine Stimme lässt sich nicht in eine andere Abstimmung hänge
     `update public.votes set poll_id=$1 where poll_id=$2 and wallet=$3`,
     [poll.id, live.id, DOLPHIN]));
 
-// Der eindeutige Schlüssel (poll_id, wallet) fängt das NICHT – er verhindert
-// Doppelte, keine Umzüge. Und die fremde Wallet fängt schon die Regel weg.
+// The unique key (poll_id, wallet) does NOT catch this - it prevents
+// duplicates, not moves. And a foreign wallet is already caught by the
+// policy.
 await expectFail('Und nicht auf eine andere Wallet',
   DOLPHIN, () => client.query(
     `update public.votes set wallet=$1 where poll_id=$2 and wallet=$3`,
     [GHOST, live.id, DOLPHIN]));
 
-// Der schlimmere der beiden Fälle: Bei einer geschlossenen Abstimmung gilt das
-// Ergebnis als endgültig. Es stand aber in einer Zeile, die ihr Eigentümer
-// weiter anfassen durfte.
+// The worse of the two cases: on a closed poll, the result counts as final.
+// But it lived in a row its owner was still allowed to touch.
 const beendetVorher = await gewichtVon(poll.id, SHRIMP);
 await expectFail('Eine geschlossene Abstimmung nimmt gar keine Änderung mehr an',
   SHRIMP, () => client.query(
@@ -449,25 +450,26 @@ check('Ihr Ergebnis steht danach unverändert da',
   (await gewichtVon(poll.id, SHRIMP)) === beendetVorher,
   `$${beendetVorher}`);
 
-// Und der ehrliche Weg muss weiter gehen – eine Sperre, die auch das Richtige
-// abweist, ist keine Lösung, sondern der nächste Fehlerbericht.
+// And the honest path still has to keep working - a lock that also rejects
+// the legitimate case isn't a fix, it's the next bug report.
 await asWallet(DOLPHIN, () => client.query(
   `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)
    on conflict (poll_id, wallet)
    do update set poll_id = excluded.poll_id, option_id = excluded.option_id,
                  wallet = excluded.wallet`,
   [live.id, live.options[1], DOLPHIN]));
-check('Die Antwort zu wechseln geht weiter – genau wie die App es tut',
+check('Die Antwort zu wechseln geht next – genau wie die App es tut',
   Number((await client.query(
     `select option_id o from public.votes where poll_id=$1 and wallet=$2`,
     [live.id, DOLPHIN])).rows[0].o) === Number(live.options[1]));
 
 await setBalance(DOLPHIN, 200_000, 840.00);
-check('Und ein geänderter Bestand zieht die offene Stimme weiter nach',
+check('Und ein geänderter Bestand zieht die offene Stimme next nach',
   (await gewichtVon(live.id, DOLPHIN)) === 840,
   `$${await gewichtVon(live.id, DOLPHIN)}`);
-// Ueber der DM-Schwelle von $1000: Der Delfin schreibt weiter unten eine DM,
-// und die Schwelle ist seit 20260831020000 kein Dollar mehr, sondern tausend.
+// Above the $1000 DM threshold: the dolphin writes a DM further down, and
+// since 20260831020000 the threshold is no longer a dollar, it's a
+// thousand.
 await setBalance(DOLPHIN, 120_400, 1_505.68);
 
 console.log('\n── Links ──');
@@ -508,16 +510,16 @@ check('Ansem darf Links posten', true);
 await asWallet(WHALE, () => client.query(
   `insert into public.dms (wallet, body) values ($1, 'hier der link: https://meine-seite.com')`, [WHALE]));
 check('In DMs sind Links weiterhin erlaubt', true);
-// Wieder entfernen, damit die DM-Tests unten von einem sauberen Stand ausgehen.
+// Remove it again, so the DM tests below start from a clean state.
 await client.query(`delete from public.dms where body like 'hier der link%'`);
 
 console.log('\n── DMs ──');
 
 await asWallet(WHALE, () => client.query(
   `insert into public.dms (wallet, body) values ($1,$2)`, [WHALE, 'Interesse an einem OTC-Block?']));
-// Der Shrimp haelt $32,50. Seit 20260831020000_dm_schwelle_1000.sql sind das
-// zu wenig – hier stand frueher ein glatter insert, weil die Schwelle damals
-// noch bei einem Dollar lag. Der Delfin uebernimmt seinen Platz.
+// The shrimp holds $32.50. Since 20260831020000_dm_schwelle_1000.sql that's
+// no longer enough - this used to be a plain insert, back when the
+// threshold still sat at one dollar. The dolphin takes its place.
 await expectFail('Unter der Schwelle kommt keine DM durch', SHRIMP, () =>
   client.query(`insert into public.dms (wallet, body) values ($1,$2)`,
     [SHRIMP, 'bruder bitte ein airdrop']));
@@ -540,13 +542,13 @@ const fremdeThreads = await asWallet(DOLPHIN, () => client.query(`select wallet 
 check('dm_threads verrät Nicht-Admins keine fremden Threads',
   fremdeThreads.rows.length === 1 && fremdeThreads.rows[0].wallet === DOLPHIN);
 
-// Der Shrimp stand hier, und der Test bestand – aber am falschen Netz: Er
-// haelt $32,50, und die DM-Schwelle von $1000 hat ihn abgewiesen, bevor die
-// Regel ueber from_admin ueberhaupt drankam. Ein gruener Haken, der ueber die
-// Sperre, um die es geht, gar nichts sagte.
+// The shrimp used to be here, and the test passed - but on the wrong basis:
+// it holds $32.50, and the $1000 DM threshold rejected it before the
+// from_admin rule ever got a chance to fire. A green check that said
+// nothing about the lock it was supposed to be testing.
 //
-// Der Delfin liegt ueber der Schwelle. Und die Meldung wird mitgeprueft: Sie
-// muss aus der RLS-Regel kommen, nicht aus dem Mindestbestand.
+// The dolphin sits above the threshold. And the error message gets checked
+// too: it has to come from the RLS policy, not from the minimum balance.
 const alsAnsem = await expectFail('Niemand kann sich als Ansem ausgeben', DOLPHIN, () =>
   client.query(`insert into public.dms (wallet, from_admin, body) values ($1, true, $2)`,
     [WHALE, 'hier spricht ansem, schick mir sol']));
@@ -556,14 +558,14 @@ check('Und zwar an der richtigen Regel, nicht am Mindestbestand',
 
 await asWallet(ADMIN, () => client.query(
   `insert into public.dms (wallet, from_admin, body) values ($1, true, $2)`,
-  [WHALE, 'schreib mir auf tg, gleicher handle.']));
+  [WHALE, 'write mir auf tg, gleicher handle.']));
 const reply = await asWallet(WHALE, () => client.query(
   `select count(*)::int c from public.dms where from_admin`));
 check('Antwort von Ansem landet im Thread des Nutzers', reply.rows[0].c === 1);
 
 console.log('\n── Rate-Limits ──');
 
-// Sechs Nachrichten gehen durch, die siebte innerhalb derselben Minute nicht.
+// Six messages go through, the seventh within the same minute doesn't.
 let sent = 0;
 try {
   for (let i = 0; i < 9; i++) {
@@ -571,22 +573,22 @@ try {
       `insert into public.messages (wallet, body) values ($1, $2)`, [DOLPHIN, `spam ${i}`]));
     sent++;
   }
-} catch { /* erwartet */ }
+} catch { /* expected */ }
 check('messages bremst nach 6 Nachrichten pro Minute', sent === 6, `${sent} durchgelassen`);
 
 await expectFail('Die siebte Nachricht wird abgelehnt', DOLPHIN, () =>
   client.query(`insert into public.messages (wallet, body) values ($1, 'noch eine')`, [DOLPHIN]));
 
-// --- Wiederholungen sind wieder erlaubt ---
+// --- Repeats are allowed again ---
 //
-// Hier stand eine Sperre gegen dieselbe Nachricht zweimal hintereinander.
-// 20260827020000_doppelte_erlauben_link_hinweis.sql hat sie entfernt: In einem
-// Chat sagt man Dinge zweimal, weil die erste Nachricht untergegangen ist. Der
-// Spamschutz sitzt bei der Taktgrenze, nicht beim Wortlaut.
+// There used to be a block against the same message twice in a row.
+// 20260827020000_doppelte_erlauben_link_hinweis.sql removed it: in a chat,
+// people say things twice because the first message got lost in the noise.
+// Spam protection lives in the rate limit, not in the wording.
 //
-// Die Pruefungen darunter behaupteten das Gegenteil und sind seitdem falsch.
-// Sie stehen jetzt andersherum da – die Sperre darf nicht zurueckkommen, ohne
-// dass es hier auffaellt.
+// The checks below used to claim the opposite and were wrong ever since.
+// They now stand the other way around - the block must not come back
+// without this catching it.
 await client.query(`delete from public.messages where wallet=$1`, [GHOST]);
 await client.query(
   `insert into public.wallets (address, ui_amount, usd_value, price) values ($1, 5000, 21, 0.0042)
@@ -604,7 +606,7 @@ for (const text of ['wen muss ich bestechen', 'wen muss ich bestechen',
 check('Dieselbe Nachricht darf zweimal hintereinander kommen',
   wiederholt.every((w) => w === 'durch'), wiederholt.join(' · '));
 
-// Ansem ist ausgenommen – er soll nicht gebremst werden.
+// Ansem is exempt - he shouldn't be rate-limited.
 let adminSent = 0;
 try {
   for (let i = 0; i < 15; i++) {
@@ -612,12 +614,12 @@ try {
       `insert into public.messages (wallet, body) values ($1, $2)`, [ADMIN, `ansem ${i}`]));
     adminSent++;
   }
-} catch { /* sollte nicht passieren */ }
+} catch { /* shouldn't happen */ }
 check('Ansem wird nicht gebremst', adminSent === 15, `${adminSent} durchgelassen`);
 
-// Das befristete Recht wieder einziehen – ab hier gilt wieder der Zustand,
-// mit dem die Seite live geht. Ohne diese Zeilen prueften alle folgenden
-// Abschnitte gegen eine Datenbank, die es so nicht gibt.
+// Revoke the temporary grant again - from here on, the state matches what
+// the site goes live with again. Without these lines, every section below
+// would be testing against a database that doesn't actually exist.
 await client.query('drop policy if exists messages_insert on public.messages');
 await client.query('drop policy if exists messages_admin_delete on public.messages');
 await client.query('revoke insert, delete on public.messages from authenticated');
@@ -625,10 +627,10 @@ await expectFail('Gegenprobe: danach ist messages wieder dicht', WHALE, () =>
   client.query(`insert into public.messages (wallet, body) values ($1, $2)`,
     [WHALE, 'und jetzt nicht mehr']));
 
-// GHOST haelt aus den Taktgrenzen-Tests darueber 5.000 Token / $21 – zu wenig
-// fuer eine DM, seit die Schwelle bei $1000 liegt. Ohne diese Zeile misst der
-// Test unten nicht die Taktgrenze, sondern den Mindestbestand, und meldet
-// "0 durchgelassen" statt 5.
+// GHOST holds 5,000 tokens / $21 from the rate-limit tests above - not
+// enough for a DM now that the threshold sits at $1000. Without this line
+// the test below wouldn't measure the rate limit, it would measure the
+// minimum balance, and report "0 durchgelassen" instead of 5.
 await client.query(
   `update public.wallets set ui_amount = 400000, usd_value = 1680 where address = $1`,
   [GHOST]);
@@ -640,7 +642,7 @@ try {
       `insert into public.dms (wallet, body) values ($1, $2)`, [GHOST, `dm ${i}`]));
     dmSent++;
   }
-} catch { /* erwartet */ }
+} catch { /* expected */ }
 check('DMs bremsen nach 5 pro Minute', dmSent === 5, `${dmSent} durchgelassen`);
 
 await asWallet(ADMIN, () => client.query(
@@ -676,17 +678,17 @@ const inOneHour = new Date(Date.now() + 3_600_000);
 await client.query(
   `insert into public.challenges (wallet, lamports, expires_at) values ($1, 2000123, $2)`,
   [WHALE, inOneHour]);
-// Der Betrag ist EINDEUTIG JE WALLET, nicht global.
+// The amount is UNIQUE PER WALLET, not globally.
 //
-// Global war er es einmal, und das kostete Nachkommastellen: Um genug
-// verschiedene Beträge zu haben, ging der Aufschlag bis auf das Lamport
-// hinunter – 0.002043217 SOL, neun Stellen. In Phantom auf dem Handy lässt
-// sich das nicht eintippen, die letzte Stelle fällt weg, und die Zahlung
-// passt auf keine Challenge. Das Geld ist weg und niemand sieht warum.
+// It used to be global, and that cost decimal places: to have enough
+// distinct amounts, the surcharge went all the way down to the lamport -
+// 0.002043217 SOL, nine digits. On Phantom on a phone that can't be typed
+// in, the last digit gets dropped, and the payment matches no challenge.
+// The money is gone and nobody sees why.
 //
-// Global eindeutig muss der Betrag auch gar nicht sein: scanTreasury gleicht
-// zusätzlich die ABSENDERADRESSE ab. Eine fremde Zahlung käme aus einer
-// fremden Wallet und passt schon deshalb nicht.
+// The amount doesn't even need to be globally unique: scanTreasury also
+// matches the SENDER ADDRESS. A payment from someone else would come from a
+// different wallet and wouldn't match for that reason alone.
 let dupFremd = true;
 try {
   await client.query(
@@ -727,51 +729,53 @@ check('wallets_to_refresh liefert nur Wallets mit offener Stimme',
   refreshList.rows.length > 0 && refreshList.rows.every((r) => r.address === DOLPHIN),
   refreshList.rows.map((r) => r.address.slice(0, 3)).join(', '));
 
-// ── Grenzen für Frage, Antwort und Antwortzahl ─────────────────────────────
+// ── Limits for question, answer, and answer count ──────────────────────────
 //
-// Die Zahlen stehen doppelt: im Formular (app.js) und hier. Das Formular ist
-// die Höflichkeit – es sagt beim Tippen, wo Schluss ist. Die Sperre ist die
-// Datenbank, denn PostgREST nimmt jeden insert an, der durch die Zeilenregeln
-// kommt. Wer den Browser umgeht, landet hier.
+// The numbers exist twice: in the form (app.js) and here. The form is the
+// courtesy - it tells you while typing where the cutoff is. The lock is the
+// database, because PostgREST accepts any insert that gets past the row
+// policies. Whoever bypasses the browser ends up here.
 //
-// Warum die Zahlen 100, 60 und 4 sind, steht in den Migrationen und in
-// test-poll-bild.mjs: Alle drei sind an der Karte gemessen, die nach draußen
-// geht. Hier wird nur geprüft, dass die Datenbank sie WIRKLICH durchsetzt.
-// ── Challenges gehoeren ihrem Ersteller ────────────────────────────────────
+// Why the numbers are 100, 60, and 4 is explained in the migrations and in
+// test-poll-bild.mjs: all three are measured against the card that goes
+// out publicly. Here it's only checked that the database REALLY enforces
+// them.
+// ── Challenges belong to their creator ──────────────────────────────────────
 //
-// Der Rest der Sperre steht in verify (Geheimnis, Abdruck, Eigentumspruefung)
-// und wird von test-anmeldung-uebernahme.mjs geprueft. Hier geht es um das,
-// was nur die Datenbank durchsetzen kann.
+// The rest of the lock lives in verify (secret, fingerprint, ownership
+// check) and is checked by test-anmeldung-uebernahme.mjs. This is about
+// what only the database can enforce.
 console.log('\n── Challenges ──');
 
-const offeneChallenge = (wallet, lamports) => client.query(
+const openChallenge = (wallet, lamports) => client.query(
   `insert into public.challenges (wallet, lamports, expires_at, secret_hash)
    values ($1, $2, now() + interval '20 minutes', $3)`,
   [wallet, lamports, 'a'.repeat(64)]);
 
 const CH = 'CHALLENGExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 await client.query(`delete from public.challenges where wallet = $1`, [CH]);
-for (let i = 0; i < 3; i++) await offeneChallenge(CH, 9_100_000 + i);
+for (let i = 0; i < 3; i++) await openChallenge(CH, 9_100_000 + i);
 check('Drei offene Challenges je Wallet gehen durch', true);
 
-// Ohne Obergrenze koennte jemand fuer eine FREMDE Adresse tausende oeffnen und
-// die Betraege besetzen – der eindeutige Index macht jeden exklusiv, und es
-// gibt nur 100.000. Das waere keine Uebernahme mehr, aber eine verschlossene
-// Tuer fuer den Richtigen.
+// Without an upper bound, someone could open thousands for a FOREIGN address
+// and occupy the amounts - the unique index makes each one exclusive, and
+// there are only 100,000. That wouldn't be a takeover anymore, but it would
+// be a locked door for the rightful owner.
 let vierte = null;
-try { await offeneChallenge(CH, 9_100_009); }
+try { await openChallenge(CH, 9_100_009); }
 catch (e) { vierte = e.message; }
 check('Die vierte wird abgewiesen', vierte !== null, (vierte ?? '').slice(0, 60));
 
-// Abgelaufene zaehlen nicht mit – sonst waere die Wallet nach einer Stunde
-// Herumprobieren dauerhaft gesperrt.
+// Expired ones don't count - otherwise a wallet would end up permanently
+// locked out after an hour of trying things.
 await client.query(
   `update public.challenges set expires_at = now() - interval '1 minute' where wallet = $1`, [CH]);
-await offeneChallenge(CH, 9_100_010);
+await openChallenge(CH, 9_100_010);
 check('Abgelaufene zählen nicht mit', true);
 
-// Und der Altbestand: offene Challenges ohne Abdruck sind nach der Migration
-// abgelaufen. Man sieht ihnen nicht an, ob sie einem Angreifer gehoeren.
+// And the legacy rows: open challenges without a fingerprint are expired
+// after the migration. There's no way to tell from them whether they belong
+// to an attacker.
 await client.query(`delete from public.challenges where wallet = $1`, [CH]);
 await client.query(
   `insert into public.challenges (wallet, lamports, expires_at)
@@ -790,90 +794,90 @@ const grenzeAus = (name) => {
   if (!m) throw new Error(`${name} nicht in app.js gefunden`);
   return Number(m[1]);
 };
-const MAX_FRAGE = grenzeAus('MAX_FRAGE');
-const MAX_ANTWORT = grenzeAus('MAX_ANTWORT');
+const MAX_QUESTION = grenzeAus('MAX_QUESTION');
+const MAX_ANSWER = grenzeAus('MAX_ANSWER');
 const MAX_OPTIONEN = grenzeAus('MAX_OPTIONEN');
 
-const gehtDurch = async (sql, werte) => {
+const passes = async (sql, werte) => {
   try { await client.query(sql, werte); return true; } catch { return false; }
 };
 
-// Genau auf der Grenze muss es gehen, ein Zeichen darüber nicht. Beide Seiten
-// prüfen, sonst bestünde der Test auch eine Datenbank, die gar nichts annimmt.
+// Right at the limit it has to work, one character over it must not. Check
+// both sides, otherwise the test would also pass a database that accepts
+// nothing at all.
 const fr = await client.query(
-  `insert into public.polls (question) values ($1) returning id`, ['x'.repeat(MAX_FRAGE)]);
-check(`Eine Frage mit genau ${MAX_FRAGE} Zeichen wird angenommen`, fr.rows.length === 1);
-check(`Eine mit ${MAX_FRAGE + 1} nicht`,
-  !await gehtDurch(`insert into public.polls (question) values ($1)`, ['x'.repeat(MAX_FRAGE + 1)]));
+  `insert into public.polls (question) values ($1) returning id`, ['x'.repeat(MAX_QUESTION)]);
+check(`Eine Frage mit genau ${MAX_QUESTION} Zeichen wird angenommen`, fr.rows.length === 1);
+check(`Eine mit ${MAX_QUESTION + 1} nicht`,
+  !await passes(`insert into public.polls (question) values ($1)`, ['x'.repeat(MAX_QUESTION + 1)]));
 
 const pollId = fr.rows[0].id;
-check(`Eine Antwort mit genau ${MAX_ANTWORT} Zeichen wird angenommen`,
-  await gehtDurch(`insert into public.poll_options (poll_id, label, idx) values ($1, $2, 0)`,
-    [pollId, 'y'.repeat(MAX_ANTWORT)]));
-check(`Eine mit ${MAX_ANTWORT + 1} nicht`,
-  !await gehtDurch(`insert into public.poll_options (poll_id, label, idx) values ($1, $2, 1)`,
-    [pollId, 'y'.repeat(MAX_ANTWORT + 1)]));
+check(`Eine Antwort mit genau ${MAX_ANSWER} Zeichen wird angenommen`,
+  await passes(`insert into public.poll_options (poll_id, label, idx) values ($1, $2, 0)`,
+    [pollId, 'y'.repeat(MAX_ANSWER)]));
+check(`Eine mit ${MAX_ANSWER + 1} nicht`,
+  !await passes(`insert into public.poll_options (poll_id, label, idx) values ($1, $2, 1)`,
+    [pollId, 'y'.repeat(MAX_ANSWER + 1)]));
 
-// Die App legt ALLE Antworten in einem einzigen insert an – der Trigger läuft
-// deshalb pro Anweisung. Beide Wege prüfen: alle auf einmal, und eine zu viel
-// nachgeschoben.
+// The app creates ALL answers in a single insert - the trigger therefore
+// runs per statement. Check both paths: all at once, and one pushed in
+// afterward.
 const alleAufEinmal = await client.query(
   `insert into public.polls (question) values ('Alle auf einmal') returning id`);
 check(`${MAX_OPTIONEN} Antworten in EINEM insert gehen durch`,
-  await gehtDurch(
+  await passes(
     `insert into public.poll_options (poll_id, label, idx)
      select $1, 'A'||g, g from generate_series(1, $2) g`, [alleAufEinmal.rows[0].id, MAX_OPTIONEN]));
 check(`Eine ${MAX_OPTIONEN + 1}. nachgeschoben wird abgewiesen`,
-  !await gehtDurch(`insert into public.poll_options (poll_id, label, idx) values ($1, 'zuviel', 99)`,
+  !await passes(`insert into public.poll_options (poll_id, label, idx) values ($1, 'zuviel', 99)`,
     [alleAufEinmal.rows[0].id]));
 
 const zuVieleAufEinmal = await client.query(
   `insert into public.polls (question) values ('Zu viele auf einmal') returning id`);
 check(`Und ${MAX_OPTIONEN + 1} in EINEM insert auch`,
-  !await gehtDurch(
+  !await passes(
     `insert into public.poll_options (poll_id, label, idx)
      select $1, 'A'||g, g from generate_series(1, $2) g`,
     [zuVieleAufEinmal.rows[0].id, MAX_OPTIONEN + 1]));
-// Und der abgewiesene insert darf nichts zurücklassen.
+// And a rejected insert must not leave anything behind.
 const restlos = await client.query(
   `select count(*)::int c from public.poll_options where poll_id = $1`, [zuVieleAufEinmal.rows[0].id]);
 check('Der abgewiesene insert lässt keine halbe Abstimmung zurück',
   restlos.rows[0].c === 0, `${restlos.rows[0].c} Antworten übrig`);
 
-// Der Fall, der beim Bauen des Triggers fast schiefgegangen wäre: Eine alte
-// Abstimmung mit mehr Antworten darf NEUE Abstimmungen nicht blockieren. Eine
-// Zählung über die ganze Tabelle hätte genau das getan.
+// The case that nearly went wrong while building this trigger: an old poll
+// with more answers must not block NEW polls. A count over the whole table
+// would have done exactly that.
 await client.query(`alter table public.poll_options disable trigger trg_poll_options_anzahl`);
 const alt = await client.query(
-  `insert into public.polls (question) values ('Alt und zu gross') returning id`);
+  `insert into public.polls (question) values ('Alt und zu big') returning id`);
 await client.query(
   `insert into public.poll_options (poll_id, label, idx)
    select $1, 'Alt '||g, g from generate_series(1, $2) g`, [alt.rows[0].id, MAX_OPTIONEN + 3]);
 await client.query(`alter table public.poll_options enable trigger trg_poll_options_anzahl`);
-const neuTrotzAlt = await client.query(
+const newDespiteOld = await client.query(
   `insert into public.polls (question) values ('Neu neben alt') returning id`);
 check('Eine bestehende zu große Abstimmung blockiert neue nicht',
-  await gehtDurch(
+  await passes(
     `insert into public.poll_options (poll_id, label, idx)
-     select $1, 'Neu '||g, g from generate_series(1, 2) g`, [neuTrotzAlt.rows[0].id]));
+     select $1, 'Neu '||g, g from generate_series(1, 2) g`, [newDespiteOld.rows[0].id]));
 
 
 // ---------------------------------------------------------------------------
 console.log('\n── Die Summen laufen nicht auseinander ──');
 // ---------------------------------------------------------------------------
 //
-// public.poll_totals wird beim SCHREIBEN fortgeschrieben, statt beim Lesen
-// gebildet zu werden. Das ist der Grund, warum ein Abruf 0,03 statt 55 ms
-// kostet – und zugleich die Gefahr: Eine fortgeschriebene Summe kann von den
-// Zeilen abweichen, aus denen sie entstand. Passiert das, sieht man es nicht.
-// Die Balken stehen einfach falsch, und niemand merkt es, weil es keine
-// zweite Zahl gibt, gegen die man vergleichen könnte.
+// public.poll_totals is kept up to date on WRITE, instead of being computed
+// on read. That's why a fetch costs 0.03 ms instead of 55 - and at the same
+// time the risk: a running total can drift from the rows it was built from.
+// If that happens, you don't see it. The bars are just wrong, and nobody
+// notices, because there's no second number to compare against.
 //
-// Also gibt es hier eine: Nach JEDER Operation wird die mitgeführte Summe
-// gegen eine frisch gebildete gestellt. Weicht sie ab, ist der Trigger kaputt.
+// So here's one: after EVERY operation, the running total gets checked
+// against a freshly computed one. If it's off, the trigger is broken.
 
-/** Vergleicht public.poll_totals mit einer frisch gebildeten Summe. */
-async function summenStimmen(label) {
+/** Compares public.poll_totals against a freshly computed sum. */
+async function sumVotes(label) {
   const { rows } = await client.query(`
     select coalesce(t.option_id, f.option_id) as option_id,
            coalesce(t.votes, 0) as t_votes, coalesce(f.votes, 0) as f_votes,
@@ -889,7 +893,7 @@ async function summenStimmen(label) {
     rows.length ? `${rows.length} Zeile(n) weichen ab: ${JSON.stringify(rows[0])}` : '');
 }
 
-// Eine eigene Abstimmung, damit die Prüfungen oben unberührt bleiben.
+// A dedicated poll, so the checks above stay untouched.
 const sumPoll = await client.query(
   `insert into public.polls (question) values ('Summenprobe') returning id`);
 const sumP = sumPoll.rows[0].id;
@@ -898,16 +902,16 @@ const sumOpts = await client.query(
    values ($1,'A',0), ($1,'B',1) returning id`, [sumP]);
 const [optA, optB] = sumOpts.rows.map((r) => r.id);
 
-await summenStimmen('Vor der ersten Stimme sind beide leer');
+await sumVotes('Vor der ersten Stimme sind beide empty');
 
-// 1. Abstimmen
+// 1. Voting
 await asWallet(WHALE, () => client.query(
   `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
   [sumP, optA, WHALE]));
 await asWallet(DOLPHIN, () => client.query(
   `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
   [sumP, optA, DOLPHIN]));
-await summenStimmen('Nach zwei Stimmen auf dieselbe Antwort');
+await sumVotes('Nach zwei Stimmen auf dieselbe Antwort');
 
 const nachZwei = await client.query(
   `select votes, usd from public.poll_totals where option_id=$1`, [optA]);
@@ -916,71 +920,73 @@ check('Und die Summe ist nicht nur konsistent, sondern richtig',
     && Math.abs(Number(nachZwei.rows[0].usd) - (3793.87 + 1505.68)) < 0.01,
   `${nachZwei.rows[0].votes} Stimmen, $${nachZwei.rows[0].usd}`);
 
-// 2. Meinung ändern – die Stimme wandert auf die andere Antwort. Genau hier
-//    muss die alte Zeile abgezogen UND die neue addiert werden; wer nur
-//    addiert, zählt den Wal für immer doppelt.
+// 2. Changing one's mind - the vote moves to the other answer. This is
+//    exactly where the old row has to be subtracted AND the new one added;
+//    whoever only adds ends up counting the whale twice forever.
 await asWallet(WHALE, () => client.query(
   `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)
    on conflict (poll_id, wallet) do update set option_id = excluded.option_id`,
   [sumP, optB, WHALE]));
-await summenStimmen('Nach einem Wechsel der Antwort');
+await sumVotes('Nach einem Wechsel der Antwort');
 const nachWechsel = await client.query(
   `select option_id, votes from public.poll_totals where poll_id=$1 order by option_id`, [sumP]);
 check('Der Wechsel zählt nicht doppelt',
   nachWechsel.rows.every((r) => Number(r.votes) === 1),
   nachWechsel.rows.map((r) => r.votes).join(' / '));
 
-// 3. Der Bestand ändert sich -> app.sync_votes_with_balance schreibt die
-//    Gewichte offener Stimmen neu. Die Summe muss mitwandern.
+// 3. The balance changes -> app.sync_votes_with_balance rewrites the
+//    weights of open votes. The total has to move along with it.
 await client.query(
   `update public.wallets set ui_amount = 500000, usd_value = 2000 where address = $1`, [WHALE]);
-await summenStimmen('Nachdem sich ein Bestand geändert hat');
-const nachBestand = await client.query(
+await sumVotes('Nachdem sich ein Bestand geändert hat');
+const afterInventory = await client.query(
   `select usd from public.poll_totals where option_id=$1`, [optB]);
 check('Und sie trägt den neuen Betrag, nicht den alten',
-  Math.abs(Number(nachBestand.rows[0].usd) - 2000) < 0.01, `$${nachBestand.rows[0].usd}`);
+  Math.abs(Number(afterInventory.rows[0].usd) - 2000) < 0.01, `$${afterInventory.rows[0].usd}`);
 
-// 4. Der Bestand fällt auf null -> die Stimme wird gelöscht. Wer nichts mehr
-//    hält, wiegt nichts mehr – und darf auch nicht mehr in der Summe stehen.
+// 4. The balance drops to zero -> the vote gets deleted. Whoever holds
+//    nothing anymore weighs nothing - and must no longer show up in the
+//    total either.
 await client.query(
   `update public.wallets set ui_amount = 0, usd_value = 0 where address = $1`, [WHALE]);
-await summenStimmen('Nachdem eine Stimme wegen Bestand 0 gelöscht wurde');
+await sumVotes('Nachdem eine Stimme wegen Bestand 0 gelöscht wurde');
 const nachNull = await client.query(
   `select votes, usd from public.poll_totals where option_id=$1`, [optB]);
 check('Die gelöschte Stimme ist aus der Summe verschwunden',
   Number(nachNull.rows[0].votes) === 0 && Number(nachNull.rows[0].usd) === 0,
   `${nachNull.rows[0].votes} Stimmen, $${nachNull.rows[0].usd}`);
 
-// 5. Gegenprobe zur Gegenprobe: Der Vergleich oben muss eine Abweichung auch
-//    WIRKLICH melden. Ohne diese Zeile prüfte summenStimmen() womöglich nur,
-//    dass zwei leere Mengen gleich sind.
+// 5. Control check on the control check: the comparison above actually has
+//    to REPORT a deviation. Without this line, sumVotes() might only
+//    be checking that two empty sets are equal.
 await client.query(`update public.poll_totals set votes = votes + 7 where option_id = $1`, [optA]);
 const vorherFehler = failures;
 const stilleAusgabe = console.log;
 console.log = () => {};                     // der absichtliche Fehlschlag gehört nicht ins Protokoll
-await summenStimmen('(absichtlich verbogen)');
+await sumVotes('(absichtlich verbogen)');
 console.log = stilleAusgabe;
-const hatAngeschlagen = failures === vorherFehler + 1;
+const wasHit = failures === vorherFehler + 1;
 failures = vorherFehler;                    // und er zählt auch nicht
-check('Gegenprobe: eine von Hand verbogene Summe wird bemerkt', hatAngeschlagen)
+check('Gegenprobe: eine von Hand verbogene Summe wird bemerkt', wasHit)
 await client.query(`select app.poll_totals_neu_aufbauen()`);
-await summenStimmen('Und der Neuaufbau bringt sie zurück in Deckung');
+await sumVotes('Und der Neuaufbau bringt sie zurück in Deckung');
 
-// 6. Die Abstimmung löschen -> die Summenzeilen müssen mitgehen, sonst wachsen
-//    sie ewig weiter.
+// 6. Deleting the poll -> the total rows have to go with it, otherwise they
+//    just keep growing forever.
 await client.query(`delete from public.polls where id = $1`, [sumP]);
 const reste = await client.query(
   `select count(*)::int n from public.poll_totals where poll_id = $1`, [sumP]);
 check('Mit der Abstimmung verschwinden auch ihre Summenzeilen',
   reste.rows[0].n === 0, `${reste.rows[0].n} übrig`);
-await summenStimmen('Und danach stimmt alles wieder');
+await sumVotes('Und danach stimmt alles wieder');
 
-// Und das Ganze ist nur etwas wert, wenn der Browser diese Zahlen auch liest.
-const sichtQuelle = await client.query(
+// And all of this is only worth something if the browser actually reads
+// these numbers.
+const viewSource = await client.query(
   `select pg_get_viewdef('public.poll_results'::regclass) as def`);
 check('public.poll_results liest aus der Summentabelle, nicht mehr aus votes',
-  /poll_totals/.test(sichtQuelle.rows[0].def) && !/\bvotes\b\s+v\b/.test(sichtQuelle.rows[0].def),
-  sichtQuelle.rows[0].def.replace(/\s+/g, ' ').slice(0, 70));
+  /poll_totals/.test(viewSource.rows[0].def) && !/\bvotes\b\s+v\b/.test(viewSource.rows[0].def),
+  viewSource.rows[0].def.replace(/\s+/g, ' ').slice(0, 70));
 
 await expectFail('Und niemand kann die Summen von aussen verbiegen', WHALE, () =>
   client.query(`update public.poll_totals set usd = 99999999`));
@@ -990,19 +996,20 @@ await expectFail('Und niemand kann die Summen von aussen verbiegen', WHALE, () =
 console.log('\n── DM-Stups: wer bekommt ihn, und wer darf zuhören ──');
 // ---------------------------------------------------------------------------
 //
-// Der teuerste Pfad der ganzen Seite lief bis eben über postgres_changes: Bei
-// jeder DM prüft Supabase die Rechte EINZELN für jeden Zuhörer. Eine Nachricht
-// an Ansem bei 3.000 offenen Seiten waren 3.000 Prüfungen, einfädig.
+// Until just now, the most expensive path on the whole site ran over
+// postgres_changes: on every DM, Supabase checks permissions INDIVIDUALLY
+// for every listener. One message to Ansem with 3,000 open pages meant
+// 3,000 checks, single-threaded.
 //
-// Jetzt schickt ein Trigger einen Stups an genau zwei Kanäle. Zwei Dinge
-// müssen dafür stimmen, und beide fallen sonst nicht auf:
-//   1. der Stups geht an die RICHTIGEN zwei Kanäle
-//   2. er trägt KEINEN Inhalt
-//   3. fremde dürfen den Kanal nicht betreten
+// Now a trigger sends a ping to exactly two channels. Two things have to
+// hold for that, and neither would be obvious if it broke:
+//   1. the ping goes to the RIGHT two channels
+//   2. it carries NO content
+//   3. strangers must not be able to enter the channel
 
-// DOLPHIN und nicht WHALE: WHALEs Bestand wurde weiter oben auf 0 gesetzt,
-// er faellt seitdem durch die DM-Schwelle. Genau so ein stiller Seiteneffekt
-// hat hier schon einmal eine Pruefung aus dem falschen Grund gruen gemacht.
+// DOLPHIN and not WHALE: WHALE's balance was set to 0 further up, so it now
+// falls below the DM threshold. This exact kind of quiet side effect has
+// already once made a check pass here for the wrong reason.
 await client.query(`delete from realtime.messages`);
 await asWallet(DOLPHIN, () => client.query(
   `insert into public.dms (wallet, body) values ($1, 'Stups-Probe')`, [DOLPHIN]));
@@ -1020,23 +1027,23 @@ check('Einer an Ansems Posteingang',
 check('Beide als privater Broadcast',
   stupse.rows.every((r) => r.private === true && r.extension === 'broadcast'));
 
-// Der wichtigste Punkt: Selbst wenn die Zugangsregel unten je falsch wäre,
-// darf über diesen Weg kein Nachrichtentext abfliessen.
-const inhalte = JSON.stringify(stupse.rows.map((r) => r.payload));
+// The most important point: even if the access policy below were ever
+// wrong, no message text may leak out through this path.
+const contents = JSON.stringify(stupse.rows.map((r) => r.payload));
 check('Kein Stups trägt den Nachrichtentext',
-  !inhalte.includes('Stups-Probe'), inhalte.slice(0, 90));
+  !contents.includes('Stups-Probe'), contents.slice(0, 90));
 check('Und auch keine Beträge',
-  !/snap_usd|snap_tokens|"usd"/.test(inhalte));
+  !/snap_usd|snap_tokens|"usd"/.test(contents));
 
 // ---------------------------------------------------------------------------
-// Die Zugangsregel: Wer darf welchen Kanal betreten?
+// The access policy: who may enter which channel?
 // ---------------------------------------------------------------------------
-// Die Supabase-Doku zeigt als Beispiel `using (true)`. Damit könnte jeder
-// Angemeldete dm:<fremde-adresse> betreten und mitbekommen, WANN diese Person
-// mit Ansem schreibt – kein Inhalt, aber ein Bewegungsprofil.
+// Supabase's own docs show `using (true)` as an example. With that, any
+// logged-in user could enter dm:<someone-elses-address> and learn WHEN that
+// person writes to Ansem - no content, but an activity profile.
 
-/** Darf `wallet` den Kanal `topic` betreten? Fragt die echte Regel. */
-async function darfBetreten(wallet, topic) {
+/** May `wallet` enter channel `topic`? Asks the real policy. */
+async function canEnter(wallet, topic) {
   return asWallet(wallet, async () => {
     await client.query(`select set_config('realtime.topic', $1, true)`, [topic]);
     const { rows } = await client.query(`select count(*)::int n from realtime.messages`);
@@ -1045,19 +1052,20 @@ async function darfBetreten(wallet, topic) {
 }
 
 check('Der Eigentümer darf seinen eigenen Thread hören',
-  await darfBetreten(DOLPHIN, `dm:${DOLPHIN}`));
+  await canEnter(DOLPHIN, `dm:${DOLPHIN}`));
 check('Ein Fremder darf ihn NICHT hören',
-  !(await darfBetreten(WHALE, `dm:${DOLPHIN}`)));
+  !(await canEnter(WHALE, `dm:${DOLPHIN}`)));
 check('Ansem darf den Posteingang hören',
-  await darfBetreten(ADMIN, 'dm:admin'));
+  await canEnter(ADMIN, 'dm:admin'));
 check('Ein normaler Nutzer NICHT',
-  !(await darfBetreten(DOLPHIN, 'dm:admin')));
-// Gegenprobe zur Gegenprobe: Wenn gar nichts sichtbar waere, waeren alle
-// Verneinungen oben gratis richtig.
+  !(await canEnter(DOLPHIN, 'dm:admin')));
+// Control check on the control check: if nothing were visible at all, every
+// denial above would be trivially correct for free.
 check('Gegenprobe: es gibt überhaupt etwas zu sehen',
-  await darfBetreten(ADMIN, 'dm:admin'));
+  await canEnter(ADMIN, 'dm:admin'));
 
-// Und die Regel gilt nur fuer Broadcasts, nicht fuer alles in der Tabelle.
+// And the policy only applies to broadcasts, not to everything in the
+// table.
 await client.query(
   `insert into realtime.messages (topic, extension, event, payload, private)
    values ($1, 'presence', 'x', '{}'::jsonb, true)`, [`dm:${DOLPHIN}`]);
@@ -1071,55 +1079,56 @@ check('Und sie lässt nur Broadcasts durch, nichts anderes',
   nurBroadcast.every((r) => r.extension === 'broadcast'),
   nurBroadcast.map((r) => `${r.extension}:${r.n}`).join(', '));
 
-// Niemand darf selbst senden: keine insert-Regel = kein vorgetäuschtes
-// Klingeln bei Ansem und kein Antreiben fremder Browser.
-// Das Recht zum Einfuegen ist in der Attrappe ausdruecklich ERTEILT. Was hier
-// blockiert, ist also die fehlende insert-Regel und nicht ein fehlendes
-// GRANT – sonst pruefte diese Zeile etwas anderes, als sie behauptet.
+// Nobody may send directly: no insert policy = no faked ringing at Ansem's
+// end and no pushing other people's browsers around.
+// The insert grant is explicitly GIVEN in the stub. So what's blocking here
+// is the missing insert policy, not a missing GRANT - otherwise this line
+// would be testing something other than what it claims to.
 await expectFail('Niemand kann selbst einen Stups losschicken', DOLPHIN, () =>
   client.query(
     `insert into realtime.messages (topic, extension, event, payload, private)
      values ('dm:admin', 'broadcast', 'dm', '{}'::jsonb, true)`));
 
-// Gegenprobe zur Zugangsregel.
+// Control check on the access policy.
 //
-// Die Supabase-Doku zeigt als Beispiel `using (true)`. Waere die Regel so
-// gebaut, muessten die vier Pruefungen oben trotzdem gruen sein – dann
-// pruefen sie nichts. Also einmal absichtlich falsch machen und nachsehen,
-// ob es auffaellt.
+// Supabase's own docs show `using (true)` as an example. If the policy were
+// built that way, the four checks above would still all pass - meaning they
+// would be checking nothing. So deliberately break it once and see whether
+// it gets caught.
 await client.query(`
   alter policy dm_stups_empfangen on realtime.messages using (true)`);
-const laschDurch = await darfBetreten(WHALE, `dm:${DOLPHIN}`);
+const allowedThrough = await canEnter(WHALE, `dm:${DOLPHIN}`);
 await client.query(`
   alter policy dm_stups_empfangen on realtime.messages using (
     extension = 'broadcast'
     and ((select realtime.topic()) = 'dm:' || app.jwt_wallet()
          or ((select realtime.topic()) = 'dm:admin' and app.is_admin())))`);
 check('Gegenprobe: mit der laschen Regel aus der Doku käme ein Fremder durch',
-  laschDurch);
+  allowedThrough);
 check('Und mit unserer wieder nicht',
-  !(await darfBetreten(WHALE, `dm:${DOLPHIN}`)));
+  !(await canEnter(WHALE, `dm:${DOLPHIN}`)));
 
-// public.dms darf nicht mehr in der Veroeffentlichung stehen – sonst liefe
-// die teure Haelfte munter weiter und der Umbau waere umsonst.
+// public.dms must no longer be listed in the publication - otherwise the
+// expensive half would keep running along happily and this whole rework
+// would be pointless.
 const wanderungDm = fs.readFileSync(
   path.join(root, 'supabase/migrations/20260904010000_dm_broadcast.sql'), 'utf8');
 check('public.dms verlässt die Realtime-Veröffentlichung',
   /drop table public\.dms/.test(wanderungDm));
 
-// ── Was vor dem Start gehaertet wurde ──────────────────────────────────────
+// ── What got hardened before launch ─────────────────────────────────────────
 //
-// Vier Loecher, keines davon von einer der 22 Reihen gefunden. Der Grund ist
-// derselbe bei allen: Die Reihen pruefen, ob die Regeln tun, was sie sollen.
-// Hier ging es um Regeln, die es gar nicht gab – und was es nicht gibt, misst
-// auch keiner.
+// Four holes, none of them found by any of the 22 rows above. The reason is
+// the same for all of them: those rows check whether the rules do what
+// they're supposed to. This was about rules that didn't exist at all - and
+// nobody measures what isn't there.
 console.log('\n── Haertung vor dem Start ──');
 
-// 1. created_at gehoert der Datenbank
+// 1. created_at belongs to the database
 // ---------------------------------------------------------------------------
-// Der Angriff war nicht, eine Nachricht zu faelschen, sondern die ZAEHLUNG zu
-// umgehen: Beide Sperren gegen Spam zaehlen nach Zeit, und wer created_at
-// selbst mitschickt, steht in keinem Fenster.
+// The attack wasn't forging a message, it was evading the COUNTING: both
+// anti-spam limits count by time, and whoever sends their own created_at
+// falls outside every window.
 await client.query(`update public.wallets set ui_amount = 400000, usd_value = 5000
                     where address = $1`, [WHALE]);
 await asWallet(WHALE, () => client.query(
@@ -1131,8 +1140,8 @@ check('created_at kommt vom Server, nicht vom Client',
   new Date(gestempelt.rows[0].created_at).getFullYear() >= 2020,
   String(gestempelt.rows[0].created_at));
 
-// Und die Wirkung, um die es geht: Mit gefaelschtem Datum muss die Taktgrenze
-// trotzdem greifen. Ohne den Trigger liefen hier alle zehn durch.
+// And the effect that actually matters: with a forged date, the rate limit
+// still has to apply. Without the trigger, all ten would go through here.
 let ausVergangenheit = 0;
 try {
   for (let i = 0; i < 10; i++) {
@@ -1141,34 +1150,35 @@ try {
       [WHALE, `alt ${i}`]));
     ausVergangenheit++;
   }
-} catch { /* die Taktgrenze greift – genau das ist der Punkt */ }
+} catch { /* the rate limit kicks in - that's exactly the point */ }
 check('Die Taktgrenze greift auch bei gefaelschtem created_at',
   ausVergangenheit < 10, `${ausVergangenheit} von 10 durchgelassen`);
 
-// 2. Abgelaufene Challenges geben ihren Betrag frei
+// 2. Expired challenges free up their amount
 // ---------------------------------------------------------------------------
-// Sonst laesst sich eine fremde Adresse aussperren: 999 moegliche Betraege,
-// drei offene Challenges gleichzeitig, 25 Minuten Laufzeit – nach gut sechs
-// Tagen ist jede Zahl belegt und der Besitzer kommt nicht mehr herein.
+// Otherwise a foreign address could be locked out: 999 possible amounts,
+// three open challenges at once, 25 minutes lifetime - after a good six
+// days every number is taken and the owner can no longer get in.
 await client.query(`delete from public.challenges`);
 await client.query(
   `insert into public.challenges (wallet, lamports, expires_at, status)
    values ($1, 2000123, now() - interval '1 hour', 'pending')`, [SHRIMP]);
-// Der zweite insert traegt DENSELBEN Betrag. Er muss durchgehen – und wenn
-// nicht, ist genau das der Befund und kein Absturz: Ohne das Aufraeumen weist
-// der Unique-Index ihn ab, und dann darf der Test das melden, statt hier
-// stehenzubleiben und die drei Abschnitte danach gar nicht erst zu erreichen.
-let zweiteChallenge = true;
+// The second insert carries the SAME amount. It has to go through - and if
+// it doesn't, that is exactly the finding, not a crash: without the
+// cleanup, the unique index would reject it, and then the test should
+// report that, instead of stopping dead here and never reaching the three
+// sections after it.
+let secondChallenge = true;
 try {
   await client.query(
     `insert into public.challenges (wallet, lamports, expires_at, status)
      values ($1, 2000123, now() + interval '20 minutes', 'pending')`, [SHRIMP]);
-} catch { zweiteChallenge = false; }
+} catch { secondChallenge = false; }
 check('Der Betrag einer abgelaufenen Challenge ist wieder zu haben',
-  zweiteChallenge, zweiteChallenge ? '' : 'Unique-Index weist ihn ab');
-// Die zweite Zeile traegt DENSELBEN Betrag wie die erste. Dass ihr insert
-// oben durchgelaufen ist, ist der Beweis: Ohne das Aufraeumen haette der
-// Unique-Index auf (wallet, lamports) where status = 'pending' sie abgewiesen.
+  secondChallenge, secondChallenge ? '' : 'Unique-Index weist ihn ab');
+// The second row carries the SAME amount as the first. That its insert went
+// through above is the proof: without the cleanup, the unique index on
+// (wallet, lamports) where status = 'pending' would have rejected it.
 const frei = await client.query(
   `select status, count(*)::int n from public.challenges where wallet = $1
    group by status order by status`, [SHRIMP]);
@@ -1182,11 +1192,11 @@ const abgelaufen = await client.query(
 check('Die abgelaufene Zeile steht auf expired, nicht mehr auf pending',
   abgelaufen.rows[0].n === 1, `${abgelaufen.rows[0].n} aufgeraeumt`);
 
-// 3. Lesen setzt einen wallet-Claim voraus
+// 3. Reading requires a wallet claim
 // ---------------------------------------------------------------------------
-// Ein Token mit role: authenticated aber OHNE wallet-Claim ist genau das, was
-// Supabases eigene Anmeldewege ausstellen – "Anonymous sign-ins" reicht. Damit
-// war vorher die komplette Wallet-Tabelle zu lesen.
+// A token with role: authenticated but WITHOUT a wallet claim is exactly
+// what Supabase's own sign-in flows issue - "Anonymous sign-ins" is enough.
+// With that, the entire wallets table used to be readable before this fix.
 async function ohneClaim(sql) {
   await client.query('begin');
   try {
@@ -1202,19 +1212,20 @@ for (const [name, sql] of [
   ['votes', 'select id from public.votes limit 5'],
   ['poll_totals', 'select poll_id from public.poll_totals limit 5'],
 ]) {
-  check(`Ohne wallet-Claim ist ${name} leer`, (await ohneClaim(sql)) === 0);
+  check(`Ohne wallet-Claim ist ${name} empty`, (await ohneClaim(sql)) === 0);
 }
-// Gegenprobe: MIT Claim liest dieselbe Abfrage sehr wohl – sonst haette ich
-// die Tabellen nur leergeraeumt und der Test saehe trotzdem gruen aus.
+// Control check: WITH a claim the same query reads just fine - otherwise
+// the tables could just have been emptied and the test would still look
+// green.
 const mitClaim = await asWallet(WHALE, () =>
   client.query('select address from public.wallets limit 5'));
 check('Gegenprobe: mit wallet-Claim sind sie es nicht',
   mitClaim.rows.length > 0, `${mitClaim.rows.length} Zeilen`);
 
-// 4. read_by_admin gehoert dem Server
+// 4. read_by_admin belongs to the server
 // ---------------------------------------------------------------------------
-// Ein Nutzer konnte seine DM als gelesen einliefern. Kein Datenabfluss – aber
-// Ansem entscheidet nach diesem Zaehler, wem er antwortet.
+// A user could submit their own DM already marked as read. No data leak -
+// but Ansem decides who to reply to based on that counter.
 await client.query(`delete from public.dms where wallet = $1`, [DOLPHIN]);
 await client.query(`update public.wallets set usd_value = 5000 where address = $1`, [DOLPHIN]);
 await asWallet(DOLPHIN, () => client.query(
@@ -1228,21 +1239,21 @@ check('read_by_admin laesst sich nicht vom Client setzen',
 
 console.log('\n── Eine laufende Abstimmung aendert ihren Wortlaut nicht ──');
 
-// Der Fall: "A oder B?" bekommt dreissig Stimmen, dann wird die Frage zu
-// "C oder D?". Die Stimmen bleiben stehen und beantworten etwas anderes.
+// The case: "A or B?" gets thirty votes, then the question changes to
+// "C or D?". The votes stay in place and now answer something else.
 //
-// Das ist kein RLS-Loch – Ansem DARF Abstimmungen aendern, er soll sie
-// schliessen und Fristen setzen koennen. Es geht um eine einzelne Spalte, und
-// genau dafuer gibt es Trigger statt Policies.
+// This isn't an RLS hole - Ansem IS allowed to change polls, he needs to be
+// able to close them and set deadlines. This is about one single column,
+// and that's exactly what triggers are for instead of policies.
 //
-// Zur Rollenwahl: Alles hier laeuft als ADMIN, weil nur er ueberhaupt
-// schreiben darf. Wer nicht Admin ist, scheitert schon an der Policy – das
-// steht weiter oben und wird hier nicht wiederholt.
+// On the choice of role: everything here runs as ADMIN, because only he can
+// write at all. Whoever isn't admin already fails at the policy level -
+// that's covered further up and isn't repeated here.
 await client.query('delete from public.polls');
 await client.query(`update public.wallets set ui_amount = 400000, usd_value = 5000
                     where address = $1`, [WHALE]);
 
-const mitStimme = (await asWallet(ADMIN, async () => {
+const withVote = (await asWallet(ADMIN, async () => {
   const p = await client.query(
     `insert into public.polls (question) values ('A oder B?') returning id`);
   await client.query(
@@ -1250,7 +1261,7 @@ const mitStimme = (await asWallet(ADMIN, async () => {
      values ($1,'A',0), ($1,'B',1)`, [p.rows[0].id]);
   return p;
 })).rows[0].id;
-const ohneStimme = (await asWallet(ADMIN, async () => {
+const withoutVote = (await asWallet(ADMIN, async () => {
   const p = await client.query(
     `insert into public.polls (question) values ('Noch keine Stimme?') returning id`);
   await client.query(
@@ -1260,46 +1271,46 @@ const ohneStimme = (await asWallet(ADMIN, async () => {
 })).rows[0].id;
 
 const optIds = (await client.query(
-  `select id from public.poll_options where poll_id = $1 order by idx`, [mitStimme]))
+  `select id from public.poll_options where poll_id = $1 order by idx`, [withVote]))
   .rows.map((r) => r.id);
 await asWallet(WHALE, () => client.query(
   `insert into public.votes (poll_id, option_id, wallet) values ($1, $2, $3)`,
-  [mitStimme, optIds[0], WHALE]));
+  [withVote, optIds[0], WHALE]));
 
-// --- ab der ersten Stimme gesperrt ---
+// --- locked from the first vote onward ---
 await expectFail('Frage nicht mehr aenderbar', ADMIN, () => client.query(
-  `update public.polls set question = 'C oder D?' where id = $1`, [mitStimme]));
+  `update public.polls set question = 'C oder D?' where id = $1`, [withVote]));
 await expectFail('Antwortmoeglichkeit nicht mehr umbenennbar', ADMIN, () => client.query(
   `update public.poll_options set label = 'C' where id = $1`, [optIds[0]]));
 await expectFail('Antwortmoeglichkeit nicht mehr loeschbar', ADMIN, () => client.query(
   `delete from public.poll_options where id = $1`, [optIds[1]]));
 await expectFail('Antwortmoeglichkeit nicht mehr nachschiebbar', ADMIN, () => client.query(
-  `insert into public.poll_options (poll_id, label, idx) values ($1,'C',2)`, [mitStimme]));
+  `insert into public.poll_options (poll_id, label, idx) values ($1,'C',2)`, [withVote]));
 
-// --- was weiter gehen MUSS ---
-// Die Haelfte, die man beim Sperren kaputtmacht, ohne es zu merken: Eine
-// laufende Abstimmung zu schliessen ist der Normalfall.
+// --- what MUST keep working ---
+// The half that's easy to break while adding a lock, without noticing:
+// closing a running poll is the normal case.
 await asWallet(ADMIN, () => client.query(
-  `update public.polls set closed = true where id = $1`, [mitStimme]));
+  `update public.polls set closed = true where id = $1`, [withVote]));
 check('Schliessen bleibt erlaubt',
-  (await client.query(`select closed from public.polls where id = $1`, [mitStimme]))
+  (await client.query(`select closed from public.polls where id = $1`, [withVote]))
     .rows[0].closed === true);
 
 await asWallet(ADMIN, () => client.query(
   `update public.polls set closes_at = now() + interval '1 day' where id = $1`,
-  [mitStimme]));
+  [withVote]));
 check('Frist setzen bleibt erlaubt',
-  (await client.query(`select closes_at from public.polls where id = $1`, [mitStimme]))
+  (await client.query(`select closes_at from public.polls where id = $1`, [withVote]))
     .rows[0].closes_at !== null);
 
-// Ein Formular schickt oft alle Felder mit, auch die unveraenderten. Wenn das
-// scheitert, kann Ansem eine laufende Abstimmung nicht mehr schliessen –
-// derselbe Schaden wie die Sperre selbst, nur andersherum.
+// A form often sends every field along, including the unchanged ones. If
+// that fails, Ansem can no longer close a running poll - the same damage as
+// the lock itself, just from the other direction.
 await asWallet(ADMIN, () => client.query(
   `update public.polls set question = 'A oder B?', closed = true where id = $1`,
-  [mitStimme]));
+  [withVote]));
 check('Frage unveraendert mitschreiben bleibt erlaubt',
-  (await client.query(`select question from public.polls where id = $1`, [mitStimme]))
+  (await client.query(`select question from public.polls where id = $1`, [withVote]))
     .rows[0].question === 'A oder B?');
 
 await asWallet(ADMIN, () => client.query(
@@ -1308,40 +1319,40 @@ check('Reihenfolge aendern bleibt erlaubt',
   (await client.query(`select idx from public.poll_options where id = $1`, [optIds[0]]))
     .rows[0].idx === 5);
 
-// --- ohne Stimme bleibt alles offen ---
+// --- without a vote, everything stays open ---
 await asWallet(ADMIN, () => client.query(
-  `update public.polls set question = 'Ganz andere Frage?' where id = $1`, [ohneStimme]));
+  `update public.polls set question = 'Ganz andere Frage?' where id = $1`, [withoutVote]));
 check('Ohne Stimme ist die Frage frei aenderbar',
-  (await client.query(`select question from public.polls where id = $1`, [ohneStimme]))
+  (await client.query(`select question from public.polls where id = $1`, [withoutVote]))
     .rows[0].question === 'Ganz andere Frage?');
 await asWallet(ADMIN, () => client.query(
-  `insert into public.poll_options (poll_id, label, idx) values ($1,'W',9)`, [ohneStimme]));
+  `insert into public.poll_options (poll_id, label, idx) values ($1,'W',9)`, [withoutVote]));
 check('Ohne Stimme laesst sich eine Antwortmoeglichkeit nachschieben',
   (await client.query(`select count(*)::int n from public.poll_options where poll_id = $1`,
-    [ohneStimme])).rows[0].n === 3);
+    [withoutVote])).rows[0].n === 3);
 
-// --- die ganze Abstimmung verwerfen bleibt erlaubt ---
-// Der Fremdschluessel raeumt Optionen und Stimmen mit ab, und dabei feuert der
-// Loeschtrigger auf poll_options ebenfalls. Wenn der nicht zwischen "Option
-// weg, Abstimmung bleibt" und "alles weg" unterscheidet, ist eine Abstimmung
-// mit Stimmen unloeschbar – und dann bleibt eine falsch gestellte Frage fuer
-// immer stehen.
+// --- discarding the whole poll stays allowed ---
+// The foreign key clears out options and votes along with it, and the
+// delete trigger on poll_options fires too in the process. If it can't tell
+// "option gone, poll stays" from "everything gone", a poll with votes
+// becomes undeletable - and a wrongly worded question then stays stuck
+// forever.
 await asWallet(ADMIN, () => client.query(
-  `delete from public.polls where id = $1`, [mitStimme]));
+  `delete from public.polls where id = $1`, [withVote]));
 const nichtsMehrDa = await client.query(
   `select (select count(*) from public.polls where id = $1)::int p,
           (select count(*) from public.poll_options where poll_id = $1)::int o,
-          (select count(*) from public.votes where poll_id = $1)::int v`, [mitStimme]);
+          (select count(*) from public.votes where poll_id = $1)::int v`, [withVote]);
 check('Die ganze Abstimmung samt Stimmen loeschen bleibt erlaubt',
   nichtsMehrDa.rows[0].p === 0 && nichtsMehrDa.rows[0].o === 0
     && nichtsMehrDa.rows[0].v === 0,
   `polls ${nichtsMehrDa.rows[0].p}, options ${nichtsMehrDa.rows[0].o}, `
     + `votes ${nichtsMehrDa.rows[0].v}`);
 
-// --- Gegenprobe ---
-// Ohne die Trigger muessen alle vier Sperren durchgehen. Sonst misst der Block
-// oben etwas anderes – eine Policy zum Beispiel – und wuerde gruen bleiben,
-// wenn man die Migration ersatzlos entfernt.
+// --- control check ---
+// Without the triggers, all four locks have to go through. Otherwise the
+// block above would be measuring something else - a policy, say - and
+// would stay green even if this migration were simply removed.
 {
   const p = (await asWallet(ADMIN, async () => {
     const q = await client.query(
@@ -1373,7 +1384,7 @@ check('Die ganze Abstimmung samt Stimmen loeschen bleibt erlaubt',
     [`delete from public.poll_options where id = $1`, [o]],
   ]) {
     try { await asWallet(ADMIN, () => client.query(sql[0], sql[1])); durch += 1; }
-    catch { /* zaehlt nicht als durchgegangen */ }
+    catch { /* doesn't count as having gone through */ }
   }
   check('Gegenprobe: ohne die Trigger geht alle vier wieder durch', durch === 4,
     `${durch} von 4`);
@@ -1382,26 +1393,26 @@ check('Die ganze Abstimmung samt Stimmen loeschen bleibt erlaubt',
   check('Gegenprobe: die Frage liess sich tatsaechlich umschreiben',
     umgedeutet.rows[0]?.question === 'Umgedeutet?', umgedeutet.rows[0]?.question);
 
-  // Wieder herstellen, damit ein spaeterer Block nicht auf einer halb
-  // entschaerften Datenbank arbeitet.
+  // Restore it, so a later block doesn't end up working against a
+  // half-disarmed database.
   await client.query(fs.readFileSync(
     path.join(root, 'supabase/migrations/20260907020000_abstimmung_nach_erster_stimme.sql'),
     'utf8'));
 
-  // Und eine frische Stimme, bevor erneut geprueft wird.
+  // And a fresh vote before checking again.
   //
-  // Hier lag der erste Anlauf falsch: Die Gegenprobe loescht oben die einzige
-  // Antwortmoeglichkeit, und der Fremdschluessel nimmt die Stimme mit. Danach
-  // hat die Abstimmung keine Stimme mehr – der Trigger LIESS die Frage also
-  // voellig zu Recht aendern, und der Test rief "kaputt". Ein Test, der die
-  // Vorbedingung seiner eigenen Behauptung zerstoert, sagt nichts ueber das
-  // Gepruefte aus.
-  const frisch = (await asWallet(ADMIN, () => client.query(
+  // The first attempt at this got it wrong: the control check above deletes
+  // the only answer option, and the foreign key takes the vote with it.
+  // After that the poll has no vote left - so the trigger was completely
+  // right to allow changing the question, and the test cried "broken". A
+  // test that destroys the precondition of its own claim says nothing about
+  // what it's supposedly checking.
+  const fresh = (await asWallet(ADMIN, () => client.query(
     `insert into public.poll_options (poll_id, label, idx) values ($1,'D',3) returning id`,
     [p]))).rows[0].id;
   await asWallet(WHALE, () => client.query(
     `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
-    [p, frisch, WHALE]));
+    [p, fresh, WHALE]));
   check('Vorbedingung: die Abstimmung hat wieder eine Stimme',
     (await client.query(`select count(*)::int n from public.votes where poll_id = $1`, [p]))
       .rows[0].n === 1);

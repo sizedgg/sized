@@ -1,23 +1,24 @@
 // ============================================================================
-// Vorschaubilder: Andere Richtungen für die Startseite (Chat + Hintergrund)
+// Preview images: alternative directions for the home page (chat + background)
 //
-// Anders als die bisherigen Vorschauen ist das hier keine Reihe von Stufen
-// eines Wertes, sondern sechs verschiedene Haltungen. Deshalb bekommt jede ein
-// eigenes, vollständiges Bild – Kopfzeile, Filterleiste, Nachrichten, Eingabe,
-// Hintergrund – und nicht einen Ausschnitt neben fünf anderen. Eine
-// Gestaltung beurteilt man nicht an einer Zeile.
+// Unlike the previous previews, this isn't a row of steps through one value,
+// it's six different overall stances. So each one gets its own complete
+// image - header, filter bar, messages, input, background - instead of one
+// fragment sitting next to five others. You don't judge a design by a
+// single line.
 //
-// Der Aufbau wird aus index.html geschnitten, nicht nachgebaut. Eine Kopie im
-// Skript würde beim nächsten Umbau der Seite auseinanderlaufen, und man
-// beurteilte dann eine Seite, die es nicht gibt. Genau dieser Fehler ist beim
-// Handy-Vorschauskript schon zweimal passiert.
+// The structure is cut out of index.html, not rebuilt from scratch. A copy
+// inside the script would drift apart the next time the page gets
+// restructured, and you'd end up judging a page that doesn't exist anymore.
+// That exact mistake has already happened twice in the phone preview
+// script.
 //
-// Jede Richtung ist ausschließlich CSS auf dem bestehenden Aufbau. Das ist
-// keine Bequemlichkeit, sondern die Bedingung: Was sich nicht als Stilblatt
-// schreiben lässt, wäre ein Umbau der Seite und keine Gestaltungsvariante –
-// und es ließe sich nicht in einer Sitzung wieder zurücknehmen.
+// Every direction is CSS only, applied to the existing structure. That's
+// not a convenience, it's the constraint: anything that can't be written as
+// a stylesheet would be a restructuring of the page, not a design variant -
+// and it couldn't be reverted again within one sitting.
 //
-// Erzeugt preview/design-0..5.png und preview/design-uebersicht.png
+// Produces preview/design-0..5.png and preview/design-uebersicht.png
 // ============================================================================
 
 import { chromium } from 'playwright';
@@ -29,17 +30,17 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 
-// --- Aufbau aus dem echten Blatt schneiden ---------------------------------
-const schneide = (von, bis) => {
+// --- Cut the structure out of the real page ---------------------------
+const cut = (von, bis) => {
   const a = html.indexOf(von);
   const b = html.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in index.html: ${von}`);
   return html.slice(a, b + bis.length);
 };
-const kopf = schneide('<header class="topbar">', '</header>');
-const chat = schneide('<main id="pane-chat" class="pane">', '</main>');
+const header = cut('<header class="topbar">', '</header>');
+const chat = cut('<main id="pane-chat" class="pane">', '</main>');
 
-const NACHRICHTEN = [
+const MESSAGES = [
   { h: '9Qm', ton: 0, usd: '$3.4K', body: 'gm', zeit: '14:02' },
   { h: 'bH2', ton: 1, usd: '$8.8K', body: 'when is the next poll going up', zeit: '14:03' },
   { admin: true, h: '4bo', usd: '$12M', body: 'New poll is up. Go vote.', zeit: '14:03' },
@@ -54,7 +55,7 @@ const NACHRICHTEN = [
   { h: '9Qm', ton: 0, usd: '$3.4K', body: 'hit the arrow next to your balance', zeit: '14:11' },
 ];
 
-const zeile = (m) => `
+const line = (m) => `
   <div class="msg ${m.admin ? 'is-admin' : ''}">
     <span class="who">${m.admin
       ? `<span class="h admin-name">${m.h}</span>`
@@ -64,24 +65,24 @@ const zeile = (m) => `
     <span class="meta"><span class="time">${m.zeit}</span></span>
   </div>`;
 
-// --- Die sechs Richtungen --------------------------------------------------
+// --- The six directions ------------------------------------------------
 const RICHTUNGEN = [
   {
-    datei: 'design-0', name: 'Jetzt',
-    kurz: 'Der Stand von heute',
-    text: 'Fast schwarzer Grund mit zwei weichen Lichtern – violett oben rechts, knochenweiß unten links. Der Chat liegt in einer umrandeten, gerundeten Fläche.',
+    file: 'design-0', name: 'Jetzt',
+    short: 'Der Stand von heute',
+    text: 'Fast schwarzer Grund mit zwei weichen Lichtern – violett peek right, knochenweiß bottom left. Der Chat liegt in einer umrandeten, gerundeten Fläche.',
     css: '',
   },
   {
-    datei: 'design-1', name: 'Ohne Licht',
-    kurz: 'Derselbe Aufbau, aber der Schimmer fällt weg',
-    text: 'Nur der flache Grund, kein Farbverlauf. Das Violett ist der letzte Rest Solana-Lila auf der Seite – aus den Abstimmungskarten hast du es schon entfernen lassen. Ruhiger, härter, und die Namensfarben stehen zum ersten Mal auf neutralem Grund.',
+    file: 'design-1', name: 'Ohne Licht',
+    short: 'Derselbe Aufbau, aber der Schimmer fällt weg',
+    text: 'Nur der flache Grund, kein Farbverlauf. Das Violett ist der last Rest Solana-Lila auf der Seite – aus den Abstimmungskarten hast du es schon entfernen lassen. Ruhiger, härter, und die Namensfarben stehen zum ersten Mal auf neutralem Grund.',
     css: `body { background-image: none; }`,
   },
   {
-    datei: 'design-2', name: 'Blatt auf Tisch',
-    kurz: 'Schmaler, heller, und der Hintergrund wird sichtbar',
-    text: 'Zwei Änderungen, die zusammengehören. Erstens ist die Fläche heller als das Fenster dahinter statt dunkler – der Inhalt liegt auf dem Grund statt darin, mit einem Schatten statt einer Linie. Zweitens ist sie schmaler: Heute füllt der Chat die ganze Breite, und der Hintergrund, um den es hier geht, ist am Rechner praktisch nie zu sehen. Ein schmaler Kanal gibt ihm überhaupt erst eine Fläche.',
+    file: 'design-2', name: 'Blatt auf Tisch',
+    short: 'Schmaler, heller, und der Hintergrund wird sichtbar',
+    text: 'Zwei Änderungen, die zusammengehören. Erstens ist die Fläche heller als das Fenster dahinter statt dunkler – der Inhalt liegt auf dem Grund statt darin, mit einem Schatten statt einer Linie. Zweitens ist sie narrower: Heute füllt der Chat die ganze Breite, und der Hintergrund, um den es hier geht, ist am Rechner praktisch nie zu sehen. Ein narrower Kanal gibt ihm überhaupt erst eine Fläche.',
     css: `
       .app { max-width: 900px; }
       body { background-image:
@@ -95,8 +96,8 @@ const RICHTUNGEN = [
       .topbar { background: transparent; border-bottom-color: transparent; backdrop-filter: none; }`,
   },
   {
-    datei: 'design-3', name: 'Terminal',
-    kurz: 'Alles in der Schreibmaschinenschrift',
+    file: 'design-3', name: 'Terminal',
+    short: 'Alles in der Schreibmaschinenschrift',
     text: 'Kein Kasten, keine Rundungen – nur Haarlinien und eine Spalte. Der Betrag ist hier ohnehin schon Mono; wenn der ganze Chat es ist, liest sich die Liste wie ein Orderbuch. Passt zu einem Token-Raum, verlangt aber Disziplin: Mono braucht mehr Zeilenabstand, sonst wird es ein Block.',
     css: `
       body { background-image: none; background-color: #07080b; }
@@ -114,8 +115,8 @@ const RICHTUNGEN = [
       .topbar { background: #07080b; }`,
   },
   {
-    datei: 'design-4', name: 'Luft',
-    kurz: 'Weniger Zeilen, mehr Raum',
+    file: 'design-4', name: 'Luft',
+    short: 'Weniger Zeilen, mehr Raum',
     text: 'Derselbe Aufbau, nur großzügiger: höhere Zeilen, größerer Text, keine Trennlinien mehr. Die Liste hört auf, eine Tabelle zu sein, und wird ein Gespräch. Der Preis steht im Bild – es passen sichtbar weniger Nachrichten ins Fenster.',
     css: `
       .msg { padding: .95rem .9rem; border-bottom: 0; gap: .35rem .6rem; }
@@ -126,8 +127,8 @@ const RICHTUNGEN = [
       .chat-panel > .filters { border-bottom: 1px solid var(--line); }`,
   },
   {
-    datei: 'design-5', name: 'Warm',
-    kurz: 'Der Grund wird von blau auf braun gedreht',
+    file: 'design-5', name: 'Warm',
+    short: 'Der Grund wird von blau auf braun gedreht',
     text: 'Dieselbe Helligkeit, andere Temperatur: Der Grund geht ins Warmgraue, das Licht wird Gold statt Violett. Gold ist schon Ansems Farbe – das macht die Seite persönlicher und weniger nach Software. Die vier Namensfarben sind allerdings für einen kalten Grund gewählt worden und müssten nachgezogen werden.',
     css: `
       :root { --bg: #0d0b09; --bg-1: #141110; --bg-2: #1b1815; --bg-3: #241f1b; --line: #2e2822; }
@@ -135,20 +136,20 @@ const RICHTUNGEN = [
         background-image: radial-gradient(1100px 500px at 80% -10%, rgba(255, 204, 77, .10), transparent 60%),
                           radial-gradient(900px 420px at 5% 105%, rgba(255, 176, 92, .07), transparent 60%); }
       .topbar { background: rgba(13, 11, 9, .85); }
-      /* Ansems Zeilen tragen sonst ihr Petrol – ein kalter Ton auf warmem
-         Grund, der wie ein Fehler aussieht. Damit die Richtung fair beurteilt
-         wird, wandert er hier mit ins Warme. */
+      /* Ansem's rows would otherwise keep their teal - a cool tone on a warm
+         background that would look like a mistake. So it moves into the warm
+         range here too, to keep the direction judged fairly. */
       .msg.is-admin { background: rgba(255, 204, 77, .06); }`,
   },
 ];
 
-// --- Rendern ---------------------------------------------------------------
-const seiteHtml = (extra) => `<!doctype html>
+// --- Render ------------------------------------------------------------------
+const pageHtml = (extra) => `<!doctype html>
 <meta charset="utf-8">
 <style>${css}</style>
 ${extra ? `<style>${extra}</style>` : ''}
 <div class="app">
-  ${kopf}
+  ${header}
   ${chat}
 </div>
 <script>
@@ -156,7 +157,7 @@ ${extra ? `<style>${extra}</style>` : ''}
   document.querySelector('#me-handle').className = 'handle h admin-name';
   document.querySelector('#me-holdings').textContent = '$12M';
   document.querySelector('#filter-unit').textContent = 'of $ANSEM';
-  document.querySelector('#chat-list').innerHTML = ${JSON.stringify(NACHRICHTEN.map(zeile).join(''))};
+  document.querySelector('#chat-list').innerHTML = ${JSON.stringify(MESSAGES.map(line).join(''))};
   document.querySelector('.chip[data-usd="0"]').classList.add('is-active');
 <\/script>`;
 
@@ -168,19 +169,19 @@ const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: 
 
 const bilder = [];
 for (const r of RICHTUNGEN) {
-  const seite = await browser.newPage({ viewport: { width: 1180, height: 760 }, deviceScaleFactor: 2 });
-  await seite.setContent(seiteHtml(r.css));
-  await seite.waitForTimeout(350);
-  const ziel = path.join(ausgabe, `${r.datei}.png`);
-  await seite.screenshot({ path: ziel });
+  const page = await browser.newPage({ viewport: { width: 1180, height: 760 }, deviceScaleFactor: 2 });
+  await page.setContent(pageHtml(r.css));
+  await page.waitForTimeout(350);
+  const ziel = path.join(ausgabe, `${r.file}.png`);
+  await page.screenshot({ path: ziel });
   bilder.push(fs.readFileSync(ziel).toString('base64'));
-  await seite.close();
+  await page.close();
   console.log(`  ${ziel}`);
 }
 
-// --- Übersichtsblatt -------------------------------------------------------
-// Die Einzelbilder sind zum Hinsehen, dieses eine zum Vergleichen.
-const uebersicht = `<!doctype html>
+// --- Overview page -------------------------------------------------------
+// The individual images are for looking closely, this one is for comparing.
+const overview = `<!doctype html>
 <meta charset="utf-8">
 <style>${css}</style>
 <style>
@@ -192,7 +193,7 @@ const uebersicht = `<!doctype html>
   .nr { display: inline-flex; align-items: center; justify-content: center;
         width: 1.6rem; height: 1.6rem; border-radius: 999px; background: var(--bg-3);
         color: var(--dim); font-family: var(--mono); font-size: .8rem; }
-  .kurz { color: var(--dim); font-weight: 400; font-size: .86rem; }
+  .short { color: var(--dim); font-weight: 400; font-size: .86rem; }
   p.t { margin: .35rem 0 .7rem; font-size: .84rem; color: #8b93a7; min-height: 5.6em; line-height: 1.55; }
   img { width: 100%; display: block; border-radius: 12px; border: 1px solid #232734; }
 </style>
@@ -201,14 +202,14 @@ const uebersicht = `<!doctype html>
 <div class="raster">
 ${RICHTUNGEN.map((r, i) => `
   <section>
-    <h2><span class="nr">${i}</span>${r.name}<span class="kurz">${r.kurz}</span></h2>
+    <h2><span class="nr">${i}</span>${r.name}<span class="short">${r.short}</span></h2>
     <p class="t">${r.text}</p>
     <img src="data:image/png;base64,${bilder[i]}" alt="${r.name}">
   </section>`).join('')}
 </div>`;
 
 const blatt = await browser.newPage({ viewport: { width: 1780, height: 1200 }, deviceScaleFactor: 1.5 });
-await blatt.setContent(uebersicht);
+await blatt.setContent(overview);
 await blatt.waitForTimeout(500);
 await blatt.screenshot({ path: path.join(ausgabe, 'design-uebersicht.png'), fullPage: true });
 await browser.close();

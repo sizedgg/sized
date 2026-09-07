@@ -1,26 +1,26 @@
 /**
- * Winziger Webserver für die Entwicklung – nur `public/`, ohne Zwischenspeicher.
+ * Tiny development web server - only `public/`, no caching.
  *
- * Aufruf:  npm run serve        (oder: node scripts/serve.mjs 8080)
+ * Usage:  npm run serve        (or: node scripts/serve.mjs 8080)
  *
- * Warum nicht `python -m http.server`?
+ * Why not `python -m http.server`?
  *
- * Zwei Gründe, und der zweite hat schon Zeit gekostet:
+ * Two reasons, and the second one has already cost real time.
  *
- * 1. Der Python-Server liefert das Verzeichnis aus, in dem er gestartet wurde.
- *    Startet man ihn im Projektordner, liegt die Seite unter /public/ – und
- *    alle absoluten Pfade der Seite (/styles.css, /app.js, /sw.js, das
- *    Manifest) zeigen dann ins Leere. Dieser Server hat `public/` fest
- *    eingebaut; von wo aus man ihn startet, spielt keine Rolle.
+ * 1. The Python server serves the directory it was started in. Start it in
+ *    the project root and the page ends up under /public/ - and every
+ *    absolute path on the page (/styles.css, /app.js, /sw.js, the manifest)
+ *    then points nowhere. This server has `public/` hardcoded; it doesn't
+ *    matter where you start it from.
  *
- * 2. Er schickt kein Cache-Control, aber ein Last-Modified. Der Browser
- *    entscheidet daraufhin selbst, wie lange er eine Antwort behält, und tut
- *    das großzügig. Genau daher kommt der Fall, in dem man eine Datei ändert,
- *    neu lädt und trotzdem die alte Seite sieht. Hier geht `no-store` mit:
- *    jede Anfrage holt die Datei frisch von der Platte.
+ * 2. It sends no Cache-Control, but does send a Last-Modified. The browser
+ *    then decides for itself how long to keep a response, and does so
+ *    generously. That's exactly where the case comes from where you edit a
+ *    file, reload, and still see the old page. `no-store` goes out with
+ *    every response here: every request fetches the file fresh from disk.
  *
- * Kein npm-Paket dahinter, nur Node. Ein Entwicklungswerkzeug soll keine
- * Abhängigkeit sein, die man pflegen muss.
+ * No npm package behind this, just Node. A development tool shouldn't be a
+ * dependency you have to maintain.
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -44,15 +44,15 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
-  // Erst die Abfrageparameter abschneiden, dann auf index.html abbilden.
-  // Andersherum landet "/?preview=admin" auf dem Verzeichnis statt auf der
-  // Seite und antwortet mit 404.
+  // Strip the query string first, then map to index.html. The other way
+  // around, "/?preview=admin" would resolve to the directory instead of the
+  // page and answer with 404.
   const pfad = decodeURIComponent((req.url ?? '/').split('?')[0]);
-  const datei = pfad === '/' ? '/index.html' : pfad;
+  const file = pfad === '/' ? '/index.html' : pfad;
 
-  // Kein Ausbrechen aus public/ – auch lokal nicht. Ein Entwicklungsserver
-  // liegt schneller im offenen WLAN, als einem lieb ist.
-  const abs = path.join(pub, path.normalize(datei).replace(/^(\.\.[/\\])+/, ''));
+  // No escaping public/ - not even locally. A dev server ends up on an open
+  // wifi network faster than you'd like.
+  const abs = path.join(pub, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
   if (!abs.startsWith(pub) || !fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
        .end('nicht gefunden');

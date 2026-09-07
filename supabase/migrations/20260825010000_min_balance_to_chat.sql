@@ -1,39 +1,39 @@
 -- ============================================================================
--- Mindestbestand zum Schreiben im Chat
+-- Minimum balance to write in chat
 --
--- Wer mitreden will, muss mindestens einen bestimmten Gegenwert in Token
--- halten. Lesen bleibt für alle Verifizierten frei – es geht nicht darum,
--- Leute auszusperren, sondern darum, dass eine Wegwerf-Wallet nichts kostet
--- und deshalb der billigste Weg zum Spam wäre.
+-- Anyone who wants to post has to hold at least a certain value in token.
+-- Reading stays free for everyone verified - the point isn't to lock people
+-- out, it's that a throwaway wallet costs nothing and would otherwise be
+-- the cheapest path to spam.
 --
--- Der Betrag steht in app_config und nicht im Code: Ansem soll ihn ändern
--- können, ohne dass jemand etwas neu ausrollt.
+-- The amount lives in app_config, not in code: Ansem should be able to
+-- change it without anyone shipping a new release.
 --
 -- ----------------------------------------------------------------------------
--- Dabei wird eine Lücke geschlossen, die vorher schon offen war
+-- This also closes a gap that was already open before
 -- ----------------------------------------------------------------------------
 --
--- Mehrere BEFORE-INSERT-Trigger auf derselben Tabelle feuern in alphabetischer
--- Reihenfolge ihres Namens. Auf public.messages heißt das:
+-- Several BEFORE INSERT triggers on the same table fire in alphabetical
+-- order of their name. On public.messages that means:
 --
---     trg_messages_rate_limit   <- prüft
---     trg_messages_sender       <- setzt new.wallet auf die Wallet aus dem Token
---     trg_messages_stamp        <- schreibt Bestand und USD-Wert fest
+--     trg_messages_rate_limit   <- checks
+--     trg_messages_sender       <- sets new.wallet to the wallet from the token
+--     trg_messages_stamp        <- records balance and USD value
 --
--- Die Prüfung lief also VOR der Korrektur der Absenderadresse. Bis dahin stand
--- in new.wallet noch genau das, was der Client geschickt hat. Wer beim
--- Einfügen eine fremde Adresse einträgt, wurde folglich gegen deren Zähler
--- geprüft – der eigene blieb bei null. Damit ließen sich das Limit von sechs
--- Nachrichten pro Minute und die Wiederholungssperre vollständig umgehen,
--- einfach durch Variieren eines Feldes. Die Nachricht selbst wurde danach von
--- force_sender korrekt zugeordnet, der Missbrauch blieb also unsichtbar.
+-- So the check ran BEFORE the sender address was corrected. Up to that
+-- point, new.wallet still held exactly what the client sent. So anyone
+-- entering a foreign address on insert was checked against THAT wallet's
+-- counters - their own stayed at zero. That let the limit of six messages
+-- per minute and the repeat-message block be bypassed entirely, just by
+-- varying one field. The message itself was then correctly attributed by
+-- force_sender afterward, so the abuse stayed invisible.
 --
--- Die RLS-Regel fängt das nicht ab: Sie prüft die Zeile, nachdem alle
--- BEFORE-Trigger gelaufen sind – zu diesem Zeitpunkt stimmt die Adresse wieder.
+-- The RLS rule doesn't catch this: it checks the row after all BEFORE
+-- triggers have run - by that point the address is correct again.
 --
--- Ab hier stützt sich die Prüfung nicht mehr auf new.wallet, sondern auf die
--- Wallet aus dem Token. Die ist nicht manipulierbar und von der
--- Trigger-Reihenfolge unabhängig.
+-- From here on, the check no longer relies on new.wallet but on the wallet
+-- from the token. That can't be manipulated and doesn't depend on trigger
+-- order.
 -- ============================================================================
 
 alter table public.app_config
@@ -60,12 +60,12 @@ begin
     return new;
   end if;
 
-  -- Nicht new.wallet: siehe Kopf dieser Datei.
+  -- Not new.wallet: see the top of this file.
   sender := coalesce(app.jwt_wallet(), new.wallet);
 
   select * into cfg from public.app_config where id = 1;
 
-  -- ---- Mindestbestand ------------------------------------------------------
+  -- ---- Minimum balance -------------------------------------------------
   if coalesce(cfg.min_chat_usd, 0) > 0 then
     select coalesce(w.usd_value, 0) into bal
     from public.wallets w
@@ -78,12 +78,12 @@ begin
     end if;
   end if;
 
-  -- ---- Keine Links ---------------------------------------------------------
+  -- ---- No links -----------------------------------------------------------
   if app.contains_link(new.body) then
     raise exception 'Links are not allowed in chat - send it as a DM instead';
   end if;
 
-  -- ---- Takt ----------------------------------------------------------------
+  -- ---- Rate limit -----------------------------------------------------
   select
     count(*) filter (where created_at > now() - interval '1 minute'),
     count(*)
@@ -99,9 +99,9 @@ begin
     raise exception 'Message limit reached - try again later';
   end if;
 
-  -- ---- Keine zweimal identische Nachricht hintereinander --------------------
-  -- Nur die unmittelbar vorhergehende Nachricht derselben Wallet zählt, damit
-  -- yes / no / yes möglich bleibt.
+  -- ---- No identical message twice in a row ---------------------------
+  -- Only the immediately preceding message from the same wallet counts, so
+  -- that yes / no / yes stays possible.
   select regexp_replace(lower(btrim(body)), '\s+', ' ', 'g')
   into last_body
   from public.messages
@@ -120,11 +120,11 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
--- Dieselbe Lücke bei den DMs schließen
+-- Close the same gap for DMs
 -- ----------------------------------------------------------------------------
--- Für DMs gilt kein Mindestbestand – wer verifiziert ist, darf Ansem
--- schreiben. Die Absenderprüfung muss aber aus demselben Grund vom Token
--- ausgehen und nicht vom eingesendeten Feld.
+-- No minimum balance applies to DMs - anyone verified may write to Ansem.
+-- But the sender check has to go by the token for the same reason, not by
+-- the submitted field.
 
 create or replace function app.rate_limit_dms()
 returns trigger

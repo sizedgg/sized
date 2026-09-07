@@ -1,23 +1,25 @@
 // ============================================================================
-// Ideen: gelesen gegen ungelesen.
+// Ideas: read versus unread.
 //
-// Der Zustand hat heute ZWEI Anzeichen, beide leise: eine schwach blaue Flaeche
-// und eine Vorschau, die eine Stufe heller steht. Blau und nicht heller, weil
-// Helligkeit schon vergeben ist – die hellere Flaeche bedeutet "gerade
-// geoeffnet". Waeren beide Zustaende Helligkeiten, waeren sie verwechselbar.
+// Today the state has TWO signals, both quiet: a faintly blue area and a
+// preview line that sits one shade lighter. Blue, and not lighter, because
+// lightness is already spoken for - the lighter area means "just opened".
+// If both states were shades of lightness, they'd be mistakable for each
+// other.
 //
-// Genau daran haengt die Pruefung, die hier mitlaeuft und die auf einem Bild
-// niemand sieht: In der Liste gibt es DREI Flaechen, die einander im Weg stehen
-// koennen – ungelesen, unter dem Zeiger, geoeffnet. Eine Idee, die "ungelesen"
-// deutlicher macht, ist wertlos, wenn sie dabei aussieht wie "geoeffnet".
-// Deshalb wird zu jeder Fassung gemessen, wie weit die drei auseinanderliegen,
-// und im Bild steht eine ungelesene Zeile DIREKT neben der geoeffneten.
+// That's exactly what the check running alongside this hinges on, the one
+// nobody sees in a screenshot: the list has THREE areas that can get in
+// each other's way - unread, under the pointer, opened. An idea that makes
+// "unread" clearer is worthless if it ends up looking like "opened" while
+// doing it. So for every version, how far the three sit apart from each
+// other is measured, and in the picture an unread row sits DIRECTLY next
+// to the opened one.
 //
-// Verworfen waren beim Bauen: rote Blase, Punkt, linker Strich – mit der
-// Begruendung, alle drei behaupteten Dringlichkeit statt bloss "noch nicht
-// gelesen". Zwei davon stehen hier trotzdem wieder drin. Das Argument galt bei
-// vier Zeilen; bei vierzig ist die Frage nicht mehr dieselbe, und eine
-// Entscheidung, die man nicht nachprueft, ist irgendwann nur noch Gewohnheit.
+// Discarded while building this: red badge, dot, left-hand stripe - on the
+// grounds that all three asserted urgency instead of just "not read yet".
+// Two of them are back in here anyway. That argument held at four rows; at
+// forty the question isn't the same anymore, and a decision nobody
+// re-checks eventually becomes just a habit.
 //
 //   node scripts/vorschau-ungelesen.mjs
 // ============================================================================
@@ -34,31 +36,31 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const nachbar = fs.readFileSync(
   path.join(root, 'scripts', 'vorschau-posteingang.mjs'), 'utf8');
-const datenQuelle = nachbar.slice(
+const dataSource = nachbar.slice(
   nachbar.indexOf('const B58 ='), nachbar.indexOf('const CHROME'));
 // eslint-disable-next-line no-new-func
-const { THREADS } = new Function(`${datenQuelle}\nreturn { THREADS };`)();
+const { THREADS } = new Function(`${dataSource}\nreturn { THREADS };`)();
 
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-const teile = [
-  schneide('const HANDLE_TONES', '\n'),
-  schneide('const handleOf =', '\n'),
-  schneide('function toneOf(wallet) {', '\n}') + '\n}',
-  schneide('const esc =', '\n\n'),
-  schneide('const STUFEN =', '\n'),
-  schneide('function kurzUsd(', '\n}') + '\n}',
-  schneide('function renderThreads() {', '\n}\n') + '\n}',
+const parts = [
+  cut('const HANDLE_TONES', '\n'),
+  cut('const handleOf =', '\n'),
+  cut('function toneOf(wallet) {', '\n}') + '\n}',
+  cut('const esc =', '\n\n'),
+  cut('const TIERS =', '\n'),
+  cut('function shortUsd(', '\n}') + '\n}',
+  cut('function renderThreads() {', '\n}\n') + '\n}',
 ].join('\n');
 
-// Die heutigen Regeln muessen abgeschaltet werden, bevor eine andere Idee
-// wirken kann – sonst liegt jede Fassung OBEN DRAUF und man vergleicht
-// Summen statt Alternativen.
+// Today's rules have to be switched off before another idea can take
+// effect - otherwise every version sits ON TOP and you end up comparing
+// sums instead of alternatives.
 const AUS = `
   .thread.is-unread { background: transparent; }
   .thread.is-unread .thread-prev { color: var(--dim); }`;
@@ -88,7 +90,7 @@ const IDEEN = [
       .thread.is-unread .thread-prev { color: var(--text); font-weight: 650; }`,
   },
   {
-    nr: 4, name: 'punkt', titel: 'Punkt links',
+    nr: 4, name: 'dot', titel: 'Punkt left',
     was: 'Ein kleiner Punkt vor dem Kuerzel. Beim Bauen verworfen, weil er '
        + 'Dringlichkeit behaupte – hier bewusst in --dim statt in Rot oder im '
        + 'Akzent, also als Marke und nicht als Alarm.',
@@ -114,7 +116,7 @@ const IDEEN = [
   {
     nr: 6, name: 'gelesene-zurueck', titel: 'Gelesene zurückgenommen',
     was: 'Andersherum gedacht: Ungelesen ist der NORMALFALL, und gelesene Zeilen '
-       + 'treten zurueck. In einem Posteingang sind die meisten Zeilen gelesen – '
+       + 'treten back. In einem Posteingang sind die meisten Zeilen gelesen – '
        + 'die wenigen offenen fallen dann auf, ohne dass ihnen etwas '
        + 'hinzugefuegt wird.',
     css: `${AUS}
@@ -128,23 +130,23 @@ const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascrip
 const server = http.createServer((q, res) => {
   let pfad = decodeURIComponent(q.url.split('?')[0]);
   if (pfad === '/') pfad = '/index.html';
-  const datei = path.join(root, 'public', pfad);
-  if (!datei.startsWith(path.join(root, 'public')) || !fs.existsSync(datei)) {
+  const file = path.join(root, 'public', pfad);
+  if (!file.startsWith(path.join(root, 'public')) || !fs.existsSync(file)) {
     return res.writeHead(404).end('');
   }
   if (pfad === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('/* Vorschau */');
   }
-  res.writeHead(200, { 'content-type': TYPEN[path.extname(datei)] ?? 'application/octet-stream' })
-     .end(fs.readFileSync(datei));
+  res.writeHead(200, { 'content-type': TYPEN[path.extname(file)] ?? 'application/octet-stream' })
+     .end(fs.readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
 
-// Damit die drei Zustaende im Bild NEBENEINANDER liegen und nicht zufaellig
-// verstreut: Zeile 3 ungelesen, Zeile 4 geoeffnet, Zeile 5 ungelesen.
+// So the three states sit NEXT TO EACH OTHER in the picture instead of
+// being scattered at random: row 3 unread, row 4 opened, row 5 unread.
 const DATEN = THREADS.map((t, i) => ({
   ...t, unread: [2, 4, 8, 9, 14, 21, 22, 30].includes(i) ? 1 : 0,
 }));
@@ -159,10 +161,10 @@ const kon = (a, b) => {
 console.log('\nGelesen gegen ungelesen – 40 Gespraeche\n');
 
 for (const idee of IDEEN) {
-  const seite = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.waitForTimeout(200);
-  await seite.addScriptTag({
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.waitForTimeout(200);
+  await page.addScriptTag({
     content: `
       const $ = (s, r = document) => r.querySelector(s);
       const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -173,13 +175,13 @@ for (const idee of IDEEN) {
         dmThreads: ${JSON.stringify(DATEN)},
         activeThread: ${JSON.stringify(DATEN[3].wallet)},
       };
-      ${teile}
+      ${parts}
       window.renderThreads = renderThreads;
     `,
   });
-  if (idee.css) await seite.addStyleTag({ content: idee.css });
+  if (idee.css) await page.addStyleTag({ content: idee.css });
 
-  const m = await seite.evaluate(() => {
+  const m = await page.evaluate(() => {
     document.querySelector('#login').hidden = true;
     document.querySelector('.app').hidden = false;
     for (const p of document.querySelectorAll('.pane')) p.hidden = true;
@@ -198,22 +200,22 @@ for (const idee of IDEEN) {
     document.querySelector('#me-holdings').textContent = '$14,204,880';
     window.renderThreads();
 
-    const zeilen = [...document.querySelectorAll('.thread')];
+    const lines = [...document.querySelectorAll('.thread')];
 
-    // Die WIRKLICH sichtbare Flaeche einer Zeile.
+    // The ACTUALLY visible color of a row.
     //
-    // getComputedStyle().backgroundColor liefert bei einer durchsichtigen
-    // Flaeche rgba(0, 0, 0, 0) – die Null im Alphakanal, aber eben auch drei
-    // Nullen davor. Wer nur die ersten drei Zahlen nimmt, rechnet gegen
-    // Schwarz statt gegen den Grund darunter und bekommt Werte wie 9,5:1 fuer
-    // zwei Zeilen, die nebeneinander fast gleich aussehen. Genau das ist beim
-    // ersten Durchlauf passiert.
+    // getComputedStyle().backgroundColor returns rgba(0, 0, 0, 0) for a
+    // transparent area - the zero in the alpha channel, but also three
+    // zeros before it. Anyone who takes just the first three numbers is
+    // computing against black instead of the ground underneath, and gets
+    // values like 9.5:1 for two rows that look almost identical side by
+    // side. That's exactly what happened on the first pass.
     //
-    // Also von der Zeile nach oben laufen und uebereinanderlegen, bis eine
-    // deckende Flaeche kommt. Die Deckkraft geht mit ein – Idee 6 arbeitet
-    // allein damit.
-    const echteFarbe = (el) => {
-      const schichten = [];
+    // So walk up from the row and layer things on top of each other until
+    // an opaque area shows up. Opacity factors in too - idea 6 works with
+    // nothing else.
+    const realColor = (el) => {
+      const layers = [];
       let deckung = 1;
       for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
         const s = getComputedStyle(e);
@@ -221,17 +223,17 @@ for (const idee of IDEEN) {
         const m = s.backgroundColor.match(/[\d.]+/g);
         if (!m) continue;
         const [r, g, b, a = 1] = m.map(Number);
-        if (a > 0) schichten.push([r, g, b, a]);
+        if (a > 0) layers.push([r, g, b, a]);
         if (a === 1) break;
       }
-      // Von unten nach oben mischen.
-      let f = schichten.pop() ?? [0, 0, 0, 1];
-      while (schichten.length) {
-        const [r, g, b, a] = schichten.pop();
+      // Blend from bottom to top.
+      let f = layers.pop() ?? [0, 0, 0, 1];
+      while (layers.length) {
+        const [r, g, b, a] = layers.pop();
         f = [0, 1, 2].map((i) => f[i] * (1 - a) + [r, g, b][i] * a);
       }
-      // Die Deckkraft mischt die ganze Zeile gegen ihren eigenen Grund; fuer
-      // die Flaeche heisst das: gegen die Flaeche der Liste.
+      // Opacity blends the whole row against its own ground; for the area
+      // that means: against the color of the list.
       if (deckung < 1) {
         const g = getComputedStyle(document.querySelector('.thread-list'))
           .backgroundColor.match(/[\d.]+/g).map(Number);
@@ -241,45 +243,45 @@ for (const idee of IDEEN) {
     };
 
     return {
-      gelesen: echteFarbe(zeilen[1]),
-      ungelesen: echteFarbe(zeilen[2]),
-      geoeffnet: echteFarbe(zeilen[3]),
-      // Und die Schrift, denn drei der Ideen arbeiten gar nicht mit der
-      // Flaeche. Ohne das saehen sie hier alle gleich aus.
-      textGelesen: getComputedStyle(zeilen[1].querySelector('.thread-prev')).color,
-      textUngelesen: getComputedStyle(zeilen[2].querySelector('.thread-prev')).color,
-      fettGelesen: getComputedStyle(zeilen[1].querySelector('.thread-prev')).fontWeight,
-      fettUngelesen: getComputedStyle(zeilen[2].querySelector('.thread-prev')).fontWeight,
-      deckungGelesen: Number(getComputedStyle(zeilen[1]).opacity),
-      marke: getComputedStyle(zeilen[2], '::before').content !== 'none'
-        || getComputedStyle(zeilen[2]).boxShadow !== 'none',
+      gelesen: realColor(lines[1]),
+      ungelesen: realColor(lines[2]),
+      geoeffnet: realColor(lines[3]),
+      // And the type, because three of the ideas don't work with the area
+      // at all. Without this they'd all look the same here.
+      textGelesen: getComputedStyle(lines[1].querySelector('.thread-prev')).color,
+      textUngelesen: getComputedStyle(lines[2].querySelector('.thread-prev')).color,
+      fettGelesen: getComputedStyle(lines[1].querySelector('.thread-prev')).fontWeight,
+      fettUngelesen: getComputedStyle(lines[2].querySelector('.thread-prev')).fontWeight,
+      deckungGelesen: Number(getComputedStyle(lines[1]).opacity),
+      marker: getComputedStyle(lines[2], '::before').content !== 'none'
+        || getComputedStyle(lines[2]).boxShadow !== 'none',
     };
   });
 
-  await seite.screenshot({ path: path.join(outDir, `${idee.nr}-${idee.name}.png`) });
-  await seite.close();
+  await page.screenshot({ path: path.join(outDir, `${idee.nr}-${idee.name}.png`) });
+  await page.close();
 
-  const gegenGelesen = kon(m.ungelesen, m.gelesen);
+  const versusRead = kon(m.ungelesen, m.gelesen);
   const gegenOffen = kon(m.ungelesen, m.geoeffnet);
-  // Woran haengt der Zustand ueberhaupt? Eine Idee, die nur die Schrift
-  // aendert, hat eine Flaechenzahl von 1,000:1 – und das ist kein Mangel,
-  // sondern ihre Ansage.
-  const traeger = [
-    gegenGelesen > 1.01 ? 'Flaeche' : null,
+  // What does the state actually hinge on? An idea that only changes the
+  // type has an area ratio of 1.000:1 - and that's not a shortcoming,
+  // that's its whole point.
+  const carrier = [
+    versusRead > 1.01 ? 'Flaeche' : null,
     m.textGelesen !== m.textUngelesen ? 'Textfarbe' : null,
     m.fettGelesen !== m.fettUngelesen ? 'Schnitt' : null,
     m.deckungGelesen < 1 ? 'Deckkraft' : null,
-    m.marke ? 'Marke' : null,
+    m.marker ? 'Marke' : null,
   ].filter(Boolean);
   console.log(`${idee.nr}. ${idee.titel}`);
   console.log(`   ${idee.was.replace(/\s+/g, ' ')}`);
-  console.log(`   getragen von: ${traeger.join(' + ')}`);
-  console.log(`   Flaeche ungelesen gegen gelesen ${gegenGelesen.toFixed(3)}:1`
+  console.log(`   getragen von: ${carrier.join(' + ')}`);
+  console.log(`   Flaeche ungelesen gegen gelesen ${versusRead.toFixed(3)}:1`
     + `  ·  gegen geoeffnet ${gegenOffen.toFixed(3)}:1`);
-  // Der Fehler, vor dem der Kommentar im Blatt warnt: Eine ungelesene Zeile,
-  // die aussieht wie die geoeffnete. Nur relevant, wenn die Flaeche der
-  // Traeger ist.
-  if (gegenGelesen > 1.01 && gegenOffen < 1.03) {
+  // The mistake the comment in the sheet warns about: an unread row that
+  // looks like the opened one. Only relevant when the area is what
+  // carries the signal.
+  if (versusRead > 1.01 && gegenOffen < 1.03) {
     console.log('   ACHTUNG: ungelesen und geoeffnet liegen zu nah beieinander.');
   }
   console.log('');

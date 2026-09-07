@@ -1,38 +1,38 @@
 // ============================================================================
-// Findet der Treasury-Scan jede Zahlung – auch wenn hunderte gleichzeitig
-// hereinkommen?
+// Does the treasury scan find every payment - even when hundreds arrive at
+// once?
 //
-// Das ist die einzige Stelle der Seite, an der ein Fehler nicht Anzeige oder
-// Bequemlichkeit kostet, sondern echtes Geld: Wer SOL an die Treasury schickt
-// und dessen Zahlung nicht gesehen wird, hat bezahlt und kommt nicht herein.
-// Die Challenge läuft nach 25 Minuten ab, und das SOL ist überwiesen.
-//
-// ----------------------------------------------------------------------------
-// Die zwei Fehler, die es gab
-//
-//   1. `recentTreasuryPayments` hat einen Parameter `aussieben`, mit dem der
-//      Aufrufer bekannte Signaturen herausfiltern kann, BEVOR pro Signatur eine
-//      teure Detailabfrage läuft. `scanTreasury` hat ihn nicht übergeben und
-//      erst hinterher gegen seen_txs geprüft. Also: jeder Lauf, alle 5
-//      Sekunden, holte dieselben 40 Transaktionen erneut vom RPC – Sekunden
-//      Arbeit für ein Ergebnis, das schon verbucht war.
-//
-//   2. Das Fenster war 40 Signaturen breit. Landen zwischen zwei Läufen mehr
-//      als 40 Zahlungen, fallen die ältesten heraus und werden NIE gesehen.
-//      Genau der Fall bei einem Start mit vielen gleichzeitigen Anmeldungen.
+// This is the one place on the site where a bug doesn't cost a display
+// glitch or a bit of convenience, but real money: someone who sends SOL to
+// the treasury and whose payment goes unseen has paid and doesn't get in.
+// The challenge expires after 25 minutes, and the SOL has been sent.
 //
 // ----------------------------------------------------------------------------
-// Was hier wirklich läuft
+// The two bugs that existed
 //
-// Deno gibt es in dieser Umgebung nicht. Also werden `recentTreasuryPayments`
-// aus _shared/solana.ts und `scanTreasury` aus verify/index.ts wörtlich
-// herausgeschnitten und in Node ausgeführt – gegen eine Attrappe des RPC und
-// eine Attrappe der Datenbank. Weggelassen werden nur die TypeScript-Typen.
+//   1. `recentTreasuryPayments` takes a parameter `aussieben` that lets the
+//      caller filter out known signatures BEFORE an expensive per-signature
+//      detail lookup runs. `scanTreasury` didn't pass it and only checked
+//      against seen_txs afterward. So: every run, every 5 seconds, fetched
+//      the same 40 transactions from the RPC again - seconds of work for a
+//      result that was already recorded.
 //
-// Gezählt wird, was zählt: wie viele `getTransaction`-Abfragen ein Lauf kostet
-// und welche Zahlungen am Ende verbucht sind. Die Prüfungen hängen an dieser
-// Beobachtung, nicht an den Zahlen 200 oder 60 – wer das Fenster später ändert,
-// soll nicht den Test anpassen müssen, solange das Verhalten stimmt.
+//   2. The window was 40 signatures wide. If more than 40 payments land
+//      between two runs, the oldest ones fall out and are NEVER seen.
+//      Exactly the case at a launch with many simultaneous logins.
+//
+// ----------------------------------------------------------------------------
+// What actually runs here
+//
+// Deno doesn't exist in this environment. So `recentTreasuryPayments` from
+// _shared/solana.ts and `scanTreasury` from verify/index.ts are cut out
+// verbatim and run in Node - against a stand-in RPC and a stand-in
+// database. Only the TypeScript types are dropped.
+//
+// What's counted is what matters: how many `getTransaction` calls a run
+// costs and which payments end up recorded. The checks hang on this
+// observation, not on the numbers 200 or 60 - whoever changes the window
+// later shouldn't have to adjust the test, as long as the behavior holds.
 //
 //   node scripts/test-treasury-scan.mjs
 // ============================================================================
@@ -47,24 +47,24 @@ const solanaTs = fs.readFileSync(
 const verifyTs = fs.readFileSync(
   path.join(root, 'supabase/functions/verify/index.ts'), 'utf8');
 
-const schneide = (quelle, wo, von, bis) => {
-  const a = quelle.indexOf(von);
-  const b = quelle.indexOf(bis, a);
+const cut = (source, wo, von, bis) => {
+  const a = source.indexOf(von);
+  const b = source.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in ${wo}: ${von}`);
-  return quelle.slice(a, b);
+  return source.slice(a, b);
 };
 
 const befunde = [];
-const pruefe = (name, ok, zusatz = '') => {
+const check = (name, ok, zusatz = '') => {
   befunde.push({ name, ok });
   console.log(`  ${ok ? 'ok  ' : 'FEHL'}  ${name}${zusatz ? '  – ' + zusatz : ''}`);
 };
 
 // ---------------------------------------------------------------------------
-// Der Code, wörtlich – nur ohne Typen
+// The code, verbatim - just without types
 // ---------------------------------------------------------------------------
 
-const scanQuelle = schneide(solanaTs, '_shared/solana.ts',
+const scanSource = cut(solanaTs, '_shared/solana.ts',
   'const DETAILS_PRO_SCAN', '\n// ------')
   .replace('export async function recentTreasuryPayments(', 'async function recentTreasuryPayments(')
   .replace(/\n  treasury: string,/, '\n  treasury,')
@@ -77,48 +77,48 @@ const scanQuelle = schneide(solanaTs, '_shared/solana.ts',
   .replace('(i: any) =>', '(i) =>')
   .replace('const out: TreasuryPayment[] = [];', 'const out = [];');
 
-const fensterQuelle = schneide(verifyTs, 'verify/index.ts',
+const windowSource = cut(verifyTs, 'verify/index.ts',
   'const TREASURY_FENSTER', '\n');
-const scanTreasuryQuelle = fensterQuelle + '\n' + schneide(verifyTs, 'verify/index.ts',
+const scanTreasurySource = windowSource + '\n' + cut(verifyTs, 'verify/index.ts',
   'async function scanTreasury(treasury', '\n/**')
   .replace('async function scanTreasury(treasury: string)', 'async function scanTreasury(treasury)');
 
-pruefe('Der Ausschnitt aus solana.ts ist wirklich die Funktion',
-  /getSignaturesForAddress/.test(scanQuelle) && /getTransaction/.test(scanQuelle));
-pruefe('Der Ausschnitt aus verify/index.ts ist wirklich der Scan',
-  /recentTreasuryPayments\(/.test(scanTreasuryQuelle) && /seen_txs/.test(scanTreasuryQuelle));
+check('Der Ausschnitt aus solana.ts ist wirklich die Funktion',
+  /getSignaturesForAddress/.test(scanSource) && /getTransaction/.test(scanSource));
+check('Der Ausschnitt aus verify/index.ts ist wirklich der Scan',
+  /recentTreasuryPayments\(/.test(scanTreasurySource) && /seen_txs/.test(scanTreasurySource));
 
 // ---------------------------------------------------------------------------
-// Die Attrappen: eine Treasury mit Zahlungen, und eine Datenbank
+// The stand-ins: a treasury with payments, and a database
 // ---------------------------------------------------------------------------
 
 const TREASURY = 'TreasuryAdresse111111111111111111111111111';
 const JETZT = () => new Date().toISOString();
-const SPAETER = () => new Date(Date.now() + 20 * 60e3).toISOString();
+const LATER = () => new Date(Date.now() + 20 * 60e3).toISOString();
 
 /**
- * Baut eine Welt: `anzahl` Zahlungen an die Treasury, die neueste zuerst –
- * genau die Reihenfolge, in der getSignaturesForAddress antwortet.
+ * Builds a world: `anzahl` payments to the treasury, newest first - exactly
+ * the order getSignaturesForAddress responds in.
  */
 function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
-  const zahlungen = Array.from({ length: anzahl }, (_, i) => ({
+  const payments = Array.from({ length: anzahl }, (_, i) => ({
     signature: `sig${String(anzahl - i).padStart(4, '0')}`,
     slot: 1000 + (anzahl - i),
     sender: `wallet${String(anzahl - i).padStart(4, '0')}`,
     lamports: 2_000_000 + (anzahl - i),
   }));
 
-  const abfragen = [];                 // jede RPC-Methode, in Reihenfolge
+  const queries = [];                 // every RPC method, in order
   const rpc = async (methode, params) => {
-    abfragen.push(methode);
+    queries.push(methode);
     if (methode === 'getSignaturesForAddress') {
       const limit = params[1]?.limit ?? 1000;
-      return zahlungen.slice(0, limit).map((z) => ({
+      return payments.slice(0, limit).map((z) => ({
         signature: z.signature, slot: z.slot, err: null,
       }));
     }
     if (methode === 'getTransaction') {
-      const z = zahlungen.find((x) => x.signature === params[0]);
+      const z = payments.find((x) => x.signature === params[0]);
       if (!z) return null;
       return {
         slot: z.slot, meta: { err: null, innerInstructions: [] },
@@ -133,29 +133,29 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
     throw new Error(`unerwartete RPC-Methode ${methode}`);
   };
 
-  // Die ÄLTESTEN `verbucht` Zahlungen sind schon in seen_txs – der übliche
-  // Zustand: was lange dort steht, ist längst abgearbeitet.
-  const seen = zahlungen.slice(anzahl - verbucht).map((z, i) => ({
+  // The OLDEST `verbucht` payments are already in seen_txs - the usual
+  // state: what's been sitting there a long time has long been handled.
+  const seen = payments.slice(anzahl - verbucht).map((z, i) => ({
     signature: z.signature, slot: z.slot, sender: z.sender,
     lamports: z.lamports, seen_at: new Date(Date.now() - i * 1000).toISOString(),
   }));
 
   const challenges = offeneChallenges.map((c, i) => ({
     id: `ch${i}`, status: 'pending', wallet: c.wallet, lamports: c.lamports,
-    expires_at: c.expires_at ?? SPAETER(), tx_sig: null,
+    expires_at: c.expires_at ?? LATER(), tx_sig: null,
   }));
 
   const db = {
-    from: (tabelle) => bauKette(tabelle),
+    from: (tabelle) => buildChain(tabelle),
   };
 
-  function bauKette(tabelle) {
+  function buildChain(tabelle) {
     const daten = () => (tabelle === 'seen_txs' ? seen : challenges);
 
     const kette = {
       filter: [],
-      _eq(spalte, wert) { this.filter.push((r) => r[spalte] === wert); return this; },
-      _gt(spalte, wert) { this.filter.push((r) => r[spalte] > wert); return this; },
+      _eq(column, wert) { this.filter.push((r) => r[column] === wert); return this; },
+      _gt(column, wert) { this.filter.push((r) => r[column] > wert); return this; },
       treffer() { return daten().filter((r) => this.filter.every((f) => f(r))); },
     };
 
@@ -165,12 +165,12 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
         s.filter = [];
         s.eq = (a, b) => s._eq(a, b);
         s.gt = (a, b) => s._gt(a, b);
-        s.in = (spalte, werte) => { s.filter.push((r) => werte.includes(r[spalte])); return s; };
+        s.in = (column, werte) => { s.filter.push((r) => werte.includes(r[column])); return s; };
         s.order = () => s;
         s.limit = (n) => {
-          const zeilen = [...seen]
+          const lines = [...seen]
             .sort((a, b) => (a.seen_at < b.seen_at ? 1 : -1)).slice(0, n);
-          return Promise.resolve({ data: zeilen, error: null });
+          return Promise.resolve({ data: lines, error: null });
         };
         s.then = (aufl) => Promise.resolve(
           opt?.head
@@ -180,13 +180,13 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
         return s;
       },
 
-      insert(zeile) {
+      insert(line) {
         if (tabelle !== 'seen_txs') throw new Error('nur seen_txs');
-        if (seen.some((s) => s.signature === zeile.signature)) {
-          // Der Primärschlüssel – die eigentliche Sperre gegen Doppelbuchung.
+        if (seen.some((s) => s.signature === line.signature)) {
+          // The primary key - the actual lock against double-booking.
           return Promise.resolve({ error: { code: '23505' } });
         }
-        seen.unshift({ ...zeile, seen_at: JETZT() });
+        seen.unshift({ ...line, seen_at: JETZT() });
         return Promise.resolve({ error: null });
       },
 
@@ -208,27 +208,27 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
     };
   }
 
-  // Die 5-Sekunden-Bremse im Scan ist echt und soll auch echt bleiben. Damit
-  // ein Test mehrere Läufe hintereinander prüfen kann, ohne fünf Sekunden zu
-  // schlafen, bekommt der Ausschnitt eine Uhr, die sich vorstellen lässt –
-  // sonst nichts. `new Date()` bleibt die echte Klasse.
+  // The 5-second brake in the scan is real and should stay real. So a test
+  // can check several runs in a row without sleeping five seconds each
+  // time, the snippet gets a clock that can be fast-forwarded - nothing
+  // else. `new Date()` stays the real class.
   let versatz = 0;
-  const uhr = new Proxy(Date, {
+  const clock = new Proxy(Date, {
     get: (ziel, name) =>
       (name === 'now' ? () => Date.now() + versatz : Reflect.get(ziel, name)),
   });
 
   const lauf = new Function('rpc', 'db', 'console', 'Date', `
     let lastScan = 0;
-    ${scanQuelle}
-    ${scanTreasuryQuelle}
+    ${scanSource}
+    ${scanTreasurySource}
     return { recentTreasuryPayments, scanTreasury };
-  `)(rpc, db, { log() {}, warn() {}, error() {} }, uhr);
+  `)(rpc, db, { log() {}, warn() {}, error() {} }, clock);
 
   return {
-    ...lauf, abfragen, seen, challenges, zahlungen,
+    ...lauf, queries, seen, challenges, payments,
     zeitVor: (ms) => { versatz += ms; },
-    details: () => abfragen.filter((m) => m === 'getTransaction').length,
+    details: () => queries.filter((m) => m === 'getTransaction').length,
   };
 }
 
@@ -237,47 +237,47 @@ console.log('\nDas Sieb: bekannte Signaturen kosten keine Detailabfrage\n');
 // ---------------------------------------------------------------------------
 
 {
-  // 200 Zahlungen liegen an der Treasury, 195 davon sind längst verbucht.
-  // Vorher: 200 Detailabfragen, bei jedem Lauf, alle 5 Sekunden.
+  // 200 payments are at the treasury, 195 of them long since recorded.
+  // Before: 200 detail lookups, on every run, every 5 seconds.
   const w = welt({
     anzahl: 200, verbucht: 195,
     offeneChallenges: [{ wallet: 'wallet0200', lamports: 2_000_200 }],
   });
   await w.scanTreasury(TREASURY);
 
-  pruefe('Die Signaturliste wird genau einmal geholt',
-    w.abfragen.filter((m) => m === 'getSignaturesForAddress').length === 1);
-  pruefe('Nur die unbekannten Zahlungen kosten eine Detailabfrage',
+  check('Die Signaturliste wird genau einmal geholt',
+    w.queries.filter((m) => m === 'getSignaturesForAddress').length === 1);
+  check('Nur die unbekannten Zahlungen kosten eine Detailabfrage',
     w.details() === 5, `${w.details()} statt 200`);
-  pruefe('Die neue Zahlung wird trotzdem verbucht',
+  check('Die neue Zahlung wird trotzdem verbucht',
     w.challenges[0].status === 'paid' && w.challenges[0].tx_sig === 'sig0200');
 }
 
 {
-  // Gegenprobe: Ohne Sieb müsste dieselbe Welt 200 Abfragen kosten. Wenn diese
-  // Prüfung fehlschlägt, misst die Prüfung darüber nichts.
+  // Control: without the sieve, the same world would have to cost 200
+  // lookups. If this check fails, the one above it measures nothing.
   const w = welt({ anzahl: 200, verbucht: 195, offeneChallenges: [] });
   const alle = await w.recentTreasuryPayments(TREASURY, 200);
-  pruefe('Gegenprobe: ohne Sieb kostet dasselbe Fenster jede Signatur',
+  check('Gegenprobe: ohne Sieb kostet dasselbe Fenster jede Signatur',
     w.details() === 60, `${w.details()} – gedeckelt durch DETAILS_PRO_SCAN`);
-  pruefe('Gegenprobe: und liefert dann auch alle gefundenen Zahlungen',
+  check('Gegenprobe: und liefert dann auch alle gefundenen Zahlungen',
     alle.length === 60);
 }
 
 {
-  // Und der Kern des ersten Fehlers, direkt: Wird `aussieben` überhaupt
-  // durchgereicht? Eine Attrappe, die nichts durchlässt, muss den RPC
-  // vollständig stilllegen.
+  // And the core of the first bug, directly: is `aussieben` even passed
+  // through? A stand-in that lets nothing through has to shut the RPC
+  // down completely.
   const w = welt({
     anzahl: 40, verbucht: 40,
     offeneChallenges: [{ wallet: 'wallet0040', lamports: 2_000_040 }],
   });
   await w.scanTreasury(TREASURY);
-  pruefe('Ist alles bekannt, gibt es keine einzige Detailabfrage',
+  check('Ist alles bekannt, gibt es keine einzige Detailabfrage',
     w.details() === 0, `${w.details()}`);
-  pruefe('scanTreasury übergibt das Sieb – nicht erst hinterher gefiltert',
-    /recentTreasuryPayments\(\s*treasury,[^)]*aussieben|verbucht\.has/s.test(scanTreasuryQuelle)
-      && /\(sigs\) => sigs\.filter/.test(scanTreasuryQuelle));
+  check('scanTreasury übergibt das Sieb – nicht erst hinterher gefiltert',
+    /recentTreasuryPayments\(\s*treasury,[^)]*aussieben|verbucht\.has/s.test(scanTreasurySource)
+      && /\(sigs\) => sigs\.filter/.test(scanTreasurySource));
 }
 
 // ---------------------------------------------------------------------------
@@ -285,37 +285,37 @@ console.log('\nDas Fenster: ein Ansturm darf keine Zahlung verlieren\n');
 // ---------------------------------------------------------------------------
 
 {
-  // Der Startfall. 120 Menschen zahlen, bevor der nächste Lauf kommt – mehr
-  // als die 40, mit denen das hier vorher arbeitete. Alle haben eine offene
-  // Challenge, alle müssen hereinkommen.
-  const zahler = Array.from({ length: 120 }, (_, i) => ({
+  // The launch case. 120 people pay before the next run comes around -
+  // more than the 40 this used to work with. All have an open challenge,
+  // all have to get in.
+  const payers = Array.from({ length: 120 }, (_, i) => ({
     wallet: `wallet${String(i + 1).padStart(4, '0')}`,
     lamports: 2_000_000 + i + 1,
   }));
-  const w = welt({ anzahl: 120, verbucht: 0, offeneChallenges: zahler });
+  const w = welt({ anzahl: 120, verbucht: 0, offeneChallenges: payers });
 
-  // Mehrere Läufe, so wie es in Wirklichkeit läuft: Der Deckel pro Lauf sorgt
-  // dafür, dass die Funktion nicht in ihr Zeitlimit läuft, und der nächste Lauf
-  // holt den Rest.
+  // Several runs, the way it really works: the per-run cap keeps the
+  // function from running into its time limit, and the next run picks up
+  // the rest.
   for (let i = 0; i < 5; i++) { await w.scanTreasury(TREASURY); w.zeitVor(6000); }
 
-  const bezahlt = w.challenges.filter((c) => c.status === 'paid').length;
-  pruefe('Alle 120 Zahlungen werden gefunden', bezahlt === 120, `${bezahlt} von 120`);
-  pruefe('Und keine doppelt verbucht',
+  const paid = w.challenges.filter((c) => c.status === 'paid').length;
+  check('Alle 120 Zahlungen werden gefunden', paid === 120, `${paid} von 120`);
+  check('Und keine doppelt verbucht',
     new Set(w.challenges.map((c) => c.tx_sig)).size === 120);
-  pruefe('Ein Fenster von 40 hätte 80 davon nie gesehen',
-    w.zahlungen.length === 120);
+  check('Ein Fenster von 40 hätte 80 davon nie gesehen',
+    w.payments.length === 120);
 }
 
 {
-  // Die Gegenprobe zum zweiten Fehler: Mit dem alten Fenster von 40 fällt der
-  // Rest heraus – und zwar endgültig, weil die Signaturen nie in seen_txs
-  // landen und beim nächsten Lauf immer noch ausserhalb des Fensters liegen.
-  const zahler = Array.from({ length: 120 }, (_, i) => ({
+  // The control for the second bug: with the old window of 40, the rest
+  // falls out - permanently, because the signatures never land in
+  // seen_txs and are still outside the window on the next run too.
+  const payers = Array.from({ length: 120 }, (_, i) => ({
     wallet: `wallet${String(i + 1).padStart(4, '0')}`,
     lamports: 2_000_000 + i + 1,
   }));
-  const w = welt({ anzahl: 120, verbucht: 0, offeneChallenges: zahler });
+  const w = welt({ anzahl: 120, verbucht: 0, offeneChallenges: payers });
   for (let i = 0; i < 5; i++) {
     const p = await w.recentTreasuryPayments(TREASURY, 40, (s) =>
       s.filter((x) => !w.seen.some((v) => v.signature === x)));
@@ -325,7 +325,7 @@ console.log('\nDas Fenster: ein Ansturm darf keine Zahlung verlieren\n');
     }
   }
   const gefunden = new Set(w.seen.map((s) => s.signature)).size;
-  pruefe('Gegenprobe: mit 40 bleiben Zahlungen dauerhaft ungesehen',
+  check('Gegenprobe: mit 40 bleiben Zahlungen dauerhaft ungesehen',
     gefunden === 40, `${gefunden} von 120`);
 }
 
@@ -336,29 +336,29 @@ console.log('\nDie Sparmassnahmen davor bleiben\n');
 {
   const w = welt({ anzahl: 10, verbucht: 0, offeneChallenges: [] });
   await w.scanTreasury(TREASURY);
-  pruefe('Ohne offene Challenge kein einziger RPC-Aufruf',
-    w.abfragen.length === 0, `${w.abfragen.length}`);
+  check('Ohne offene Challenge kein einziger RPC-Aufruf',
+    w.queries.length === 0, `${w.queries.length}`);
 }
 
 {
-  // Eine Challenge, die zu keiner Zahlung passt: Sie bleibt offen, also bleibt
-  // auch der Grund zu scannen bestehen – sonst prüfte die Bremse unten nur,
-  // dass nichts mehr zu tun ist.
+  // A challenge that matches no payment: it stays open, so the reason to
+  // scan stays too - otherwise the brake below would only be testing that
+  // there's nothing left to do.
   const w = welt({
     anzahl: 10, verbucht: 0,
     offeneChallenges: [{ wallet: 'wallet9999', lamports: 1_234_567 }],
   });
   await w.scanTreasury(TREASURY);
-  const nach1 = w.abfragen.length;
+  const nach1 = w.queries.length;
   await w.scanTreasury(TREASURY);
-  pruefe('Ein zweiter Lauf innerhalb von 5 Sekunden tut nichts',
-    w.abfragen.length === nach1, `${w.abfragen.length - nach1} Aufrufe zusätzlich`);
-  // Gegenprobe: Nach der Bremse läuft er wieder – sonst prüfte die Zeile oben
-  // nur, dass irgendetwas kaputt ist.
+  check('Ein zweiter Lauf innerhalb von 5 Sekunden tut nichts',
+    w.queries.length === nach1, `${w.queries.length - nach1} Aufrufe zusätzlich`);
+  // Control: after the brake it runs again - otherwise the line above
+  // would only be testing that something, anything, is broken.
   w.zeitVor(6000);
   await w.scanTreasury(TREASURY);
-  pruefe('Nach 5 Sekunden läuft er wieder',
-    w.abfragen.length > nach1);
+  check('Nach 5 Sekunden läuft er wieder',
+    w.queries.length > nach1);
 }
 
 {
@@ -370,17 +370,18 @@ console.log('\nDie Sparmassnahmen davor bleiben\n');
     }],
   });
   await w.scanTreasury(TREASURY);
-  pruefe('Eine abgelaufene Challenge wird nicht mehr bezahlt',
+  check('Eine abgelaufene Challenge wird nicht mehr paid',
     w.challenges[0].status === 'pending');
 }
 
 {
-  // Die Detailabfragen laufen in Gruppen parallel – sonst wären 60 Signaturen
-  // seriell rund sechs Sekunden, und die Function hat ein Zeitlimit.
-  pruefe('Die Detailabfragen laufen nicht eine nach der anderen',
-    /Promise\.all\(/.test(scanQuelle) && /GLEICHZEITIG/.test(scanQuelle));
-  pruefe('Aber gedeckelt, damit ein Kaltstart nicht in das Zeitlimit läuft',
-    /slice\(0, DETAILS_PRO_SCAN\)/.test(scanQuelle));
+  // The detail lookups run in parallel batches - otherwise 60 signatures
+  // serially would take around six seconds, and the function has a time
+  // limit.
+  check('Die Detailabfragen laufen nicht eine nach der anderen',
+    /Promise\.all\(/.test(scanSource) && /GLEICHZEITIG/.test(scanSource));
+  check('Aber gedeckelt, damit ein Kaltstart nicht in das Zeitlimit läuft',
+    /slice\(0, DETAILS_PRO_SCAN\)/.test(scanSource));
 }
 
 // ---------------------------------------------------------------------------
@@ -390,10 +391,10 @@ console.log('\nDer Index für das Sieb\n');
 {
   const wanderung = fs.readFileSync(
     path.join(root, 'supabase/migrations/20260903030000_seen_txs_index.sql'), 'utf8');
-  pruefe('Die Abfrage des Siebs hat einen Index',
+  check('Die Abfrage des Siebs hat einen Index',
     /create index if not exists[\s\S]*seen_txs[\s\S]*seen_at desc/.test(wanderung));
-  pruefe('Und der Scan sortiert genau danach',
-    /order\('seen_at', \{ ascending: false \}\)/.test(scanTreasuryQuelle));
+  check('Und der Scan sortiert genau danach',
+    /order\('seen_at', \{ ascending: false \}\)/.test(scanTreasurySource));
 }
 
 // ---------------------------------------------------------------------------
@@ -403,14 +404,14 @@ console.log('\nDie Fassung für das Dashboard ist nicht veraltet\n');
 {
   const gebaut = path.join(root, 'supabase/functions/verify/index.dashboard.ts');
   if (!fs.existsSync(gebaut)) {
-    pruefe('index.dashboard.ts ist vorhanden', false, 'node scripts/verify-eigenstaendig.mjs');
+    check('index.dashboard.ts ist vorhanden', false, 'node scripts/verify-eigenstaendig.mjs');
   } else {
     const d = fs.readFileSync(gebaut, 'utf8');
-    pruefe('index.dashboard.ts enthält das Sieb',
+    check('index.dashboard.ts enthält das Sieb',
       /\(sigs\) => sigs\.filter\(\(s\) => !verbucht\.has\(s\)\)/.test(d));
-    pruefe('index.dashboard.ts enthält das breitere Fenster',
+    check('index.dashboard.ts enthält das breitere Fenster',
       /const TREASURY_FENSTER = 200/.test(d));
-    pruefe('index.dashboard.ts enthält den Deckel pro Lauf',
+    check('index.dashboard.ts enthält den Deckel pro Lauf',
       /DETAILS_PRO_SCAN/.test(d));
   }
 }

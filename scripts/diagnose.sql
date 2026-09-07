@@ -1,14 +1,14 @@
 -- ============================================================================
--- Was frisst die Ressourcen?
+-- What's eating the resources?
 --
--- Im SQL-Editor ausführen. Jeder Abschnitt gibt ein eigenes Ergebnis; im
--- Supabase-Editor lässt sich zwischen ihnen über die Reiter unter "Results"
--- blättern. Nichts hier verändert etwas – reines Nachsehen.
+-- Run in the SQL editor. Each section returns its own result; in the
+-- Supabase editor you can page between them via the tabs under "Results".
+-- Nothing here changes anything - purely a look-around.
 -- ============================================================================
 
--- 1. Wie groß sind die Tabellen und wie viele Zeilen stehen drin?
---    Der häufigste Grund für einen erschöpften kleinen Server sind schlicht
---    Daten, die niemand mehr braucht – etwa Reste aus einem Lasttest.
+-- 1. How big are the tables, and how many rows are in them?
+--    The most common reason a small server runs out of steam is simply
+--    data nobody needs anymore - leftovers from a load test, say.
 select
   relname                                        as tabelle,
   n_live_tup                                     as zeilen,
@@ -17,9 +17,9 @@ select
 from pg_stat_user_tables
 order by pg_total_relation_size(relid) desc;
 
--- 2. Verbindungen: wie viele sind offen, und was tun sie?
---    "idle in transaction" ist der gefährliche Zustand – eine Verbindung, die
---    eine Transaktion offen hält und damit Aufräumarbeiten blockiert.
+-- 2. Connections: how many are open, and what are they doing?
+--    "idle in transaction" is the dangerous state - a connection holding a
+--    transaction open and thereby blocking cleanup work.
 select
   state,
   count(*)                                          as anzahl,
@@ -29,9 +29,9 @@ where datname = current_database()
 group by state
 order by anzahl desc;
 
--- 3. Welche Abfragen kosten am meisten Zeit insgesamt?
---    Braucht die Erweiterung pg_stat_statements. Fehlt sie, meldet die Zeile
---    einen Fehler – dann diesen Abschnitt einfach überspringen.
+-- 3. Which queries cost the most time overall?
+--    Needs the pg_stat_statements extension. If it's missing, this line
+--    reports an error - just skip this section then.
 select
   round(total_exec_time)::bigint  as gesamt_ms,
   calls                           as aufrufe,
@@ -41,9 +41,9 @@ from pg_stat_statements
 order by total_exec_time desc
 limit 15;
 
--- 4. Laufen die drei Cronjobs, und laufen sie durch?
---    status sollte "succeeded" sein. Steht dort "failed", stimmt etwas mit
---    dem Secret oder der Function nicht – dann liefen sie zwar, aber ins Leere.
+-- 4. Are the three cron jobs running, and running successfully?
+--    status should read "succeeded". If it says "failed", something's
+--    wrong with the secret or the function - they ran, but into a void.
 select
   j.jobname,
   d.status,
@@ -55,8 +55,8 @@ where d.start_time > now() - interval '30 minutes'
 group by j.jobname, d.status
 order by j.jobname, d.status;
 
--- 5. Die letzten fünf Cron-Läufe im Klartext – zeigt die Fehlermeldung, falls
---    einer fehlgeschlagen ist.
+-- 5. The last five cron runs in plain text - shows the error message if
+--    one of them failed.
 select
   j.jobname, d.status, d.start_time, left(coalesce(d.return_message, ''), 200) as meldung
 from cron.job_run_details d

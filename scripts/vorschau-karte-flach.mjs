@@ -1,35 +1,36 @@
 // ============================================================================
-// Vorschaubilder: Die Abstimmungskarte ohne Farbverlauf
+// Preview images: the poll card without a gradient
 //
-// In der Karte steckt bis jetzt genau eine Stelle mit einem Verlauf: ein sehr
-// schwacher Lichtschein unten rechts. Die Begründung im Code lautet:
+// The card currently has exactly one spot with a gradient: a very faint
+// glow in the bottom right. The reasoning in the code reads:
 //
-//     "Ohne ihn ist die Fläche vollkommen flach, und zwischen lauter anderen
-//      dunklen Kacheln in der Zeitleiste verschwindet eine flache Fläche."
+//     "Without it the area is completely flat, and among a bunch of other
+//      dark tiles in the timeline, a flat area disappears."
 //
-// Das Problem ist echt und verschwindet nicht dadurch, dass der Verlauf geht.
-// Eine Linkkarte auf X steht zwischen fremden Beiträgen; sie muss sich vom
-// Grund der Zeitleiste absetzen, sonst sieht sie aus wie ein Loch. Die Frage
-// ist deshalb nicht "mit oder ohne", sondern: WOMIT sonst.
+// The problem is real and doesn't go away just because the gradient does.
+// A link card on X sits among other people's posts; it has to set itself
+// apart from the timeline background, or it looks like a hole. So the
+// question isn't "with or without", it's: WITH WHAT instead.
 //
-// Drei Mittel stehen zur Verfügung, alle ohne Verlauf:
+// Three means are available, all without a gradient:
 //
-//   * Die Fläche selbst heller stellen – der Unterschied zum Grund wird
-//     größer, bleibt aber eine einzige Farbe.
-//   * Den Rand kräftiger ziehen – die Kante trennt, nicht die Fläche.
-//   * Eine helle Linie an der oberen Innenkante – das älteste Mittel für
-//     Tiefe ohne Verlauf, eine Kante Licht statt einer Wolke.
+//   * Make the area itself lighter - the difference against the background
+//     gets bigger, but it stays a single flat color.
+//   * Draw the border more strongly - the edge does the separating, not
+//     the area.
+//   * A light line along the upper inner edge - the oldest trick for depth
+//     without a gradient, one edge of light instead of a cloud.
 //
-// Beide Formate werden gezeigt, weil sie verschiedene Aufgaben haben:
-// das Bild zum Herunterladen (16:9, wird als Bild gepostet und ganz gesehen)
-// und die Vorschaukarte (1,91:1, wird von X zugeschnitten und klein gezeigt).
-// Was auf dem einen trägt, kann auf dem anderen verschwinden.
+// Both formats are shown, because they serve different purposes: the image
+// to download (16:9, posted as an image and seen in full) and the preview
+// card (1.91:1, cropped by X and shown small). What holds up on one can
+// vanish on the other.
 //
-// Gemessen wird außerdem die Dateigröße. Der Verlauf ist der teuerste Teil
-// eines PNG: Weiche Übergänge lassen sich nicht als Flächen packen, sie
-// werden gerastert. Genau daran lag es, dass die Karte einmal 1,5 MB wog.
+// File size is measured too. The gradient is the most expensive part of a
+// PNG: soft transitions can't be packed as flat areas, they get rasterized.
+// That's exactly why the card once weighed in at 1.5 MB.
 //
-// Erzeugt preview/flach-*.png und preview/flach-uebersicht.png
+// Produces preview/flach-*.png and preview/flach-uebersicht.png
 // ============================================================================
 
 import { chromium } from 'playwright';
@@ -42,82 +43,82 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 
-// Woertlich aus app.js, wie in test-poll-bild.mjs: Eine nachgebaute Kopie
-// wuerde etwas zeigen, das die App nicht zeichnet.
-const schneide = (von, bis) => {
+// Verbatim from app.js, like in test-poll-bild.mjs: a rebuilt copy would
+// show something the app doesn't actually draw.
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-// Ab cssWert, nicht ab BILD_BREITE: zeichnePoll() holt sich Farben und Schrift
-// ueber diesen Helfer, und ohne ihn bricht die Leinwand beim ersten Aufruf ab.
-const zeichner = schneide('const cssWert =', '\nasync function ladeOgBildHoch');
-const formate = schneide('const nfGanz =', 'const ganzeZahl')
-  + schneide('const ganzeZahl =', '\n');
+// Starting from cssWert, not from IMAGE_WIDTH: drawPoll() gets its colors
+// and fonts via this helper, and without it the canvas bails on the first call.
+const drawSource = cut('const cssWert =', '\nasync function ladeOgBildHoch');
+const formate = cut('const nfGanz =', 'const wholeNumber')
+  + cut('const wholeNumber =', '\n');
 
-// --- Die Stellen, an denen die Fassungen ansetzen --------------------------
-const SCHEIN = `  const schein = ctx.createRadialGradient(B * .82, H * .9, 0, B * .82, H * .9, Math.max(B, H) * .8);
-  schein.addColorStop(0, \`rgba(\${farbe.akzentRgb}, .055)\`);
-  schein.addColorStop(.55, \`rgba(\${farbe.akzentRgb}, .018)\`);
-  schein.addColorStop(1, \`rgba(\${farbe.akzentRgb}, 0)\`);
+// --- The spots the versions hook into ---------------------------------------
+const GLOW = `  const schein = ctx.createRadialGradient(B * .82, H * .9, 0, B * .82, H * .9, Math.max(B, H) * .8);
+  schein.addColorStop(0, \`rgba(\${color.akzentRgb}, .055)\`);
+  schein.addColorStop(.55, \`rgba(\${color.akzentRgb}, .018)\`);
+  schein.addColorStop(1, \`rgba(\${color.akzentRgb}, 0)\`);
   ctx.fillStyle = schein;
   ctx.fillRect(0, 0, B, H);`;
-if (!zeichner.includes(SCHEIN)) throw new Error('Der Lichtschein sieht in app.js anders aus als hier erwartet');
+if (!drawSource.includes(GLOW)) throw new Error('Der Lichtschein sieht in app.js anders aus als hier erwartet');
 
-const FUELLUNG = `  ctx.fillStyle = farbe.karte;
-  ctx.fillRect(m, m, B - m * 2, karteH);`;
-if (!zeichner.includes(FUELLUNG)) throw new Error('Die Kartenfuellung sieht anders aus als erwartet');
+const FILL_LEVEL = `  ctx.fillStyle = color.card;
+  ctx.fillRect(m, m, B - m * 2, cardH);`;
+if (!drawSource.includes(FILL_LEVEL)) throw new Error('Die Kartenfuellung sieht anders aus als erwartet');
 
-const RAND = `  ctx.strokeStyle = farbe.linie;
+const MARGIN = `  ctx.strokeStyle = color.linie;
   ctx.lineWidth = 1.5;`;
-if (!zeichner.includes(RAND)) throw new Error('Der Rand sieht anders aus als erwartet');
+if (!drawSource.includes(MARGIN)) throw new Error('Der Rand sieht anders aus als erwartet');
 
-const ohneSchein = (q) => q.replace(SCHEIN, '  // kein Lichtschein');
+const withoutGlow = (q) => q.replace(GLOW, '  // kein Lichtschein');
 
 const FASSUNGEN = [
-  { datei: 'jetzt', name: 'Jetzt',
-    kurz: 'Mit Lichtschein',
-    text: 'Der Stand von heute: ein sehr schwacher Verlauf unten rechts. Er ist das Einzige, was die Fläche im Bild nicht ganz flach macht – und die einzige Stelle, die dem flachen Grund der Seite widerspricht.',
+  { file: 'jetzt', name: 'Jetzt',
+    short: 'Mit Lichtschein',
+    text: 'Der Stand von heute: ein sehr schwacher Verlauf bottom right. Er ist das Einzige, was die Fläche im Bild nicht ganz flach macht – und die einzige Stelle, die dem flachen Grund der Seite widerspricht.',
     patch: (q) => q },
 
-  { datei: 'flach', name: 'Einfach flach',
-    kurz: 'Der Verlauf fällt ersatzlos weg',
+  { file: 'flach', name: 'Einfach flach',
+    short: 'Der Verlauf fällt ersatzlos weg',
     text: 'Sonst nichts geändert. Die Karte ist damit eine einzige Farbe, abgesetzt nur durch die Haarlinie am Rand. Am nächsten an der Seite – die Frage ist, ob sie sich in einer Zeitleiste noch behauptet.',
-    patch: ohneSchein },
+    patch: withoutGlow },
 
-  { datei: 'heller', name: 'Flach, Fläche heller',
-    kurz: 'Der Unterschied zum Grund wird größer',
+  { file: 'heller', name: 'Flach, Fläche heller',
+    short: 'Der Unterschied zum Grund wird größer',
     text: 'Statt eines Verlaufs eine hellere Fläche: --bg-2 statt --bg-1. Ein einziger Farbwert, kein Übergang. Der Abstand zum Bildgrund verdoppelt sich ungefähr, die Karte bleibt aber eine ruhige Fläche.',
-    patch: (q) => ohneSchein(q).replace(FUELLUNG,
-      `  ctx.fillStyle = farbe.balken;\n  ctx.fillRect(m, m, B - m * 2, karteH);`) },
+    patch: (q) => withoutGlow(q).replace(FILL_LEVEL,
+      `  ctx.fillStyle = color.balken;\n  ctx.fillRect(m, m, B - m * 2, cardH);`) },
 
-  { datei: 'rand', name: 'Flach, Rand kräftiger',
-    kurz: 'Die Kante trennt, nicht die Fläche',
+  { file: 'margin', name: 'Flach, Rand kräftiger',
+    short: 'Die Kante trennt, nicht die Fläche',
     text: 'Der Rand wird heller und doppelt so stark. Das ist das Mittel, das den Weg durch X am besten übersteht: Eine Fläche kann bei der Umrechnung in JPEG in ihrer Umgebung untergehen, ein Strich bleibt ein Strich.',
-    patch: (q) => ohneSchein(q).replace(RAND,
-      `  ctx.strokeStyle = farbe.dimmer;\n  ctx.lineWidth = 3;`) },
+    patch: (q) => withoutGlow(q).replace(MARGIN,
+      `  ctx.strokeStyle = color.dimmer;\n  ctx.lineWidth = 3;`) },
 
-  { datei: 'kante', name: 'Flach, Lichtkante oben',
-    kurz: 'Eine Linie statt einer Wolke',
-    text: 'Eine helle Linie an der oberen Innenkante, wie bei einer Fläche, auf die Licht von oben fällt. Gibt Tiefe ohne Verlauf – das älteste Mittel dafür. Auf der zugeschnittenen Vorschaukarte ist sie allerdings nah am oberen Schnittrand.',
-    patch: (q) => ohneSchein(q).replace(FUELLUNG,
-      `  ctx.fillStyle = farbe.karte;
-  ctx.fillRect(m, m, B - m * 2, karteH);
+  { file: 'kante', name: 'Flach, Lichtkante peek',
+    short: 'Eine Linie statt einer Wolke',
+    text: 'Eine helle Linie an der oberen Innenkante, wie bei einer Fläche, auf die Licht von peek fällt. Gibt Tiefe ohne Verlauf – das älteste Mittel dafür. Auf der zugeschnittenen Vorschaukarte ist sie allerdings nah am oberen Schnittrand.',
+    patch: (q) => withoutGlow(q).replace(FILL_LEVEL,
+      `  ctx.fillStyle = color.card;
+  ctx.fillRect(m, m, B - m * 2, cardH);
   ctx.save();
-  ctx.strokeStyle = \`rgba(\${farbe.akzentRgb}, .16)\`;
+  ctx.strokeStyle = \`rgba(\${color.akzentRgb}, .16)\`;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(m + 30, m + 1); ctx.lineTo(B - m - 30, m + 1);
   ctx.stroke();
   ctx.restore();`) },
 
-  { datei: 'beides', name: 'Flach, heller + Rand',
-    kurz: 'Die zwei stärksten Mittel zusammen',
+  { file: 'beides', name: 'Flach, heller + Rand',
+    short: 'Die zwei stärksten Mittel zusammen',
     text: 'Hellere Fläche und kräftigerer Rand gemeinsam. Setzt sich am deutlichsten ab und übersteht die Umrechnung durch X am sichersten. Auch die lauteste Fassung – zwischen ruhigen Beiträgen fällt sie auf.',
-    patch: (q) => ohneSchein(q)
-      .replace(FUELLUNG, `  ctx.fillStyle = farbe.balken;\n  ctx.fillRect(m, m, B - m * 2, karteH);`)
-      .replace(RAND, `  ctx.strokeStyle = farbe.dimmer;\n  ctx.lineWidth = 3;`) },
+    patch: (q) => withoutGlow(q)
+      .replace(FILL_LEVEL, `  ctx.fillStyle = color.balken;\n  ctx.fillRect(m, m, B - m * 2, cardH);`)
+      .replace(MARGIN, `  ctx.strokeStyle = color.dimmer;\n  ctx.lineWidth = 3;`) },
 ];
 
 const POLL = {
@@ -142,37 +143,37 @@ fs.mkdirSync(ausgabe, { recursive: true });
 
 const ergebnisse = [];
 for (const f of FASSUNGEN) {
-  const seite = await browser.newPage({ viewport: { width: 900, height: 600 } });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.addScriptTag({
+  const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.addScriptTag({
     content: `
       const state = { cfg: { symbol: 'ANSEM' }, polls: [] };
       const fmtUsd = (n) => '$' + Math.round(Number(n)).toLocaleString('en-US');
       const toast = () => {};
       ${formate}
-      ${f.patch(zeichner)}
-      window.zeichnePoll = zeichnePoll;
+      ${f.patch(drawSource)}
+      window.drawPoll = drawPoll;
     `,
   });
 
-  const daten = await seite.evaluate(async (p) => {
-    const gross = await window.zeichnePoll(p);
-    const karte = await window.zeichnePoll(p, { fuerKarte: true });
-    return { gross: gross.toDataURL('image/png'), karte: karte.toDataURL('image/png') };
+  const daten = await page.evaluate(async (p) => {
+    const big = await window.drawPoll(p);
+    const card = await window.drawPoll(p, { fuerKarte: true });
+    return { big: big.toDataURL('image/png'), card: card.toDataURL('image/png') };
   }, POLL);
-  await seite.close();
+  await page.close();
 
   const roh = (d) => Buffer.from(d.split(',')[1], 'base64');
-  const [g, k] = [roh(daten.gross), roh(daten.karte)];
-  fs.writeFileSync(path.join(ausgabe, `flach-${f.datei}-download.png`), g);
-  fs.writeFileSync(path.join(ausgabe, `flach-${f.datei}-karte.png`), k);
-  ergebnisse.push({ gross: daten.gross, karte: daten.karte, kb: { g: g.length / 1024, k: k.length / 1024 } });
+  const [g, k] = [roh(daten.big), roh(daten.card)];
+  fs.writeFileSync(path.join(ausgabe, `flach-${f.file}-download.png`), g);
+  fs.writeFileSync(path.join(ausgabe, `flach-${f.file}-karte.png`), k);
+  ergebnisse.push({ big: daten.big, card: daten.card, kb: { g: g.length / 1024, k: k.length / 1024 } });
   console.log(`  ${f.name.padEnd(24)} Download ${(g.length / 1024).toFixed(0).padStart(4)} KB   Karte ${(k.length / 1024).toFixed(0).padStart(4)} KB`);
 }
 
-// --- Übersichtsblatt -------------------------------------------------------
-// Nebeneinander, weil genau das die Frage ist: Was auf dem grossen Bild traegt,
-// kann auf der kleinen zugeschnittenen Kachel verschwinden.
+// --- Overview sheet ----------------------------------------------------------
+// Side by side, because that's exactly the question: what holds up on the
+// large image can vanish on the small cropped tile.
 const blattHtml = `<!doctype html>
 <meta charset="utf-8">
 <style>${css}</style>
@@ -185,29 +186,29 @@ const blattHtml = `<!doctype html>
   .nr { display: inline-flex; align-items: center; justify-content: center;
         width: 1.6rem; height: 1.6rem; border-radius: 999px; background: var(--bg-3);
         color: var(--dim); font-size: .8rem; }
-  .kurz { color: var(--dim); font-weight: 400; font-size: .86rem; }
+  .short { color: var(--dim); font-weight: 400; font-size: .86rem; }
   .werte { font-size: .7rem; color: var(--dimmer); font-weight: 400; }
   p.t { margin: .35rem 0 .8rem; font-size: .84rem; color: #8b93a7; line-height: 1.55; max-width: 118ch; }
   .paar { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-  .beschriftung { font-size: .72rem; color: var(--dimmer); margin: 0 0 .35rem; }
+  .caption { font-size: .72rem; color: var(--dimmer); margin: 0 0 .35rem; }
   img { width: 100%; display: block; border-radius: 8px; }
-  /* Der Grund hinter den Bildern ist absichtlich NICHT der Seitengrund, sondern
-     das Grau einer Zeitleiste – dort steht die Kachel spaeter. Auf Schwarz
-     sieht jede dunkle Karte gut aus. */
+  /* The background behind the images is deliberately NOT the page
+     background, but the gray of a timeline - that's where the tile ends up
+     later. Every dark card looks good on black. */
   .buehne { background: #16181c; padding: 14px; border-radius: 12px; }
 </style>
 <h1>Die Abstimmungskarte ohne Verlauf</h1>
-<p class="lead">Links jeweils das Bild zum Herunterladen, rechts die Vorschaukarte für X. Der Rahmen dahinter ist bewusst nicht schwarz, sondern das Grau einer Zeitleiste – auf schwarzem Grund sieht jede dunkle Karte gut aus, und genau dort steht sie später nicht.</p>
+<p class="lead">Links jeweils das Bild zum Herunterladen, right die Vorschaukarte für X. Der Rahmen dahinter ist bewusst nicht schwarz, sondern das Grau einer Zeitleiste – auf schwarzem Grund sieht jede dunkle Karte gut aus, und genau dort steht sie später nicht.</p>
 ${FASSUNGEN.map((f, i) => `
 <section>
-  <h2><span class="nr">${i}</span>${f.name}<span class="kurz">${f.kurz}</span>
+  <h2><span class="nr">${i}</span>${f.name}<span class="short">${f.short}</span>
     <span class="werte">${ergebnisse[i].kb.g.toFixed(0)} KB / ${ergebnisse[i].kb.k.toFixed(0)} KB</span></h2>
   <p class="t">${f.text}</p>
   <div class="paar">
-    <div><p class="beschriftung">Herunterladen · 16:9</p>
-      <div class="buehne"><img src="${ergebnisse[i].gross}"></div></div>
-    <div><p class="beschriftung">Vorschau bei X · 1,91:1</p>
-      <div class="buehne"><img src="${ergebnisse[i].karte}"></div></div>
+    <div><p class="caption">Herunterladen · 16:9</p>
+      <div class="buehne"><img src="${ergebnisse[i].big}"></div></div>
+    <div><p class="caption">Vorschau bei X · 1,91:1</p>
+      <div class="buehne"><img src="${ergebnisse[i].card}"></div></div>
   </div>
 </section>`).join('')}`;
 

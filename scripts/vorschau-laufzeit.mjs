@@ -1,44 +1,45 @@
 // ============================================================================
-// Vorschau: Die Laufzeit als Tage / Stunden / Minuten
+// Preview: the duration as days / hours / minutes
 //
-// Heute steht dort ein einziger Wert in Stunden, mit einem Plus und einem
-// Minus daneben: "− 24h +". Das ist eine Reihe, durch die man sich tippt.
-// Gewuenscht ist die Form von X: drei Auswahlfelder nebeneinander, Tage,
-// Stunden, Minuten, jedes einzeln waehlbar.
+// Today a single value in hours sits there, with a plus and a minus next
+// to it: "- 24h +". That's a row you tap your way through. What's wanted
+// is X's shape: three select fields side by side, days, hours, minutes,
+// each individually selectable.
 //
-// Der Unterschied ist groesser als er aussieht, und zwar aus einem Grund, der
-// nichts mit Geschmack zu tun hat: PLATZ.
+// The difference is bigger than it looks, for a reason that has nothing
+// to do with taste: SPACE.
 //
-//   heute      ein Kasten,  ~92 px breit
-//   X-Form     drei Kaesten, jeder mit Beschriftung und Pfeil
+//   today      one box,   ~92 px wide
+//   X's shape  three boxes, each with a label and an arrow
 //
-// Und dieser Platz muss irgendwo herkommen. Heute steht die Laufzeit in der
-// KOPFZEILE des Anlegekastens, rechts neben "+ New poll", und zwar sichtbar
-// auch im zugeklappten Zustand. Drei Kaesten passen dort am Rechner knapp und
-// auf 390 px gar nicht.
+// And that space has to come from somewhere. Today the duration sits in
+// the creation box's HEADER, right next to "+ New poll", visible even
+// when collapsed. Three boxes barely fit there on desktop and don't fit
+// at all at 390 px.
 //
-// Deshalb zeigt diese Vorschau nicht nur "wie sehen die Felder aus", sondern
-// vor allem: WO stehen sie. Jede Fassung wird am Rechner und auf dem Handy
-// gerendert, zugeklappt und aufgeklappt.
+// So this preview shows not just "what do the fields look like", but
+// above all: WHERE do they sit. Every version is rendered on desktop and
+// on a phone, collapsed and expanded.
 //
-// Alles Markup und alles CSS wird woertlich aus index.html und styles.css
-// geschnitten. Nur was die jeweilige Fassung AENDERT, steht hier im Skript –
-// sonst wuerde die Vorschau eine nachgebaute Seite zeigen statt der echten.
+// All markup and all CSS is cut verbatim out of index.html and
+// styles.css. Only what each version CHANGES lives here in the script -
+// otherwise the preview would show a rebuilt page instead of the real
+// one.
 //
 // ----------------------------------------------------------------------------
-// ACHTUNG: Dieses Skript laeuft nicht mehr.
+// HEADS UP: this script no longer runs.
 //
-// Es schneidet .poll-frist aus index.html – den alten Stundenschalter in der
-// Kopfzeile. Den gibt es seit der Entscheidung fuer Fassung 1 nicht mehr, und
-// damit faellt der Schnitt ins Leere.
+// It cuts .poll-frist out of index.html - the old hour toggle in the
+// header. That's been gone since the decision for version 1, so the cut
+// now hits nothing.
 //
-// Es bleibt trotzdem liegen, weil es die Frage festhaelt, die entschieden
-// wurde, und die beiden Wege, die nicht genommen wurden. Wer es wiederbeleben
-// will, muss die drei Fassungen gegen den heutigen Kasten neu aufbauen.
+// It stays here anyway, because it records the question that got decided
+// and the two paths that weren't taken. Whoever wants to revive it will
+// have to rebuild the three versions against today's box.
 //
 //   node scripts/vorschau-laufzeit.mjs
 //
-// Erzeugte preview/laufzeit.png
+// Used to produce preview/laufzeit.png
 // ============================================================================
 
 import fs from 'node:fs';
@@ -48,38 +49,38 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const oeffentlich = path.join(root, 'public');
-const css = fs.readFileSync(path.join(oeffentlich, 'styles.css'), 'utf8');
-const html = fs.readFileSync(path.join(oeffentlich, 'index.html'), 'utf8');
+const publicDir = path.join(root, 'public');
+const css = fs.readFileSync(path.join(publicDir, 'styles.css'), 'utf8');
+const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
 
-// Woertlich aus index.html: der ganze Anlegekasten, von .poll-admin bis zu
-// seinem schliessenden Tag. Kein Nachbau – waere es einer, zeigte die
-// Vorschau, was ich fuer die Seite halte, und nicht, was dort steht.
-const schneide = (von, bis) => {
+// Verbatim from index.html: the entire creation box, from .poll-admin to
+// its closing tag. Not a rebuild - if it were, the preview would show
+// what I think the page looks like, not what's actually there.
+const cut = (von, bis) => {
   const a = html.indexOf(von);
   if (a < 0) throw new Error(`nicht gefunden: ${von}`);
   const b = html.indexOf(bis, a);
   if (b < 0) throw new Error(`Ende nicht gefunden: ${bis}`);
   return html.slice(a, b + bis.length);
 };
-const KASTEN = schneide('<div id="poll-admin"', '</div>\n    </div>')
+const BOX = cut('<div id="poll-admin"', '</div>\n    </div>')
   .replace(' hidden', '');
 
 // ---------------------------------------------------------------------------
-// Die Fassungen
+// The versions
 // ---------------------------------------------------------------------------
 //
-// ersetzt: Was an die Stelle von .poll-frist tritt.
-// wohin:   'kopf'  – bleibt in der Kopfzeile neben "+ New poll"
-//          'innen' – wandert in den aufgeklappten Kasten, wie bei X
+// ersetzt: what takes the place of .poll-frist.
+// wohin:   'header'  - stays in the header next to "+ New poll"
+//          'innen' - moves into the expanded box, like on X
 //
-// Bei 'innen' ist die Kopfzeile im zugeklappten Zustand NUR noch der Knopf,
-// und die Laufzeit ist gar nicht zu sehen, bevor man aufklappt. Das ist ein
-// echter Verlust und gehoert zur Entscheidung dazu: Heute sieht Ansem die
-// eingestellte Laufzeit, ohne etwas anzufassen.
+// With 'innen', the header in the collapsed state is ONLY the button, and
+// the duration isn't visible at all before expanding. That's a real loss
+// and belongs to the decision: today Ansem sees the configured duration
+// without touching anything.
 
-const feldX = (name, wert, breit) => `
-  <label class="lz-feld${breit ? ' lz-breit' : ''}">
+const fieldX = (name, wert, wide) => `
+  <label class="lz-feld${wide ? ' lz-breit' : ''}">
     <span class="lz-name">${name}</span>
     <select class="lz-wahl">${
       [...Array(wert.max + 1)].map((_, i) =>
@@ -87,9 +88,9 @@ const feldX = (name, wert, breit) => `
     }</select>
   </label>`;
 
-const DREI = (breit = false) => feldX('Days', { max: 7, vor: 1 }, breit)
-  + feldX('Hours', { max: 23, vor: 0 }, breit)
-  + feldX('Minutes', { max: 59, vor: 0 }, breit);
+const DREI = (wide = false) => fieldX('Days', { max: 7, vor: 1 }, wide)
+  + fieldX('Hours', { max: 23, vor: 0 }, wide)
+  + fieldX('Minutes', { max: 59, vor: 0 }, wide);
 
 const FASSUNGEN = [
   {
@@ -117,8 +118,8 @@ const FASSUNGEN = [
         font: inherit; font-family: var(--mono); font-size: .95rem; color: var(--text);
         cursor: pointer; outline: none;
       }
-      /* Der Pfeil ist gezeichnet, kein Zeichen: Ein "v" aus der Schrift steht
-         zu hoch und ist in der Mono zu breit. */
+      /* The arrow is drawn, not a character: a "v" from the font sits
+         too high and is too wide in the mono face. */
       .lz-feld::after {
         content: ''; position: absolute; right: .6rem; top: 50%;
         width: 8px; height: 8px; margin-top: -5px;
@@ -127,7 +128,7 @@ const FASSUNGEN = [
       }
       .lz-wahl option { background: var(--bg-1); color: var(--text); }
       :root[data-tastatur] .lz-feld:focus-within { border-color: var(--fokus); }`,
-    text: 'Genau der Aufbau vom Screenshot: Überschrift, darunter drei gleich breite '
+    text: 'Genau der Aufbau vom Screenshot: Überschrift, darunter drei gleich width '
       + 'Kästen mit Beschriftung, Wert und Pfeil. Er steht im aufgeklappten Kasten, '
       + 'nicht mehr in der Kopfzeile – am Rechner passte er dort knapp, auf dem Handy '
       + 'gar nicht. Der Preis: Zugeklappt ist die eingestellte Laufzeit nicht mehr zu sehen.',
@@ -154,8 +155,8 @@ const FASSUNGEN = [
       .lz-block { display: flex; align-items: center; gap: .6rem; }
       .lz-titel { font-size: .82rem; color: var(--dimmer); }
       .lz-reihe { display: flex; gap: .4rem; }
-      /* Derselbe Rahmen wie .filter-group und .frist-feld: eng am Inhalt, ein
-         randloses Feld und die Einheit dahinter. */
+      /* The same border as .filter-group and .frist-feld: tight around
+         the content, a borderless field and the unit right after it. */
       .lz-feld {
         display: inline-flex; align-items: center; gap: .15rem;
         background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
@@ -177,7 +178,7 @@ const FASSUNGEN = [
   {
     nr: 3,
     name: 'Drei Felder, unsere Form – in der Kopfzeile',
-    wohin: 'kopf',
+    wohin: 'header',
     ersetzt: `<div class="poll-frist lz-block">
         <span class="frist-label">Runs for</span>
         <div class="lz-reihe">
@@ -209,14 +210,14 @@ const FASSUNGEN = [
       .lz-einheit { font-family: var(--mono); font-size: .78rem; color: var(--dimmer); }
       .lz-wahl option { background: var(--bg-1); color: var(--text); }
       :root[data-tastatur] .lz-feld:focus-within { border-color: var(--fokus); }`,
-    text: 'Wie 2, aber am alten Platz: rechts neben "+ New poll", auch im zugeklappten '
+    text: 'Wie 2, aber am alten Platz: right neben "+ New poll", auch im zugeklappten '
       + 'Zustand sichtbar. Am Rechner geht das auf. Auf dem Handy bricht die Zeile um – '
       + 'genau das ist hier die Frage.',
   },
 ];
 
 // ---------------------------------------------------------------------------
-// Rendern
+// Rendering
 // ---------------------------------------------------------------------------
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -227,8 +228,8 @@ const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascrip
 const server = http.createServer((q, res) => {
   let p = decodeURIComponent(q.url.split('?')[0]);
   if (p === '/') p = '/index.html';
-  const f = path.join(oeffentlich, p);
-  if (!f.startsWith(oeffentlich) || !fs.existsSync(f) || !fs.statSync(f).isFile()) {
+  const f = path.join(publicDir, p);
+  if (!f.startsWith(publicDir) || !fs.existsSync(f) || !fs.statSync(f).isFile()) {
     return res.writeHead(404).end('');
   }
   res.writeHead(200, { 'content-type': TYPEN[path.extname(f)] ?? 'application/octet-stream' })
@@ -237,48 +238,48 @@ const server = http.createServer((q, res) => {
 await new Promise((r) => server.listen(0, r));
 const basis = `http://127.0.0.1:${server.address().port}`;
 
-/** Ein Bild einer Fassung, in einer Breite, auf- oder zugeklappt. */
-async function bild(f, breite, offen) {
-  const seite = await browser.newPage({ viewport: { width: breite, height: 400 } });
-  await seite.goto(basis);
-  await seite.waitForTimeout(150);
+/** An image of one version, at one width, expanded or collapsed. */
+async function bild(f, width, offen) {
+  const page = await browser.newPage({ viewport: { width: width, height: 400 } });
+  await page.goto(basis);
+  await page.waitForTimeout(150);
 
-  let markup = KASTEN;
+  let markup = BOX;
   if (f.wohin === 'innen') {
-    // Aus der Kopfzeile raus, in den Kasten rein – vor die Zeile mit den
-    // Knoepfen, wie bei X unter der letzten Antwort.
+    // Out of the header, into the box - right before the row with the
+    // buttons, like on X below the last answer.
     markup = markup.replace(/<div class="poll-frist">[\s\S]*?<\/div>\s*<\/div>/, '</div>')
                    .replace('<div class="row">', `${f.ersetzt}\n        <div class="row">`);
   } else {
     markup = markup.replace(/<div class="poll-frist">[\s\S]*?<\/div>\s*<\/div>/, `${f.ersetzt}\n      </div>`);
   }
 
-  await seite.addStyleTag({ content: f.css });
-  await seite.evaluate(([m, auf]) => {
+  await page.addStyleTag({ content: f.css });
+  await page.evaluate(([m, auf]) => {
     document.querySelector('#login').hidden = true;
     document.querySelector('.app').hidden = false;
     for (const p of document.querySelectorAll('.pane')) p.hidden = true;
     const pane = document.querySelector('#pane-polls');
     pane.hidden = false;
     pane.querySelector('#poll-admin').outerHTML = m;
-    const kasten = document.querySelector('#poll-admin');
-    kasten.hidden = false;
-    kasten.classList.toggle('offen', auf);
+    const panel = document.querySelector('#poll-admin');
+    panel.hidden = false;
+    panel.classList.toggle('offen', auf);
     document.querySelector('#poll-admin-felder').hidden = !auf;
     document.querySelector('#poll-list').innerHTML = '';
-    // Die Kopfzeile und die Liste stoeren im Ausschnitt nur.
+    // The topbar and the list would only get in the way of the crop.
     document.querySelector('.topbar').style.display = 'none';
   }, [markup, offen]);
-  await seite.waitForTimeout(120);
+  await page.waitForTimeout(120);
 
-  const ziel = seite.locator('#poll-admin');
-  const kasten = await ziel.boundingBox();
-  const png = await seite.screenshot({
-    clip: { x: 0, y: kasten.y - 10, width: breite, height: kasten.height + 20 },
+  const ziel = page.locator('#poll-admin');
+  const panel = await ziel.boundingBox();
+  const png = await page.screenshot({
+    clip: { x: 0, y: panel.y - 10, width: width, height: panel.height + 20 },
   });
-  const kopf = await seite.locator('.poll-admin-kopf').boundingBox();
-  await seite.close();
-  return { png: png.toString('base64'), hoehe: Math.round(kasten.height), kopfHoehe: Math.round(kopf.height) };
+  const header = await page.locator('.poll-admin-kopf').boundingBox();
+  await page.close();
+  return { png: png.toString('base64'), height: Math.round(panel.height), kopfHoehe: Math.round(header.height) };
 }
 
 console.log('\n  Gemessen: Hoehe des Kastens\n');
@@ -293,11 +294,11 @@ for (const f of FASSUNGEN) {
   const handyAuf = await bild(f, 390, true);
   bilder.push({ f, zu, auf, handyZu, handyAuf });
   console.log('  ' + `${f.nr}. ${f.name}`.padEnd(40)
-    + `${zu.hoehe} px`.padEnd(14) + `${auf.hoehe} px`.padEnd(15)
+    + `${zu.height} px`.padEnd(14) + `${auf.height} px`.padEnd(15)
     + `${handyZu.kopfHoehe} px`);
 }
 
-const seiteHtml = `
+const pageHtml = `
 <style>
   body { margin: 0; padding: 2rem; background: #06070a; color: #e7e9ee;
          font-family: ui-monospace, monospace; font-size: 15px; }
@@ -308,12 +309,12 @@ const seiteHtml = `
   h2 .nr { display: inline-block; min-width: 1.6rem; color: #eceff5; }
   .hinweis { color: #8b93a7; font-size: .8rem; line-height: 1.6; max-width: 62rem; margin: 0 0 1rem; }
   .paar { display: flex; gap: 1.2rem; align-items: flex-start; flex-wrap: wrap; }
-  .schuss { border: 1px solid #262b39; border-radius: 10px; overflow: hidden; }
-  .schuss img { display: block; }
+  .shoot { border: 1px solid #262b39; border-radius: 10px; overflow: hidden; }
+  .shoot img { display: block; }
   .cap { font-size: .7rem; color: #5d657a; margin: 0 0 .3rem; text-transform: uppercase; letter-spacing: .08em; }
 </style>
 <h1>Die Laufzeit als Tage / Stunden / Minuten</h1>
-<p class="lead">Links jeweils zugeklappt, rechts aufgeklappt – oben am Rechner (1000 px),
+<p class="lead">Links jeweils zugeklappt, right aufgeklappt – peek am Rechner (1000 px),
 darunter auf dem Handy (390 px). Der Unterschied zwischen den Fassungen ist nicht die Form
 der Felder, sondern <b>wo sie stehen</b>: in der Kopfzeile neben „+ New poll" (dort steht die
 Laufzeit heute, auch zugeklappt sichtbar) oder im aufgeklappten Kasten wie bei X.</p>
@@ -322,21 +323,21 @@ ${bilder.map(({ f, zu, auf, handyZu, handyAuf }) => `
   <h2><span class="nr">${f.nr}.</span>${f.name}</h2>
   <p class="hinweis">${f.text}</p>
   <div class="paar">
-    <div><p class="cap">Rechner · zu</p><div class="schuss"><img src="data:image/png;base64,${zu.png}"></div></div>
-    <div><p class="cap">Rechner · auf</p><div class="schuss"><img src="data:image/png;base64,${auf.png}"></div></div>
+    <div><p class="cap">Rechner · zu</p><div class="shoot"><img src="data:image/png;base64,${zu.png}"></div></div>
+    <div><p class="cap">Rechner · auf</p><div class="shoot"><img src="data:image/png;base64,${auf.png}"></div></div>
   </div>
   <div class="paar" style="margin-top:1rem">
-    <div><p class="cap">390 px · zu</p><div class="schuss"><img src="data:image/png;base64,${handyZu.png}"></div></div>
-    <div><p class="cap">390 px · auf</p><div class="schuss"><img src="data:image/png;base64,${handyAuf.png}"></div></div>
+    <div><p class="cap">390 px · zu</p><div class="shoot"><img src="data:image/png;base64,${handyZu.png}"></div></div>
+    <div><p class="cap">390 px · auf</p><div class="shoot"><img src="data:image/png;base64,${handyAuf.png}"></div></div>
   </div>
 </div>`).join('')}
 `;
 
-const seite = await browser.newPage({ viewport: { width: 1180, height: 900 } });
-await seite.setContent(seiteHtml);
-await seite.waitForTimeout(200);
+const page = await browser.newPage({ viewport: { width: 1180, height: 900 } });
+await page.setContent(pageHtml);
+await page.waitForTimeout(200);
 fs.mkdirSync(path.join(root, 'preview'), { recursive: true });
-await seite.screenshot({ path: path.join(root, 'preview', 'laufzeit.png'), fullPage: true });
+await page.screenshot({ path: path.join(root, 'preview', 'laufzeit.png'), fullPage: true });
 
 await browser.close();
 server.close();

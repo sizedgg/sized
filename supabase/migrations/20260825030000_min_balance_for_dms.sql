@@ -1,24 +1,24 @@
 -- ============================================================================
--- Mindestbestand, um Ansem eine DM zu schreiben – von Ansem einstellbar
+-- Minimum holdings to DM Ansem - adjustable by Ansem
 --
--- Der Chat hat bereits eine Schwelle (min_chat_usd). Für DMs gab es bisher
--- keine: Wer verifiziert war, durfte schreiben. Das ist der teurere Kanal –
--- eine DM landet nicht in einem Strom, den man überfliegt, sondern in einem
--- Posteingang, den eine einzelne Person abarbeitet. Genau deshalb ist er das
--- lohnendere Ziel für Spam.
+-- The chat already has a threshold (min_chat_usd). DMs didn't have one so
+-- far: anyone verified was allowed to write. That's the more expensive
+-- channel - a DM doesn't land in a stream you skim, it lands in an inbox one
+-- single person works through. That's exactly why it's the more rewarding
+-- target for spam.
 --
--- Zwei Dinge unterscheiden diese Schwelle von der im Chat:
+-- Two things set this threshold apart from the one in chat:
 --
---   1. Sie hat einen eigenen Wert. Die beiden Kanäle haben unterschiedliche
---      Kosten, und Ansem soll den Posteingang zumachen können, ohne dabei
---      den Chat mit zu schließen.
+--   1. It has its own value. The two channels have different costs, and
+--      Ansem should be able to close the inbox without closing chat along
+--      with it.
 --
---   2. Ansem kann sie im laufenden Betrieb ändern. Dafür gibt es unten eine
---      eng zugeschnittene Funktion statt eines Schreibrechts auf app_config.
---      Der Unterschied ist wesentlich: In derselben Zeile stehen treasury,
---      admin_wallet und ansem_mint. Ein allgemeines UPDATE-Recht auf diese
---      Zeile hieße, dass ein übernommener Admin-Token die Zahladresse
---      umbiegen kann. Die Funktion hier kann genau eine Spalte setzen.
+--   2. Ansem can change it while the app is running. There's a tightly
+--      scoped function below for that instead of write access to
+--      app_config. The difference matters: the same row holds treasury,
+--      admin_wallet and ansem_mint. A general UPDATE right on that row would
+--      mean a hijacked admin token could redirect the payment address. The
+--      function here can set exactly one column.
 -- ============================================================================
 
 alter table public.app_config
@@ -28,17 +28,17 @@ comment on column public.app_config.min_dm_usd is
   'Mindestwert in USD an gehaltenen Token, um Ansem eine DM schreiben zu duerfen. 0 = aus.';
 
 -- ----------------------------------------------------------------------------
--- Einstellen: nur diese eine Spalte, nur durch Ansem
+-- Setting it: only this one column, only by Ansem
 -- ----------------------------------------------------------------------------
 --
--- security definer, weil app_config für normale Rollen nicht schreibbar ist
--- und das auch so bleiben soll. Die Rechteprüfung passiert deshalb hier drin,
--- in der ersten Zeile, und stützt sich auf app.is_admin() – also auf die
--- Wallet aus dem Token, nicht auf irgendein mitgeschicktes Feld.
+-- security definer, because app_config isn't writable for normal roles and
+-- should stay that way. The permission check therefore happens right here,
+-- in the first line, and relies on app.is_admin() - that is, on the wallet
+-- from the token, not on some field sent along with the request.
 --
--- search_path ist fest gesetzt. Ohne das könnte ein Aufrufer mit eigenem
--- search_path eine gleichnamige Tabelle unterschieben und die Funktion damit
--- gegen etwas anderes laufen lassen, als hier steht.
+-- search_path is fixed. Without that, a caller with their own search_path
+-- could substitute a same-named table and make the function run against
+-- something other than what's written here.
 
 create or replace function public.set_min_dm_usd(p_usd numeric)
 returns numeric
@@ -57,8 +57,8 @@ begin
     raise exception 'Amount must be 0 or higher';
   end if;
 
-  -- Obergrenze als Tippfehlerbremse: Eine versehentlich angehängte Null soll
-  -- nicht den Posteingang für alle schließen, ohne dass es auffällt.
+  -- Upper limit as a typo brake: an accidentally added zero shouldn't close
+  -- the inbox for everyone without anyone noticing.
   if p_usd > 1000000 then
     raise exception 'Amount is too high';
   end if;
@@ -77,26 +77,25 @@ $$;
 comment on function public.set_min_dm_usd(numeric) is
   'Setzt die DM-Schwelle. Nur fuer Ansem, aendert ausschliesslich min_dm_usd.';
 
--- Standardmäßig darf jede Rolle jede Funktion ausführen. Bei security definer
--- ist das die falsche Grundeinstellung, deshalb erst wegnehmen, dann gezielt
--- geben. anon bekommt sie nicht – wer nicht verifiziert ist, hat hier nichts
--- zu suchen, auch wenn die Prüfung ihn ohnehin abweisen würde.
+-- By default every role can execute every function. With security definer
+-- that's the wrong starting point, so it's revoked first and then granted
+-- specifically. anon doesn't get it - anyone unverified has no business
+-- here, even though the check would reject them anyway.
 revoke all on function public.set_min_dm_usd(numeric) from public;
 grant execute on function public.set_min_dm_usd(numeric) to authenticated;
 
 -- ----------------------------------------------------------------------------
--- Schwelle beim Einfügen durchsetzen
+-- Enforcing the threshold on insert
 -- ----------------------------------------------------------------------------
--- Der Sperrbildschirm im Browser ist Höflichkeit, nicht Sicherheit: Er
--- erspart es, erst zu tippen und dann eine Fehlermeldung zu bekommen. Die
--- verbindliche Prüfung steht hier.
+-- The lock screen in the browser is courtesy, not security: it saves people
+-- from typing first and getting an error message after. The binding check
+-- lives here.
 --
--- Wie im Chat wird der Absender aus dem Token genommen und nicht aus
--- new.wallet – siehe die ausführliche Begründung in
--- 20260825010000_min_balance_to_chat.sql. Antworten von Ansem (from_admin)
--- gehen weiterhin ungeprüft durch.
+-- As in chat, the sender is taken from the token, not from new.wallet - see
+-- the detailed reasoning in 20260825010000_min_balance_to_chat.sql. Replies
+-- from Ansem (from_admin) continue to pass through unchecked.
 --
--- Die Taktgrenzen bleiben unverändert bei 5 pro Minute und 30 pro Stunde.
+-- The rate limits stay unchanged at 5 per minute and 30 per hour.
 
 create or replace function app.rate_limit_dms()
 returns trigger
@@ -111,12 +110,12 @@ declare
   per_minute int;
   per_hour   int;
 begin
-  -- Bewusst nur app.is_admin() und nicht mehr "new.from_admin or ...":
-  -- from_admin kommt vom Client. Bisher war das ungefährlich, weil die
-  -- RLS-Regel dms_insert_user eine fremde from_admin-Zeile am Ende ohnehin
-  -- abweist – aber diese Prüfung hier hätte ein Angreifer damit übersprungen,
-  -- und die Sperre hinge allein an der RLS-Regel. Ansem erkennt man am Token,
-  -- nicht an einem Feld, das mitgeschickt wird.
+  -- Deliberately just app.is_admin() and no longer "new.from_admin or ...":
+  -- from_admin comes from the client. That used to be harmless, because the
+  -- RLS rule dms_insert_user rejects a foreign from_admin row at the end
+  -- regardless - but an attacker could have used it to skip this check
+  -- right here, leaving the block resting solely on the RLS rule. Ansem is
+  -- recognized by the token, not by a field sent along with the request.
   if app.is_admin() then
     return new;
   end if;
@@ -125,7 +124,7 @@ begin
 
   select * into cfg from public.app_config where id = 1;
 
-  -- ---- Mindestbestand ------------------------------------------------------
+  -- ---- Minimum holdings -----------------------------------------------------
   if coalesce(cfg.min_dm_usd, 0) > 0 then
     select coalesce(w.usd_value, 0) into bal
     from public.wallets w
@@ -138,7 +137,7 @@ begin
     end if;
   end if;
 
-  -- ---- Takt ----------------------------------------------------------------
+  -- ---- Rate limit ------------------------------------------------------------
   select
     count(*) filter (where created_at > now() - interval '1 minute'),
     count(*)

@@ -1,17 +1,17 @@
 // ============================================================================
-// Baut aus verify/index.ts eine Datei, die man ins Dashboard einfügen kann.
+// Builds a file from verify/index.ts that can be pasted into the dashboard.
 //
-// Warum es die gibt: Nicht ueberall liegen Node und die Supabase-CLI, und
-// eine Function mit relativen Importen (../_shared/...) lässt sich im
-// Dashboard-Editor nicht speichern – dort gibt es die Nachbardateien nicht.
-// og/index.ts ist deshalb von Hand importfrei gehalten. Bei verify ginge das
-// auch, wäre aber die schlechtere Lösung: Der Code ist zehnmal so lang, und
-// drei der fünf Nachbardateien (jwt, solana, holdings) werden auch von
-// anderen Functions gebraucht.
+// Why this exists: Node and the Supabase CLI aren't available everywhere,
+// and a function with relative imports (../_shared/...) can't be saved in
+// the dashboard editor - the neighboring files don't exist there. og/index.ts
+// is therefore kept import-free by hand. The same could be done for verify,
+// but that would be the worse solution: the code is ten times as long, and
+// three of the five neighboring files (jwt, solana, holdings) are also
+// needed by other functions.
 //
-// Also andersherum: EINE Quelle, und diese Datei setzt daraus die Fassung für
-// den Editor zusammen. Was hier herauskommt, wird nie von Hand bearbeitet –
-// eine Änderung geht immer in die Quelle und wird neu erzeugt.
+// So the other way round: ONE source, and this file assembles the editor
+// version from it. What comes out of this is never edited by hand - a
+// change always goes into the source and gets regenerated.
 //
 //   node scripts/verify-eigenstaendig.mjs
 //   -> supabase/functions/verify/index.dashboard.ts
@@ -24,13 +24,13 @@ import { fileURLToPath } from 'node:url';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const fnDir = path.join(root, 'supabase/functions');
 
-const lies = (p) => fs.readFileSync(path.join(fnDir, p), 'utf8');
+const read = (p) => fs.readFileSync(path.join(fnDir, p), 'utf8');
 
-const quelle = lies('verify/index.ts');
+const source = read('verify/index.ts');
 
-// Die Nachbardateien in der Reihenfolge, in der sie voneinander abhängen.
-// Nicht aus den Importen abgeleitet, sondern hier benannt: Eine falsche
-// Reihenfolge fällt sonst erst im Betrieb auf, und zwar als leere Seite.
+// The neighboring files in the order they depend on each other. Not derived
+// from the imports but named explicitly here: a wrong order would otherwise
+// only show up in production, as a blank page.
 const NACHBARN = [
   '_shared/base58.ts',
   '_shared/freischaltung.ts',
@@ -40,19 +40,20 @@ const NACHBARN = [
   '_shared/holdings.ts',
 ];
 
-/** Nimmt einer Datei ihre Importe und ihre export-Schlüsselwörter. */
-function entkleiden(text, datei) {
+/** Strips a file of its imports and its export keywords. */
+function entkleiden(text, file) {
   const externe = [];
-  // "export { x } from './y.ts'" ist ein Weiterreichen, kein Import: Der Inhalt
-  // steht in dieser Fassung ohnehin schon da, die Zeile fällt ersatzlos weg.
-  const ohneWeitergabe = text.replace(/^export\s*\{[^}]*\}\s*from\s+'\.[^']*';?\s*$/gm, '');
+  // "export { x } from './y.ts'" is a pass-through, not an import: the
+  // content is already right there in this version, so the line just drops
+  // out with nothing to replace it.
+  const withoutForwarding = text.replace(/^export\s*\{[^}]*\}\s*from\s+'\.[^']*';?\s*$/gm, '');
 
-  const ohneImporte = ohneWeitergabe.replace(
+  const ohneImporte = withoutForwarding.replace(
     /^import\s[\s\S]*?from\s+'([^']+)';?\s*$/gm,
     (ganz, woher) => {
-      // Externe Importe (jsr:, npm:, https:) müssen bleiben – sie kommen
-      // ganz nach oben. Nur die relativen fallen weg, weil ihr Inhalt
-      // gleich darunter steht.
+      // External imports (jsr:, npm:, https:) have to stay - they go right
+      // to the top. Only the relative ones fall away, because their content
+      // sits right below.
       if (!woher.startsWith('.')) { externe.push(ganz.trim()); }
       return '';
     });
@@ -60,7 +61,7 @@ function entkleiden(text, datei) {
   return {
     externe,
     text: `// ---------------------------------------------------------------------------\n`
-      + `// aus ${datei}\n`
+      + `// aus ${file}\n`
       + `// ---------------------------------------------------------------------------\n`
       + ohneImporte
         .replace(/^export\s+(async\s+function|function|const|interface|type|class)\s/gm, '$1 ')
@@ -68,44 +69,44 @@ function entkleiden(text, datei) {
   };
 }
 
-const teile = [];
+const parts = [];
 const externe = new Set();
 
-for (const datei of NACHBARN) {
-  const e = entkleiden(lies(datei), datei);
+for (const file of NACHBARN) {
+  const e = entkleiden(read(file), file);
   e.externe.forEach((x) => externe.add(x));
-  teile.push(e.text);
+  parts.push(e.text);
 }
-const haupt = entkleiden(quelle, 'verify/index.ts');
+const haupt = entkleiden(source, 'verify/index.ts');
 haupt.externe.forEach((x) => externe.add(x));
 
-const kopf = `// ============================================================================
-// verify – EIGENSTÄNDIGE FASSUNG FÜR DEN DASHBOARD-EDITOR
+const header = `// ============================================================================
+// verify - SELF-CONTAINED VERSION FOR THE DASHBOARD EDITOR
 //
-// ACHTUNG: Diese Datei wird NICHT von Hand bearbeitet. Sie entsteht aus
-// supabase/functions/verify/index.ts und den Dateien unter _shared/ durch
+// WARNING: this file is NOT edited by hand. It is generated from
+// supabase/functions/verify/index.ts and the files under _shared/ by
 //
 //     node scripts/verify-eigenstaendig.mjs
 //
-// Wer hier etwas ändert, verliert es beim nächsten Lauf – und schlimmer: Die
-// Fassung im Dashboard und die im Projekt sagen dann Verschiedenes, ohne dass
-// man es einer von beiden ansieht.
+// Anyone who changes something here loses it on the next run - and worse: the
+// version in the dashboard and the one in the project then say different
+// things, without either of them showing it.
 //
-// Erzeugt am ${new Date().toISOString().slice(0, 10)}
+// Generated on ${new Date().toISOString().slice(0, 10)}
 // ============================================================================
 
 ${[...externe].join('\n')}
 `;
 
 const ziel = path.join(fnDir, 'verify/index.dashboard.ts');
-fs.writeFileSync(ziel, `${kopf}\n${teile.join('\n\n')}\n\n${haupt.text}\n`);
+fs.writeFileSync(ziel, `${header}\n${parts.join('\n\n')}\n\n${haupt.text}\n`);
 
-const inhalt = fs.readFileSync(ziel, 'utf8');
-const relativeUebrig = [...inhalt.matchAll(/from\s+'\.[^']*'/g)].map((m) => m[0]);
-if (relativeUebrig.length) {
-  console.error(`\n  Es sind noch relative Importe drin: ${relativeUebrig.join(', ')}\n`);
+const content = fs.readFileSync(ziel, 'utf8');
+const relativeRemaining = [...content.matchAll(/from\s+'\.[^']*'/g)].map((m) => m[0]);
+if (relativeRemaining.length) {
+  console.error(`\n  Es sind noch relative Importe drin: ${relativeRemaining.join(', ')}\n`);
   process.exit(1);
 }
 
-console.log(`\n  ${ziel.replace(root + '/', '')} – ${inhalt.split('\n').length} Zeilen, `
+console.log(`\n  ${ziel.replace(root + '/', '')} – ${content.split('\n').length} Zeilen, `
   + `keine relativen Importe\n`);

@@ -1,38 +1,39 @@
 // ============================================================================
-// Vorschaubild: Wie sollen die eigenen Nachrichten in einer DM aussehen?
+// Preview image: what should your own messages look like in a DM?
 //
-// Erzeugt preview/dm-eigene.png.
+// Produces preview/dm-eigene.png.
 //
-// Ausgangslage: Solange der Akzent grün war, waren die eigenen Blasen grün
-// getönt und damit auf einen Blick von den eingehenden zu unterscheiden. Seit
-// der Akzent knochenweiß ist, ist aus der Tönung ein helles Grau geworden – und
-// das liegt nah am Grau der eingehenden Blase. Der Unterschied ist noch da,
-// aber er trägt nicht mehr.
+// Starting point: as long as the accent was green, your own bubbles were
+// tinted green and thus distinguishable from incoming ones at a glance.
+// Since the accent became bone-white, that tint has turned into a light
+// gray - and that sits close to the gray of the incoming bubble. The
+// difference is still there, but it no longer carries.
 //
-// "Eigene" heißt hier immer: die des Betrachters. Für Ansem sind es seine, für
-// alle anderen ihre – app.js entscheidet das über state.me.isAdmin. Deshalb
-// kommt Gold nicht in Frage, obwohl es naheläge: Es ist Ansems Farbe, und bei
-// einem normalen Nutzer wäre sie schlicht falsch.
+// "Own" here always means: the viewer's own. For Ansem it's his, for
+// everyone else it's theirs - app.js decides that via state.me.isAdmin.
+// That's why gold isn't an option, even though it might seem obvious: it's
+// Ansem's color, and for a regular user it would simply be wrong.
 //
-// Gebaut mit dem echten Markup aus dmHtml() und dem echten Stylesheet.
+// Built with the real markup from dmHtml() and the real stylesheet.
 // ============================================================================
 
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 
-// Zweiter Durchgang: Variante 3 steht fest, gesucht ist nur noch, wie hell die
-// Fläche sein darf. Eine Blase ist größer als ein Knopf und kommt mehrfach
-// untereinander vor – was auf einem Knopf noch angenehm ist, blendet hier.
+// Second pass: variant 3 is settled, all that's left to find is how bright
+// the fill is allowed to be. A bubble is bigger than a button and appears
+// stacked multiple times - what's still pleasant on a button is glaring
+// here.
 //
-// Aufruf: node scripts/vorschau-eigene-dm.mjs helligkeit
-const HELL = [
+// Run with: node scripts/vorschau-eigene-dm.mjs helligkeit
+const BRIGHT = [
   ['#c6ccd8', '60 %', 'Der Ton des Send-Knopfs. Auf einer Blase zu hell, sagt André.'],
   ['#b9c0ce', '52 %', 'Eine Stufe tiefer.'],
   ['#aab2c2', '44 %', 'Eingebaut. Deutlich heller als der Grund, ohne zu leuchten.'],
   ['#9aa3b5', '36 %', 'Noch eine Stufe. Nähert sich einem mittleren Grau.'],
 ];
 
-const HELLIGKEIT = HELL.map(([ton, prozent, hinweis], i) => ({
+const BRIGHTNESS = BRIGHT.map(([ton, prozent, hinweis], i) => ({
   nr: i + 1,
   name: `${ton} · ${prozent}`,
   hinweis,
@@ -52,7 +53,7 @@ const VARIANTEN = [
   {
     nr: 2,
     name: 'Kräftiger gefüllt',
-    hinweis: 'Dieselbe Idee, deutlich angehoben. Die kleinste mögliche Änderung – nur eine Zahl.',
+    hinweis: 'Dieselbe Idee, deutlich angehoben. Die minSize mögliche Änderung – nur eine Zahl.',
     css: `@ .msg.dm.mine {
       background: rgba(var(--accent-rgb), .24);
       border-color: rgba(var(--accent-rgb), .42);
@@ -96,8 +97,8 @@ const VARIANTEN = [
   },
 ];
 
-// Ein kurzer Verlauf mit Hin und Her – nur so sieht man, ob sich die beiden
-// Sorten tatsächlich auseinanderhalten lassen.
+// A short back-and-forth exchange - that's the only way to see whether the
+// two kinds can actually be told apart.
 const VERLAUF = [
   { mine: false, text: 'Hey Ansem, quick question about the vesting schedule', zeit: '14:01' },
   { mine: true, text: 'What about it', zeit: '14:03' },
@@ -106,12 +107,13 @@ const VERLAUF = [
   { mine: true, text: 'ok', zeit: '14:06' },
 ];
 
-const HELLSATZ = process.argv[2] === 'helligkeit';
-const SATZ = HELLSATZ ? HELLIGKEIT : VARIANTEN;
-const ZIEL = HELLSATZ ? 'preview/dm-eigene-helligkeit.png' : 'preview/dm-eigene.png';
+const BRIGHT_SET = process.argv[2] === 'helligkeit';
+const SATZ = BRIGHT_SET ? BRIGHTNESS : VARIANTEN;
+const ZIEL = BRIGHT_SET ? 'preview/dm-eigene-helligkeit.png' : 'preview/dm-eigene.png';
 
-// Wie dmHtml() in app.js: Zeile aussen, Blase innen, Antwortpfeil daneben.
-const blase = (m) => `
+// Like dmHtml() in app.js: row on the outside, bubble inside, reply arrow
+// next to it.
+const bubble = (m) => `
   <div class="dm-row ${m.mine ? 'mine' : ''}">
     <div class="msg dm ${m.mine ? 'mine' : ''}">
       <span class="body">${m.text}</span>
@@ -119,15 +121,15 @@ const blase = (m) => `
     </div>
   </div>`;
 
-const karte = (v) => `
-  <section class="karte">
+const card = (v) => `
+  <section class="card">
     <style>${v.css.replaceAll('@', `#v${v.nr}`)}</style>
     <h2><span class="nr">${v.nr}</span>${v.name}</h2>
     <p class="hinweis">${v.hinweis}</p>
     <div class="thread-view" id="v${v.nr}">
       <div class="chat-list">
         <div class="day-sep">Today</div>
-        ${VERLAUF.map(blase).join('')}
+        ${VERLAUF.map(bubble).join('')}
       </div>
     </div>
   </section>`;
@@ -138,7 +140,7 @@ const html = `<!doctype html>
 <style>
   body { padding: 26px; background: var(--bg); }
   .raster { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px 22px; max-width: 1180px; }
-  .karte h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .card h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
   .nr {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; border-radius: 999px;
@@ -150,9 +152,9 @@ const html = `<!doctype html>
   h1 { font-size: 1.05rem; margin: 0 0 .2rem; }
   .lead { margin: 0 0 1.5rem; font-size: .82rem; color: var(--dim); max-width: 88ch; }
 </style>
-<h1>${HELLSATZ ? 'Wie hell darf die eigene Blase sein?' : 'Eigene Nachrichten in einer DM'}</h1>
-<p class="lead">${HELLSATZ ? 'Helle Fläche mit dunkler Schrift steht fest – hier vier Abstufungen der Fläche selbst.' : ''}${HELLSATZ ? '' : `Solange der Akzent grün war, waren die eigenen Blasen grün getönt. Knochenweiß getönt sind sie nur noch ein helles Grau – nah am Grau der eingehenden. Sechs Wege, den Unterschied wieder tragfähig zu machen.`}</p>
-<div class="raster">${SATZ.map(karte).join('')}</div>
+<h1>${BRIGHT_SET ? 'Wie hell darf die eigene Blase sein?' : 'Eigene Nachrichten in einer DM'}</h1>
+<p class="lead">${BRIGHT_SET ? 'Helle Fläche mit dunkler Schrift steht fest – hier vier Abstufungen der Fläche selbst.' : ''}${BRIGHT_SET ? '' : `Solange der Akzent grün war, waren die eigenen Blasen grün getönt. Knochenweiß getönt sind sie nur noch ein helles Grau – nah am Grau der eingehenden. Sechs Wege, den Unterschied wieder tragfähig zu machen.`}</p>
+<div class="raster">${SATZ.map(card).join('')}</div>
 `;
 
 mkdirSync('preview', { recursive: true });
@@ -161,10 +163,10 @@ writeFileSync('public/_vorschau-eigene-dm.html', html);
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(
   existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 1240, height: 900 }, deviceScaleFactor: 2 });
-await seite.goto(`file://${process.cwd()}/public/_vorschau-eigene-dm.html`);
-await seite.waitForTimeout(300);
-await seite.screenshot({ path: ZIEL, fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1240, height: 900 }, deviceScaleFactor: 2 });
+await page.goto(`file://${process.cwd()}/public/_vorschau-eigene-dm.html`);
+await page.waitForTimeout(300);
+await page.screenshot({ path: ZIEL, fullPage: true });
 await browser.close();
 
 rmSync('public/_vorschau-eigene-dm.html', { force: true });

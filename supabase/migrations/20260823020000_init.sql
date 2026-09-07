@@ -1,14 +1,14 @@
 -- ============================================================================
--- SIZED – Schema, RLS und Trigger
+-- SIZED - Schema, RLS and triggers
 --
--- Grundprinzip: Der Browser spricht nach dem Login direkt mit PostgREST. Alles,
--- was ein Nutzer fälschen könnte – sein Token-Bestand, sein Stimmgewicht, die
--- Absender-Wallet – wird deshalb NICHT vom Client übernommen, sondern hier in
--- der Datenbank aus der Tabelle `wallets` gesetzt. Und die schreibt nur die
--- Edge Function mit dem Service-Role-Key.
+-- Basic principle: after login, the browser talks directly to PostgREST.
+-- Anything a user could forge - their token balance, their voting weight,
+-- the sender wallet - is therefore NEVER taken from the client, but set
+-- here in the database from the `wallets` table. And only the Edge
+-- Function with the service-role key writes to that.
 --
--- Die Wallet des Aufrufers kommt aus dem JWT-Claim "wallet", das die
--- verify-Function nach bestätigter Zahlung ausstellt.
+-- The caller's wallet comes from the JWT claim "wallet", which the
+-- verify function issues after a confirmed payment.
 -- ============================================================================
 
 create extension if not exists pgcrypto;
@@ -16,7 +16,7 @@ create extension if not exists pgcrypto;
 create schema if not exists app;
 
 -- ----------------------------------------------------------------------------
--- Hilfsfunktionen rund um das JWT
+-- Helper functions around the JWT
 -- ----------------------------------------------------------------------------
 
 create or replace function app.jwt_wallet()
@@ -34,7 +34,7 @@ comment on function app.jwt_wallet() is
   'Verifizierte Wallet-Adresse des Aufrufers aus dem JWT-Claim "wallet".';
 
 -- ----------------------------------------------------------------------------
--- Konfiguration (eine Zeile). Nur Service-Role darf schreiben.
+-- Configuration (one row). Only service-role may write.
 -- ----------------------------------------------------------------------------
 
 create table if not exists public.app_config (
@@ -67,7 +67,7 @@ comment on function app.is_admin() is
   'True, wenn der Aufrufer mit Ansems konfigurierter Admin-Wallet verifiziert ist.';
 
 -- ----------------------------------------------------------------------------
--- Wallets: Token-Bestand und $-Wert. Einzige vertrauenswürdige Quelle.
+-- Wallets: token balance and $ value. The single trusted source.
 -- ----------------------------------------------------------------------------
 
 create table if not exists public.wallets (
@@ -82,10 +82,10 @@ create table if not exists public.wallets (
 create index if not exists idx_wallets_usd on public.wallets (usd_value desc);
 
 -- ----------------------------------------------------------------------------
--- Verifikation per Zahlung
+-- Verification via payment
 --
--- Für Clients unsichtbar (keine Policy, kein Grant): Ausstellen und Einlösen
--- macht ausschließlich die Edge Function mit dem Service-Role-Key.
+-- Invisible to clients (no policy, no grant): issuing and redeeming is
+-- done exclusively by the Edge Function with the service-role key.
 -- ----------------------------------------------------------------------------
 
 create table if not exists public.challenges (
@@ -99,15 +99,15 @@ create table if not exists public.challenges (
   expires_at  timestamptz not null
 );
 
--- Solange eine Challenge offen ist, muss ihr Betrag eindeutig sein – sonst
--- ließe sich eine fremde Zahlung auf die eigene Challenge buchen.
+-- As long as a challenge is open, its amount must be unique - otherwise
+-- a stranger's payment could get booked onto your challenge.
 create unique index if not exists uq_challenges_open_amount
   on public.challenges (lamports) where status = 'pending';
 
 create index if not exists idx_challenges_wallet on public.challenges (wallet, status);
 
--- Jede an der Treasury gesehene Zahlung, damit keine Signatur zweimal eine
--- Verifikation auslösen kann.
+-- Every payment seen at the treasury, so no signature can trigger a
+-- verification twice.
 create table if not exists public.seen_txs (
   signature  text primary key,
   slot       bigint,
@@ -136,7 +136,7 @@ create index if not exists idx_messages_feed on public.messages (id desc);
 create index if not exists idx_messages_usd  on public.messages (snap_usd desc, id desc);
 
 -- ----------------------------------------------------------------------------
--- Abstimmungen
+-- Polls
 -- ----------------------------------------------------------------------------
 
 create table if not exists public.polls (
@@ -171,12 +171,12 @@ create index if not exists idx_votes_poll   on public.votes (poll_id);
 create index if not exists idx_votes_wallet on public.votes (wallet);
 
 -- ----------------------------------------------------------------------------
--- DMs an Ansem
+-- DMs to Ansem
 -- ----------------------------------------------------------------------------
 
 create table if not exists public.dms (
   id            bigint generated always as identity primary key,
-  wallet        text not null,               -- Thread-Eigentümer, nie Ansem
+  wallet        text not null,               -- thread owner, never Ansem
   from_admin    boolean not null default false,
   body          text not null check (length(btrim(body)) between 1 and 2000),
   snap_tokens   numeric(38, 9) not null default 0,
@@ -188,7 +188,7 @@ create table if not exists public.dms (
 create index if not exists idx_dms_thread on public.dms (wallet, id);
 
 -- ============================================================================
--- Trigger: Bestand und Gewicht kommen aus `wallets`, nie vom Client
+-- Trigger: balance and weight come from `wallets`, never from the client
 -- ============================================================================
 
 create or replace function app.stamp_holdings()
@@ -226,7 +226,7 @@ create or replace trigger trg_votes_stamp
   before insert or update of option_id on public.votes
   for each row execute function app.stamp_holdings();
 
--- Absender erzwingen: die Wallet einer Nachricht ist immer die JWT-Wallet.
+-- Force the sender: a message's wallet is always the JWT wallet.
 create or replace function app.force_sender()
 returns trigger
 language plpgsql
@@ -243,8 +243,8 @@ create or replace trigger trg_messages_sender
   before insert on public.messages
   for each row execute function app.force_sender();
 
--- Keine Stimmen auf beendete Abstimmungen, Option muss zur Abstimmung gehören.
--- Meldungen auf Englisch: Sie landen als Toast in der Oberfläche.
+-- No votes on closed polls, the option must belong to the poll.
+-- Messages in English: they end up as a toast in the UI.
 create or replace function app.guard_vote()
 returns trigger
 language plpgsql
@@ -278,7 +278,7 @@ create or replace trigger trg_votes_guard
   after insert or update of option_id on public.votes
   for each row execute function app.guard_vote();
 
--- Ansem antwortet immer in einen bestehenden Thread, nie an sich selbst.
+-- Ansem always replies into an existing thread, never to himself.
 create or replace function app.guard_dm()
 returns trigger
 language plpgsql
@@ -301,15 +301,16 @@ create or replace trigger trg_dms_guard
   for each row execute function app.guard_dm();
 
 -- ----------------------------------------------------------------------------
--- Stimmgewichte folgen dem Bestand
+-- Voting weight follows the balance
 --
--- Wer nach dem Abstimmen Token abgibt, verliert im selben Moment Gewicht. Leert
--- er die Wallet, fällt seine Stimme weg. Damit bringt es nichts mehr, dasselbe
--- Guthaben durch mehrere Wallets zu schicken und mehrfach abzustimmen: Die
--- Vorgänger-Wallet wird beim Nachlesen auf 0 gesetzt.
+-- Whoever gives up tokens after voting loses weight at that same moment.
+-- Empty the wallet, and the vote falls away. That means it no longer
+-- helps to route the same balance through several wallets and vote
+-- multiple times: the previous wallet gets set to 0 the next time it's
+-- read.
 --
--- Beendete Abstimmungen bleiben unangetastet – ein Ergebnis, das sich
--- nachträglich ändert, wäre kein Ergebnis.
+-- Closed polls are left untouched - a result that changes after the
+-- fact wouldn't be a result.
 -- ----------------------------------------------------------------------------
 
 create or replace function app.sync_votes_with_balance()
@@ -354,8 +355,8 @@ create trigger trg_wallets_sync_votes
 -- Views
 -- ============================================================================
 
--- Ergebnis einer Abstimmung: Zahl der Stimmen und der zusammengezählte $-Wert,
--- den diese Stimmen halten.
+-- Result of a poll: number of votes and the summed $ value those votes
+-- hold.
 create or replace view public.poll_results
 with (security_invoker = on) as
 select
@@ -366,14 +367,14 @@ select
 from public.votes v
 group by v.poll_id, v.option_id;
 
--- Posteingang für Ansem: ein Eintrag je Wallet, mit aktuellem Bestand.
--- security_invoker = on ⇒ die RLS von `dms` gilt weiter, ein normaler Nutzer
--- sieht hier also nur den eigenen Thread.
--- Erst weg, dann neu. "create or replace view" kann Spalten nur ANHAENGEN,
--- nicht wegnehmen – und eine spaetere Migration erweitert diese Sicht. Beim
--- zweiten Durchlauf der Migrationen (der laufen koennen muss, etwa beim
--- Aufsetzen eines frischen Projekts) traefe diese Zeile sonst auf die breitere
--- Fassung und stiege mit "cannot drop columns from view" aus.
+-- Inbox for Ansem: one entry per wallet, with current balance.
+-- security_invoker = on => `dms`'s RLS still applies, so an ordinary user
+-- only sees their own thread here.
+-- Drop first, then recreate. "create or replace view" can only APPEND
+-- columns, not remove them - and a later migration extends this view.
+-- On a second run of the migrations (which has to work, e.g. when
+-- setting up a fresh project) this line would otherwise hit the wider
+-- version and bail out with "cannot drop columns from view".
 drop view if exists public.dm_threads;
 create or replace view public.dm_threads
 with (security_invoker = on) as
@@ -391,9 +392,9 @@ left join public.wallets w on w.address = d.wallet
 group by d.wallet, w.ui_amount, w.usd_value;
 
 -- ----------------------------------------------------------------------------
--- Welche Wallets muss der Cron-Job nachlesen?
--- Wallets mit offener Stimme zuerst – dort kostet ein veralteter Bestand
--- Korrektheit, nicht nur Kosmetik.
+-- Which wallets does the cron job need to re-read?
+-- Wallets with an open vote first - there, a stale balance costs
+-- correctness, not just cosmetics.
 -- ----------------------------------------------------------------------------
 
 create or replace function public.wallets_to_refresh(
@@ -438,19 +439,19 @@ alter table public.poll_options enable row level security;
 alter table public.votes        enable row level security;
 alter table public.dms          enable row level security;
 
--- app_config: öffentlich lesbar (das Frontend braucht Treasury und Symbol
--- schon vor dem Login), schreibbar nur mit Service-Role.
+-- app_config: publicly readable (the frontend needs treasury and symbol
+-- even before login), writable only with service-role.
 drop policy if exists cfg_read on public.app_config;
 create policy cfg_read on public.app_config
   for select to anon, authenticated using (true);
 
--- wallets: jeder Verifizierte darf Bestände lesen (Anzeige im Chat),
--- schreiben darf nur die Edge Function.
+-- wallets: any verified user may read balances (display in chat),
+-- only the Edge Function may write.
 drop policy if exists wallets_read on public.wallets;
 create policy wallets_read on public.wallets
   for select to authenticated using (true);
 
--- challenges / seen_txs: keine Policy ⇒ für anon und authenticated dicht.
+-- challenges / seen_txs: no policy => sealed off for anon and authenticated.
 
 -- Chat
 drop policy if exists messages_read on public.messages;
@@ -466,7 +467,7 @@ drop policy if exists messages_admin_delete on public.messages;
 create policy messages_admin_delete on public.messages
   for delete to authenticated using (app.is_admin());
 
--- Abstimmungen: lesen alle, anlegen und ändern nur Ansem
+-- Polls: everyone reads, only Ansem creates and changes them
 drop policy if exists polls_read on public.polls;
 create policy polls_read on public.polls
   for select to authenticated using (true);
@@ -483,8 +484,8 @@ drop policy if exists options_admin_write on public.poll_options;
 create policy options_admin_write on public.poll_options
   for all to authenticated using (app.is_admin()) with check (app.is_admin());
 
--- Stimmen sind einsehbar (Nachvollziehbarkeit der Gewichtung),
--- abgeben darf jeder nur für die eigene Wallet.
+-- Votes are viewable (so the weighting stays verifiable),
+-- but each user may only cast one for their own wallet.
 drop policy if exists votes_read on public.votes;
 create policy votes_read on public.votes
   for select to authenticated using (true);
@@ -500,7 +501,7 @@ create policy votes_update on public.votes
   using (wallet = app.jwt_wallet())
   with check (wallet = app.jwt_wallet());
 
--- DMs: eigener Thread oder Ansem
+-- DMs: your own thread, or Ansem
 drop policy if exists dms_read on public.dms;
 create policy dms_read on public.dms
   for select to authenticated
@@ -520,7 +521,7 @@ create policy dms_admin_update on public.dms
   using (app.is_admin()) with check (app.is_admin());
 
 -- ============================================================================
--- Rechte
+-- Grants
 -- ============================================================================
 
 grant usage on schema public, app to anon, authenticated;

@@ -1,13 +1,13 @@
 -- ============================================================================
--- Entfernt die Testdaten aus scripts/seed-dms.sql wieder.
+-- Removes the test data from scripts/seed-dms.sql again.
 --
--- Gelöscht wird ausschließlich anhand der Adressliste unten – nichts, was
--- nicht aus dem Testlauf stammt. Läuft auch mehrfach ohne Schaden.
+-- Deletion happens exclusively via the address list below - nothing that
+-- didn't come from the test run. Safe to run more than once.
 --
--- Alles in einer einzigen Anweisung, damit keine temporäre Tabelle nötig ist:
--- Der SQL-Editor von Supabase warnt sonst bei jedem CREATE TABLE, dass die
--- neue Tabelle keine RLS hat. Bei einer temporären Tabelle ist das
--- gegenstandslos, aber die Warnung erscheint trotzdem.
+-- Everything in a single statement, so no temporary table is needed:
+-- Supabase's SQL editor otherwise warns on every CREATE TABLE that the new
+-- table has no RLS. For a temporary table that warning is moot, but it
+-- shows up anyway.
 -- ============================================================================
 
 with liste(address) as (

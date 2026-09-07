@@ -2,7 +2,7 @@ import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { tokenBalance, tokenPrice } from './solana.ts';
 import { MOCK } from './common.ts';
 
-/** Deterministischer Fake-Bestand für den Mock-Modus. */
+/** Deterministic fake balance for mock mode. */
 async function mockAmount(wallet: string): Promise<number> {
   const hash = new Uint8Array(
     await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wallet)),
@@ -12,29 +12,29 @@ async function mockAmount(wallet: string): Promise<number> {
 }
 
 /**
- * Holt Bestand und Preis frisch von der Chain und schreibt sie nach `wallets`.
- * Nur diese Funktion (Service-Role) darf die Tabelle schreiben – deshalb kann
- * kein Client sein eigenes Gewicht manipulieren.
+ * Fetches holdings and price fresh from the chain and writes them to
+ * `wallets`. Only this function (service role) may write the table - so no
+ * client can manipulate its own weight.
  */
 export async function refreshWallet(
   db: SupabaseClient,
   wallet: string,
   mint: string,
   /**
-   * Bereits bekannter Kurs. Ohne diesen Parameter holt jede einzelne Wallet
-   * ihren eigenen – bei einem Stapellauf über 200 Wallets wären das 200
-   * Abfragen desselben Werts an dieselbe Preisquelle, die einen im Zweifel
-   * dafür aussperrt. Der Kurs ist für alle gleich, also holt der Aufrufer ihn
-   * einmal und reicht ihn durch.
+   * Already-known price. Without this parameter, every single wallet fetches
+   * its own - for a batch run over 200 wallets that would be 200 queries for
+   * the same value against the same price source, which might well lock you
+   * out for it. The price is the same for everyone, so the caller fetches it
+   * once and passes it through.
    */
   knownPrice?: number,
 ): Promise<{ uiAmount: number; usdValue: number; price: number }> {
-  const holePreis = async () =>
+  const getPrice = async () =>
     knownPrice !== undefined && knownPrice > 0 ? knownPrice : await tokenPrice(mint);
 
   const [uiAmount, price] = MOCK
     ? [await mockAmount(wallet), knownPrice ?? 0.0042]
-    : await Promise.all([tokenBalance(wallet, mint), holePreis()]);
+    : await Promise.all([tokenBalance(wallet, mint), getPrice()]);
 
   const usdValue = uiAmount * price;
 

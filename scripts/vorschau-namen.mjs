@@ -1,28 +1,28 @@
 // ============================================================================
-// Vorschau: wie die drei Zeichen im Chat aussehen
+// Preview: how the three characters look in the chat
 //
-// Was sie leisten muessen, bevor man ueber ihr Aussehen redet:
+// What they have to accomplish before anyone talks about how they look:
 //
-//   1. Sagen, wer spricht – bei einem Namen aus DREI Zeichen ist das wenig
-//      Material. Deshalb tragen sie ueberhaupt eine Farbe.
-//   2. Zwei Leute mit demselben Kuerzel auseinanderhalten. Bei 58³ = 195.112
-//      moeglichen Kuerzeln passiert das selten, aber es passiert – in den
-//      Daten unten stehen deshalb ZWEI mit "7xK", und in jeder Fassung sieht
-//      man, ob sie noch zu unterscheiden sind.
-//   3. Ansem erkennbar machen, ohne dass ihn jemand nachbauen kann.
-//   4. Und dabei die Nachricht nicht ueberstrahlen. Der Name ist die Angabe,
-//      der Satz ist der Inhalt.
+//   1. Say who is speaking - for a name made of THREE characters that's not
+//      much material. That's why they carry a color at all.
+//   2. Tell two people with the same handle apart. With 58^3 = 195,112
+//      possible handles that's rare, but it happens - the data below
+//      deliberately has TWO with "7xK", and every version shows whether
+//      they can still be told apart.
+//   3. Make Ansem recognizable without anyone being able to fake him.
+//   4. And not outshine the message while doing it. The name is the label,
+//      the sentence is the content.
 //
-// Die Fassungen aendern deshalb jeweils EINE Sache, nicht drei auf einmal:
-// die Farbe, die Groesse, die Form, oder ob ueberhaupt etwas davorsteht.
+// So each version changes ONE thing, not three at once: the color, the
+// size, the shape, or whether anything sits in front of it at all.
 //
-// Gemessen wird in allen: der Kontrast des Namens auf seinem Grund, und der
-// Abstand zum Nachrichtentext daneben. Ein Name, der lauter ist als der Satz,
-// ist keine Angabe mehr, sondern eine Ueberschrift.
+// What's measured in all of them: the contrast of the name against its
+// background, and the gap to the message text next to it. A name louder
+// than the sentence is no longer a label, it's a headline.
 //
-// Nichts hiervon ist eingebaut – das sind nur Bilder.
+// None of this is wired in - these are just pictures.
 //
-// Erzeugt preview/namen-*.png und preview/namen-uebersicht.png
+// Produces preview/namen-*.png and preview/namen-uebersicht.png
 //   node scripts/vorschau-namen.mjs
 // ============================================================================
 
@@ -37,109 +37,109 @@ const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-const stueck = (von, bis) => {
+const piece = (von, bis) => {
   const a = html.indexOf(von);
   const b = html.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in index.html: ${von}`);
   return html.slice(a, b + bis.length);
 };
 
-const zahlen = schneide('const nfCompact =', '/* Ausgeschrieben statt');
-const kurz = schneide('const STUFEN =', '\n/**\n * Datumstrenner');
-const tage = schneide('const tagBeginn =', 'const handleOf');
-const namen = schneide('const handleOf =', '\nconst esc =');
-const escFn = schneide('const esc = (s) =>', '\n\n');
-const linkify = schneide('const LINK_MUSTER =', '\nfunction toast(');
-const chatBau = schneide('const istAdmin =', '\nfunction appendMessage');
-const chatGeruest = stueck('<main id="pane-chat"', '</main>');
+const numbers = cut('const nfCompact =', 'const nfGanz = new Intl.NumberFormat(\'en-US\', { maximumFractionDigits: 0 });');
+const short = cut('const TIERS =', 'const tagBeginn = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();');
+const tage = cut('const tagBeginn =', 'const handleOf');
+const namen = cut('const handleOf =', '\nconst esc =');
+const escFn = cut('const esc = (s) =>', '\n\n');
+const linkify = cut('const LINK_MUSTER =', '\nfunction toast(');
+const chatBau = cut('const istAdmin =', '\nfunction appendMessage');
+const chatScaffold = piece('<main id="pane-chat"', '</main>');
 
-// --- Farbrechnung ----------------------------------------------------------
+// --- Color math --------------------------------------------------------
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const hx = (v) => '#' + v.map((n) => Math.round(n).toString(16).padStart(2, '0')).join('');
 const lum = ([r, g, b]) => { const f = (c) => (c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
 const kon = (x, y) => { const [p, q] = [lum(x), lum(y)].sort((m, n) => n - m); return (p + .05) / (q + .05); };
-const hol = (n) => new RegExp(`--${n}:\\s*(#[0-9a-f]{6})`, 'i').exec(css)[1];
-const tonWert = (n) => new RegExp(`\\.h\\.t${n} \\{ color: (#[0-9a-f]{6})`, 'i').exec(css)[1];
+const get = (n) => new RegExp(`--${n}:\\s*(#[0-9a-f]{6})`, 'i').exec(css)[1];
+const toneValue = (n) => new RegExp(`\\.h\\.t${n} \\{ color: (#[0-9a-f]{6})`, 'i').exec(css)[1];
 const mix = (v, a, grund) => v.map((c, i) => a * c + (1 - a) * grund[i]);
 
-const BG = hex(hol('bg'));
-const TEXT = hex(hol('text'));
-const DIM = hex(hol('dim'));
-const DIMMER = hex(hol('dimmer'));
-const TOENE = [0, 1, 2, 3].map((n) => hex(tonWert(n)));
+const BG = hex(get('bg'));
+const TEXT = hex(get('text'));
+const DIM = hex(get('dim'));
+const DIMMER = hex(get('dimmer'));
+const TONES = [0, 1, 2, 3].map((n) => hex(toneValue(n)));
 
-// Die getoenten Gruende fuer Fassung 4 – ausgerechnet und nicht geraten,
-// damit die Zahlen darunter stimmen.
+// The tinted backgrounds for version 4 - computed, not guessed, so the
+// numbers below hold up.
 //
-// 32 % und nicht weniger: Bei 18 % lag der Grund auf gemessenen #1e242a und
-// war neben #0a0b0f praktisch nicht zu sehen – die Fassung haette dann etwas
-// gezeigt, was sie gar nicht tut. Wer eine Moeglichkeit vorfuehrt, muss sie
-// so vorfuehren, dass man sie beurteilen kann.
+// 32% and not less: at 18% the background measured #1e242a and was
+// practically invisible next to #0a0b0f - the version would then have shown
+// something it doesn't actually do. Whoever demonstrates an option has to
+// demonstrate it in a way that can be judged.
 const ANTEIL = .32;
-const GRUENDE = TOENE.map((t) => mix(t, ANTEIL, BG));
-const AKZENT_GRUND = mix(hex(hol('accent')), ANTEIL, BG);
+const GROUNDS = TONES.map((t) => mix(t, ANTEIL, BG));
+const AKZENT_GRUND = mix(hex(get('accent')), ANTEIL, BG);
 
 const FASSUNGEN = [
   {
-    datei: 'jetzt', name: 'Jetzt',
+    file: 'jetzt', name: 'Jetzt',
     css: '',
-    farben: TOENE, gruende: TOENE.map(() => BG),
+    farben: TONES, reasons: TONES.map(() => BG),
     text: 'Vier Töne, aus der Adresse errechnet, fett und in Schreibmaschinenschrift. '
       + 'Ansem bekommt den Akzent und dazu die getönte Zeile. Der Ton ist das Einzige, '
       + 'was zwei Leute mit demselben Kürzel auseinanderhält.',
   },
   {
-    datei: 'ohnefarbe', name: 'Ohne Farbe',
+    file: 'ohnefarbe', name: 'Ohne Farbe',
     css: `.msg .who .h { color: var(--dim); }
           .msg .who .admin-name { color: var(--accent); }`,
-    farben: TOENE.map(() => DIM), gruende: TOENE.map(() => BG),
+    farben: TONES.map(() => DIM), reasons: TONES.map(() => BG),
     text: 'Alle Namen in einem Grau, nur Ansem behält den Akzent. Der Chat wird ruhig – '
-      + 'aber die zwei "7xK" unten sind dann nicht mehr zu unterscheiden, und genau dafür '
+      + 'aber die zwei "7xK" bottom sind dann nicht mehr zu unterscheiden, und genau dafür '
       + 'gibt es die Töne. Die volle Adresse steht weiterhin im Tooltip der Zeile.',
   },
   {
-    datei: 'leiser', name: 'Kleiner und leiser',
+    file: 'leiser', name: 'Kleiner und leiser',
     css: `.msg .who .h { font-size: .82rem; font-weight: 500; }`,
-    farben: TOENE, gruende: TOENE.map(() => BG),
+    farben: TONES, reasons: TONES.map(() => BG),
     text: 'Dieselben Töne, aber kleiner und ohne Fettung. Der Name tritt hinter den Satz '
       + 'zurück, statt vor ihm zu stehen. Ändert nur Größe und Gewicht – die Farbe bleibt, '
       + 'wie sie ist.',
   },
   {
-    datei: 'chip', name: 'Als Marke',
+    file: 'chip', name: 'Als Marke',
     css: `.msg .who .h {
             border: 1px solid currentColor; border-radius: 6px;
             padding: .02rem .32rem; font-size: .78rem;
           }`,
-    farben: TOENE, gruende: TOENE.map(() => BG),
+    farben: TONES, reasons: TONES.map(() => BG),
     text: 'Die drei Zeichen in einem eigenen Umriss. Sie lesen sich dadurch als Kennung '
       + 'und nicht als abgeschnittenes Wort – bei drei Zeichen ohne Bedeutung ist das der '
       + 'Unterschied zwischen "Name" und "Tippfehler". Kostet Platz und bringt eine '
       + 'weitere Rundung in eine Zeile, die schon eine hat.',
   },
   {
-    datei: 'grund', name: 'Farbe als Grund',
-    css: TOENE.map((_, i) =>
-      `.msg .who .h.t${i} { background: ${hx(GRUENDE[i])}; }`).join('\n')
+    file: 'grund', name: 'Farbe als Grund',
+    css: TONES.map((_, i) =>
+      `.msg .who .h.t${i} { background: ${hx(GROUNDS[i])}; }`).join('\n')
       + `\n.msg .who .h { color: var(--text); border-radius: 6px; padding: .02rem .34rem; font-size: .8rem; }
          .msg .who .admin-name { color: var(--accent); background: ${hx(AKZENT_GRUND)}; }`,
-    farben: TOENE.map(() => TEXT), gruende: GRUENDE,
+    farben: TONES.map(() => TEXT), reasons: GROUNDS,
     text: 'Die Farbe wandert von der Schrift in eine kleine Fläche dahinter, die Zeichen '
-      + 'werden fast weiß. Der Ton unterscheidet weiter, ohne dass die Schrift selbst '
+      + 'werden fast weiß. Der Ton unterscheidet next, ohne dass die Schrift selbst '
       + 'eingefärbt ist – und alle Namen sind gleich hell, egal welchen Ton sie erwischt '
       + 'haben. Dafür ist es die lauteste der Fassungen.',
   },
   {
-    datei: 'at', name: 'Mit @ davor',
+    file: 'at', name: 'Mit @ davor',
     css: `.msg .who .h::before { content: '@'; color: var(--dimmer); font-weight: 400; }`,
-    farben: TOENE, gruende: TOENE.map(() => BG),
+    farben: TONES, reasons: TONES.map(() => BG),
     text: 'Nur ein Zeichen davor, sonst alles wie jetzt. Drei Buchstaben ohne @ sehen aus '
       + 'wie ein Rest; mit @ liest man sie sofort als Namen. Kostet nichts – und wer von X '
       + 'kommt, kennt die Form. Der Haken: @ verspricht dort einen Namen, den man anschreiben '
@@ -147,19 +147,19 @@ const FASSUNGEN = [
   },
 ];
 
-// --- Zahlen ----------------------------------------------------------------
+// --- Numbers -------------------------------------------------------------
 console.log('\n  Kontrast der Namen und ihr Abstand zum Nachrichtentext\n');
 console.log('  ' + 'Fassung'.padEnd(22) + 'Name auf Grund'.padEnd(20)
   + 'schwächster'.padEnd(14) + 'Ton-Unterschiede');
 for (const f of FASSUNGEN) {
-  const werte = f.farben.map((c, i) => kon(c, f.gruende[i]));
+  const werte = f.farben.map((c, i) => kon(c, f.reasons[i]));
   f.min = Math.min(...werte);
-  // Wie viele PAARE der vier Toene sich noch unterscheiden. In "Ohne Farbe"
-  // sind es null – das ist die eigentliche Aussage dieser Fassung.
+  // How many PAIRS of the four tones can still be told apart. In "Ohne
+  // Farbe" it's zero - that's the actual point of that version.
   const paare = [];
   for (let i = 0; i < f.farben.length; i++)
     for (let j = i + 1; j < f.farben.length; j++)
-      if (hx(f.farben[i]) !== hx(f.farben[j]) || hx(f.gruende[i]) !== hx(f.gruende[j])) paare.push(1);
+      if (hx(f.farben[i]) !== hx(f.farben[j]) || hx(f.reasons[i]) !== hx(f.reasons[j])) paare.push(1);
   f.paare = paare.length;
   console.log('  ' + f.name.padEnd(22)
     + `${werte.map((v) => v.toFixed(1)).join(' / ')}`.padEnd(20)
@@ -169,7 +169,7 @@ const textKon = kon(TEXT, BG);
 console.log(`\n  Der Nachrichtentext daneben steht bei ${textKon.toFixed(1)}:1.`);
 console.log('  Ein Name, der deutlich darueber liegt, liest sich als Ueberschrift.\n');
 
-// --- Daten -----------------------------------------------------------------
+// --- Data ------------------------------------------------------------------
 const W = {
   ansem: '4boaBdaCkqtgPmWV4JzwJ81azM9XTNhgVPqCZW7b7Kyo',
   a: '7xKm4pQrsTuVwXyZ1a2b3c4d5e6f7g8h9i0jKlMnOpQ',
@@ -179,8 +179,8 @@ const W = {
   e: 'Zm2nB4vC6xZ8lK0jH2gF4dS6aP8oI0uY2tR4eW6qA8s',
 };
 const std = (h) => Date.now() - h * 3600e3, min2 = (m) => Date.now() - m * 60_000;
-// Kurz gehalten, damit sechs Bilder nebeneinander passen – aber MIT den
-// unbequemen Faellen: zwei gleiche Kuerzel, Ansem, eine lange Nachricht.
+// Kept short so six pictures fit side by side - but WITH the awkward cases:
+// two matching handles, Ansem, a long message.
 const CHAT = [
   { id: 1, wallet: W.c, usd: 1240, body: 'gm', createdAt: std(5) },
   { id: 2, wallet: W.a, usd: 86400, body: 'is the gate still at $10 or did that change', createdAt: std(5) },
@@ -202,7 +202,7 @@ const server = http.createServer((_q, res) =>
      .end(`<!doctype html><meta charset="utf-8"><style>${css}</style>
        <body style="margin:0">
        <div id="app" style="display:flex;flex-direction:column;height:100vh;
-            background:var(--bg);padding:14px;box-sizing:border-box">${chatGeruest}</div>`));
+            background:var(--bg);padding:14px;box-sizing:border-box">${chatScaffold}</div>`));
 await new Promise((r) => server.listen(0, r));
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -212,9 +212,9 @@ fs.mkdirSync(ausgabe, { recursive: true });
 
 const bilder = [];
 for (const f of FASSUNGEN) {
-  const seite = await browser.newPage({ viewport: { width: 640, height: 620 }, deviceScaleFactor: 2 });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.addScriptTag({ content: `
+  const page = await browser.newPage({ viewport: { width: 640, height: 620 }, deviceScaleFactor: 2 });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.addScriptTag({ content: `
     const $  = (s, r = document) => r.querySelector(s);
     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
     const state = {
@@ -223,19 +223,20 @@ for (const f of FASSUNGEN) {
       live: new Map(), quoted: new Map(), filters: { usd: 0 },
     };
     const toast = () => {};
-    ${escFn}${zahlen}${kurz}${tage}${namen}${linkify}${chatBau}
+    ${escFn}${numbers}${short}${tage}${namen}${linkify}${chatBau}
     const usdOf = (m) => m.usd;
     const passesFilter = () => true;
     document.querySelector('#chat-list').innerHTML =
       ${JSON.stringify(CHAT)}.map(msgHtml).join('');
     document.querySelector('#chat-list').scrollTop = 1e6;` });
-  // Erst NACH dem Blatt der Seite – sonst gewinnt die Regel aus styles.css.
-  if (f.css) await seite.addStyleTag({ content: f.css });
-  await seite.mouse.move(0, 0);
-  await seite.waitForTimeout(350);
-  const bild = await seite.locator('#chat-list').screenshot();
-  await seite.close();
-  fs.writeFileSync(path.join(ausgabe, `namen-${f.datei}.png`), bild);
+  // Only AFTER the page's own stylesheet - otherwise the rule from
+  // styles.css wins.
+  if (f.css) await page.addStyleTag({ content: f.css });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(350);
+  const bild = await page.locator('#chat-list').screenshot();
+  await page.close();
+  fs.writeFileSync(path.join(ausgabe, `namen-${f.file}.png`), bild);
   bilder.push('data:image/png;base64,' + bild.toString('base64'));
 }
 
@@ -244,7 +245,7 @@ const blatt = `<!doctype html><meta charset="utf-8"><style>${css}</style>
   body { background: #07080b; padding: 30px; }
   h1 { font-size: 1.15rem; margin: 0 0 .25rem; }
   .lead { margin: 0 0 1.7rem; font-size: .86rem; color: var(--dim); max-width: 112ch; line-height: 1.6; }
-  .reihe { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 26px; align-items: start; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 26px; align-items: start; }
   h2 { margin: 0 0 .1rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .nr { display: inline-flex; align-items: center; justify-content: center;
         width: 1.5rem; height: 1.5rem; border-radius: 999px; background: var(--bg-3);
@@ -261,7 +262,7 @@ demselben Kürzel <b>7xK</b> – der Fall, für den es die vier Töne überhaupt
 ohne sie passiert. Ansem ist zweimal dabei, mit Akzentfarbe und getönter Zeile.
 Der Nachrichtentext daneben steht bei ${textKon.toFixed(1)}:1 – ein Name, der deutlich darüber liegt, liest sich
 als Überschrift statt als Angabe. Nichts hiervon ist eingebaut.</p>
-<div class="reihe">
+<div class="row">
 ${FASSUNGEN.map((f, i) => `
 <div>
   <h2><span class="nr">${i}</span>${f.name}

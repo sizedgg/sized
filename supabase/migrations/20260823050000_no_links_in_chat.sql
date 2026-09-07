@@ -1,14 +1,14 @@
 -- ============================================================================
--- Keine Links im öffentlichen Chat
+-- No links in the public chat
 --
--- Der Chat ist der Ort, an dem Betrüger ihre Phishing-Seiten und
--- Telegram-Gruppen streuen würden – vor Publikum, mit dem Anschein von
--- Zugehörigkeit. In DMs bleiben Links erlaubt: Dort ist genau eine Person
--- Empfänger, und das ist Ansem.
+-- The chat is where scammers would scatter their phishing sites and
+-- Telegram groups - in front of an audience, with the appearance of
+-- belonging. Links stay allowed in DMs: there, exactly one person is the
+-- recipient, and that's Ansem.
 --
--- Der Test läuft über eine normalisierte Fassung des Textes, damit die
--- üblichen Verschleierungen nicht durchrutschen: "scam[.]com", "scam (dot) com",
--- "scam DOT com" landen alle bei "scam.com", bevor geprüft wird.
+-- The check runs over a normalized version of the text, so the usual
+-- obfuscations don't slip through: "scam[.]com", "scam (dot) com",
+-- "scam DOT com" all end up as "scam.com" before checking.
 -- ============================================================================
 
 create or replace function app.contains_link(txt text)
@@ -21,23 +21,24 @@ declare
 begin
   n := lower(coalesce(txt, ''));
 
-  -- Verschleierten Punkt zurückbauen: [.] (.) (dot) " dot "
+  -- Undo an obfuscated dot: [.] (.) (dot) " dot "
   n := regexp_replace(n, '\s*(\[\s*\.\s*\]|\(\s*\.\s*\)|\(\s*dot\s*\)|\s+dot\s+)\s*', '.', 'g');
-  -- Verschleierten Doppelpunkt: [:] (:)
+  -- Undo an obfuscated colon: [:] (:)
   n := regexp_replace(n, '\s*(\[\s*:\s*\]|\(\s*:\s*\))\s*', ':', 'g');
 
-  -- Ausgeschriebenes Protokoll
+  -- Protocol spelled out
   if n ~ '(https?|ftp)\s*:\s*/\s*/' then
     return true;
   end if;
 
-  -- www. am Wortanfang
+  -- www. at the start of a word
   if n ~ '\ywww\.' then
     return true;
   end if;
 
-  -- Domain mit gängiger Endung. Bewusst eine Liste statt "irgendwas nach dem
-  -- Punkt": Sonst würden Beträge wie 1.25 und Sätze wie "z.b" mitgefangen.
+  -- Domain with a common TLD. Deliberately a fixed list instead of
+  -- "anything after the dot": otherwise amounts like 1.25 and phrases like
+  -- "z.b" would get caught too.
   if n ~ ('\y[a-z0-9][a-z0-9-]*\.('
           || 'com|net|org|io|xyz|gg|me|co|app|fun|club|link|to|sh|dev|ai|so|'
           || 'site|store|top|vip|cc|tv|info|biz|online|live|finance|fi|pro|'
@@ -54,8 +55,8 @@ comment on function app.contains_link(text) is
   'Erkennt Links inklusive der üblichen Verschleierungen. Nur für den Chat.';
 
 -- ----------------------------------------------------------------------------
--- In die Chat-Prüfung einhängen. Ansem darf Links posten – er ist der einzige,
--- dem die Runde ohnehin vertrauen muss.
+-- Hook into the chat check. Ansem is allowed to post links - he's the only
+-- one the community has to trust anyway.
 -- ----------------------------------------------------------------------------
 
 create or replace function app.rate_limit_messages()
@@ -92,8 +93,8 @@ begin
     raise exception 'Message limit reached - try again later';
   end if;
 
-  -- Nur die unmittelbar vorhergehende Nachricht derselben Wallet zählt,
-  -- damit yes / no / yes möglich bleibt.
+  -- Only the immediately preceding message from the same wallet counts,
+  -- so yes / no / yes stays possible.
   select regexp_replace(lower(btrim(body)), '\s+', ' ', 'g')
   into last_body
   from public.messages

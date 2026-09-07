@@ -1,42 +1,42 @@
 -- ============================================================================
--- Testdaten: 50 Wallets, 85 Nachrichten an Ansem
+-- Test data: 50 wallets, 85 messages to Ansem
 --
--- Zum Einfügen im SQL-Editor des Supabase-Projekts. Alles läuft in EINER
--- Transaktion: Geht etwas schief, bleibt gar nichts zurück.
+-- To be inserted in the SQL editor of the Supabase project. Everything runs
+-- in ONE transaction: if something goes wrong, nothing at all is left
+-- behind.
 --
--- Drei Dinge, die beim Einfügen zu beachten waren:
+-- Three things that had to be watched during insertion:
 --
---   * Die Trigger auf `dms` laufen auch hier. Einer davon prüft den
---     Mindestbestand – und da eine Testwallet bewusst darunter liegt, würde
---     ihre Nachricht abgewiesen. Die Schwelle wird deshalb kurz auf 0 gesetzt
---     und am Ende auf ihren alten Wert zurückgestellt. Gemerkt wird der alte
---     Wert in einer Sitzungsvariablen statt in einer temporären Tabelle: Der
---     SQL-Editor von Supabase warnt bei jedem CREATE TABLE, dass die neue
---     Tabelle keine RLS hat. Bei einer temporären Tabelle ist das gegenstandslos
---     – sie existiert nur für diese eine Transaktion und ist für keinen Client
---     erreichbar –, aber eine Warnung, die man wegklicken muss, ist eine
---     Warnung zu viel.
---   * Die Bestände werden aus dem zuletzt bekannten Kurs zurückgerechnet.
---     Sonst würde der nächste Kurs-Takt sie neu ausrechnen und alle Beträge
---     auf einen Schlag verschieben.
---   * Zwei Paare teilen sich dieselben drei Zeichen (Km9 und 7xK). Genau
---     dafür gibt es die Namensfarben – im Posteingang sieht man daran, dass
---     es zwei verschiedene Leute sind.
+--   * The triggers on `dms` run here too. One of them checks the minimum
+--     balance - and since a test wallet is deliberately below it, its
+--     message would be rejected. The threshold is therefore briefly set
+--     to 0 and restored to its old value at the end. The old value is
+--     remembered in a session variable instead of a temp table: Supabase's
+--     SQL editor warns on every CREATE TABLE that the new table has no
+--     RLS. For a temp table that warning is moot - it only exists for
+--     this one transaction and is unreachable for any client - but a
+--     warning you have to click away is one warning too many.
+--   * The balances are computed backward from the last known price.
+--     Otherwise the next price tick would recompute them and shift every
+--     amount at once.
+--   * Two pairs share the same three characters (Km9 and 7xK). That is
+--     exactly what the name colors are for - in the inbox they show that
+--     these are two different people.
 --
--- Wieder loswerden: scripts/seed-dms-cleanup.sql
+-- To get rid of again: scripts/seed-dms-cleanup.sql
 -- ============================================================================
 
 begin;
 
--- Alten Wert merken, dann Schwelle aussetzen.
+-- Remember the old value, then suspend the threshold.
 select set_config('sized.schwelle_vorher',
                   (select min_dm_usd::text from public.app_config where id = 1),
                   true);
 
 update public.app_config set min_dm_usd = 0 where id = 1;
 
--- Wallets. usd_value ist der Zielwert, ui_amount wird daraus mit dem aktuell
--- gespeicherten Kurs zurückgerechnet.
+-- Wallets. usd_value is the target value, ui_amount is computed backward
+-- from it using the currently stored price.
 with kurs as (
   select coalesce(
     (select price from public.wallets where price > 0 order by updated_at desc limit 1),
@@ -195,5 +195,5 @@ update public.app_config
 
 commit;
 
--- Kurze Kontrolle
+-- Quick check
 select count(*) as gespraeche, sum(unread) as ungelesen from public.dm_threads;

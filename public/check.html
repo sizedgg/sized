@@ -6,8 +6,9 @@
 <title>Connection check</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◎</text></svg>">
 <style>
-  /* Bewusst eigenständig: Diese Seite muss auch dann funktionieren, wenn an
-     der App gerade etwas kaputt ist. Sie ist das Messgerät, nicht das Gerät. */
+  /* Deliberately standalone: this page has to keep working even when
+     something in the app itself is broken. It's the measuring device, not
+     the device. */
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
@@ -21,8 +22,8 @@
        display: flex; align-items: center; gap: .45rem; }
   h1 .mark { display: block; height: 1em; color: #eceff5; }
   h1 .mark svg { display: block; height: 100%; width: auto; }
-  /* Die Marke folgt der neuen Akzentfarbe. Das Gruen weiter unten bleibt
-     bewusst stehen: Dort heisst es "hat funktioniert" und nicht "SIZED". */
+  /* The mark follows the new accent color. The green further down stays
+     deliberately as it is: there it means "it worked", not "SIZED". */
   h1 span { color: #eceff5; }
   .lede { color: #8b93a7; font-size: .92rem; margin: 0; }
   .verdict {
@@ -84,12 +85,12 @@ const ATTEMPTS = 5;
 $('#meta').textContent = 'Target: ' + SUPABASE_URL;
 
 /**
- * Die öffentliche Adresse dieses Geräts anzeigen.
+ * Show this device's public address.
  *
- * Das ist keine Spielerei, sondern der Kern des Tests: Ein Handy im selben
- * WLAN wie der Messrechner tritt nach außen unter derselben Adresse auf. Ohne
- * diese Anzeige könnte ein grünes Ergebnis genauso gut bedeuten, dass beide
- * Geräte dieselbe Adresse teilen – und die Schlussfolgerung wäre falsch.
+ * This isn't a gimmick, it's the core of the test: a phone on the same wifi
+ * as the reference machine shows up on the outside under the same address.
+ * Without this display, a green result could just as easily mean both
+ * devices share an address - and the conclusion would be wrong.
  */
 (async () => {
   for (const url of ['https://api.ipify.org?format=json', 'https://ipapi.co/json/']) {
@@ -97,21 +98,21 @@ $('#meta').textContent = 'Target: ' + SUPABASE_URL;
       const r = await fetch(url, { cache: 'no-store' });
       const j = await r.json();
       if (j.ip) { $('#ip').textContent = j.ip; return; }
-    } catch { /* nächster Dienst */ }
+    } catch { /* next service */ }
   }
   $('#ip').textContent = 'could not be determined';
 })();
 
 /**
- * Eine einzelne Realtime-Verbindung öffnen.
+ * Open a single realtime connection.
  *
- * Genau hier entsteht der Fehler, den wir jagen: Wird die Verbindung
- * abgewiesen, passiert das beim Aufbau – vor jeder Anmeldung und vor jeder
- * Datenbankabfrage. Deshalb reicht der öffentliche anon-Key.
+ * This is exactly where the error we're hunting shows up: if the connection
+ * is refused, it happens at setup - before any login and before any
+ * database query. That's why the public anon key is enough.
  *
- * Der Browser verrät bei einem gescheiterten WebSocket aus Sicherheitsgründen
- * nicht, welcher HTTP-Status kam. Ob der Aufbau klappt, verrät er aber – und
- * mehr brauchen wir nicht.
+ * For security reasons the browser won't reveal which HTTP status came back
+ * on a failed WebSocket. But it does reveal whether the setup succeeded -
+ * and that's all we need.
  */
 function openOne(timeoutMs = 12000) {
   return new Promise((resolve) => {
@@ -121,7 +122,7 @@ function openOne(timeoutMs = 12000) {
     let ws;
     const done = (ok, msg) => {
       clearTimeout(timer);
-      try { ws && ws.close(); } catch { /* egal */ }
+      try { ws && ws.close(); } catch { /* doesn't matter */ }
       resolve({ ok, msg, ms: Math.round(performance.now() - t0) });
     };
     const timer = setTimeout(() => done(false, 'Timed out'), timeoutMs);

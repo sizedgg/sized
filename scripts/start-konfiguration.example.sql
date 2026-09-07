@@ -1,69 +1,69 @@
 -- ============================================================================
--- Die Werte, mit denen SIZED live geht — Vorlage
+-- The values SIZED goes live with - template
 -- ============================================================================
 --
--- Diese Datei ist die Anleitung. Die Fassung mit den echten Adressen heisst
--- start-konfiguration.sql, liegt daneben und steht in .gitignore — genau wie
--- public/config.js, und aus demselben Grund: Eine Adresse in diesem
--- Verzeichnis ist eine oeffentliche Aussage darueber, wer hinter dem Projekt
--- steht. Was dort steht, entscheidet der Betreiber, nicht diese Vorlage.
+-- This file is the instructions. The version with the real addresses is
+-- called start-konfiguration.sql, sits right next to it, and is in
+-- .gitignore - just like public/config.js, and for the same reason: an
+-- address in this repo is a public statement about who's behind the
+-- project. What goes there is the operator's call, not this template's.
 --
--- Zum Benutzen: kopieren, die vier Platzhalter ersetzen, im SQL-Editor des
--- Supabase-Dashboards einspielen, einmal, kurz vor dem Aufmachen. Danach die
--- Kontrollabfrage unten laufen lassen und wirklich hinsehen — nicht nur
--- "keine Fehlermeldung" registrieren.
---
--- ----------------------------------------------------------------------------
--- Warum alles in EINER Anweisung steht
---
--- Ein Update, das mittendrin abbricht, hinterlaesst sonst eine halbe
--- Konfiguration: neue Treasury, alte Adminwallet. Die Seite laeuft dann
--- weiter und nimmt Zahlungen an, waehrend der Admin noch der von gestern ist.
+-- To use: copy it, replace the four placeholders, run it in the SQL editor
+-- of the Supabase dashboard, once, shortly before opening up. Then run the
+-- verification query below and actually look at it - not just register
+-- "no error message".
 --
 -- ----------------------------------------------------------------------------
--- Die Adressen
+-- Why everything is in ONE statement
 --
--- Beide gehoeren vor dem Eintragen geprueft, und zwar rechnerisch und nicht
--- mit dem Auge:
+-- An update that aborts halfway through otherwise leaves a half
+-- configuration behind: new treasury, old admin wallet. The site then
+-- keeps running and accepting payments while the admin is still
+-- yesterday's.
 --
---   44 Zeichen, ausschliesslich aus dem Base58-Alphabet, und beim Dekodieren
---   kommen genau 32 Bytes heraus. Das ist es, was ein Solana-Konto ist.
+-- ----------------------------------------------------------------------------
+-- The addresses
 --
--- Was diese Pruefung nicht leisten kann, und das gehoert dazu: Sie sagt
--- nichts darueber, wem eine Adresse gehoert. Eine Adresse, zu der niemand den
--- Schluessel hat, sieht rechnerisch genauso aus — nur kommt Geld dort nie
--- wieder heraus.
+-- Both need to be checked before entering them, and by computation, not by
+-- eye:
 --
--- Deshalb fuer die Treasury einmal, bevor Fremde dorthin zahlen: 0.001 SOL
--- hinschicken, in der Wallet oeffnen, zu der der Seed gehoert, und
--- zurueckschicken. Zahlungen an eine Adresse ohne Schluessel sind der einzige
--- Fehler in diesem Projekt, der sich nicht rueckgaengig machen laesst.
+--   44 characters, exclusively from the Base58 alphabet, and decoding them
+--   yields exactly 32 bytes. That's what a Solana account is.
+--
+-- What this check can't do, and that's worth stating: it says nothing
+-- about who owns an address. An address nobody holds the key to looks
+-- computationally identical - money just never comes back out of it.
+--
+-- So for the treasury, once, before strangers pay into it: send 0.001 SOL,
+-- open it in the wallet the seed belongs to, and send it back. Payments to
+-- an address with no key are the one mistake in this project that can't be
+-- undone.
 -- ============================================================================
 
 update public.app_config set
-  -- Wohin die Verifikationszahlungen gehen. Diese Adresse steht waehrend der
-  -- Anmeldung auf dem Bildschirm; sie ist oeffentlich und soll es sein.
+  -- Where verification payments go. This address sits on screen during
+  -- sign-up; it's public, and it's meant to be.
   treasury      = 'DEINE_TREASURY_ADRESSE',
 
-  -- Wer der Admin ist. Daran haengt alles, was nur er darf: Abstimmungen
-  -- anlegen und schliessen, den Posteingang sehen, Gespraeche verbergen, die
-  -- DM-Schwelle setzen.
+  -- Who the admin is. Everything only they're allowed to do hangs off
+  -- this: creating and closing polls, seeing the inbox, hiding
+  -- conversations, setting the DM threshold.
   --
-  -- Geprueft wird das bei JEDER Anfrage, in der Datenbank, gegen den
-  -- wallet-Claim des Tokens (app.is_admin()). Es gibt kein Admin-Kennzeichen,
-  -- das ein Client setzen koennte — hier steht die einzige Stelle, an der
-  -- entschieden wird, wer Admin ist.
+  -- This is checked on EVERY request, in the database, against the
+  -- token's wallet claim (app.is_admin()). There is no admin flag a
+  -- client could set - this is the one and only place that decides who
+  -- the admin is.
   admin_wallet  = 'ADMIN_ADRESSE',
 
-  -- Kein zweiter Zugang mehr. Waehrend der geschlossenen Phase durfte hier
-  -- eine Testwallet stehen; ab dem Start waere sie ein zweiter Schluessel zu
-  -- einer Tuer, die nur einen haben soll.
+  -- No second entry point anymore. During the closed phase a test wallet
+  -- was allowed here; from launch onward it would be a second key to a
+  -- door meant to have only one.
   test_wallet   = null,
 
-  -- Die Schwelle in Dollar, ab der jemand dem Admin schreiben darf.
+  -- The threshold in dollars above which someone may DM the admin.
   min_dm_usd    = 1000,
 
-  -- Die Tuer auf.
+  -- Open the door.
   open_to_public = true,
 
   updated_at    = now()
@@ -71,24 +71,25 @@ where id = 1;
 
 
 -- ----------------------------------------------------------------------------
--- Kontrolle
+-- Verification
 -- ----------------------------------------------------------------------------
--- Hinsehen, nicht ueberfliegen. Vor allem die letzten vier Spalten: Sie
--- vergleichen das Eingetragene mit dem, was dort stehen soll, und antworten
--- mit ja oder nein statt mit einer Adresse, die man beim Lesen fuer richtig
--- haelt, weil sie so aussieht wie die richtige.
+-- Look at this, don't skim it. Above all the last four columns: they
+-- compare what got entered against what's supposed to be there, and answer
+-- yes or no instead of an address you'd read as correct just because it
+-- looks like the right one.
 --
--- Jede Adressspalte prueft ZWEI Dinge, und das zweite ist der Grund, warum
--- diese Abfrage ueberhaupt etwas wert ist:
+-- Every address column checks TWO things, and the second is the reason
+-- this query is worth anything at all:
 --
---   1. Steht das drin, was oben eingetragen wurde? Faengt den Tippfehler und
---      das halb durchgelaufene Update.
---   2. Sieht das ueberhaupt aus wie eine Solana-Adresse? 32 bis 44 Zeichen
---      aus dem Base58-Alphabet — das schliesst 0, O, I und l aus.
+--   1. Does it hold what was entered above? Catches typos and a half-run
+--      update.
+--   2. Does it even look like a Solana address? 32 to 44 characters from
+--      the Base58 alphabet - which excludes 0, O, I and l.
 --
--- Ohne Punkt 2 haette die unveraenderte Vorlage hier "true" gemeldet: Der
--- Platzhalter oben und der Platzhalter unten sind ja gleich. Eine Kontrolle,
--- die gruen wird, weil man nichts getan hat, ist schlimmer als keine.
+-- Without point 2, the unedited template would have reported "true" here:
+-- the placeholder above and the placeholder below are, after all, the
+-- same. A check that goes green because nothing was actually done is
+-- worse than no check at all.
 select
   treasury,
   admin_wallet,
@@ -108,13 +109,13 @@ where id = 1;
 
 
 -- ----------------------------------------------------------------------------
--- Wenn etwas schiefging
+-- If something went wrong
 -- ----------------------------------------------------------------------------
--- Die Tuer wieder zu, ohne sonst etwas anzufassen:
+-- Close the door again, without touching anything else:
 --
 --   update public.app_config set open_to_public = false, updated_at = now()
 --   where id = 1;
 --
--- Wer schon drin ist, bleibt drin — der Riegel gilt fuer neue Anmeldungen
--- (siehe mayEnter in supabase/functions/_shared/freischaltung.ts). Wer alle
--- hinauswerfen will, rotiert stattdessen APP_JWT_SECRET.
+-- Whoever's already in stays in - the lock applies to new sign-ups (see
+-- mayEnter in supabase/functions/_shared/freischaltung.ts). Whoever wants
+-- to kick everyone out rotates APP_JWT_SECRET instead.

@@ -1,15 +1,15 @@
 /**
- * Prüft die Zustandsmaschine, die entscheidet, welche Realtime-Kanäle ein
- * Browser gerade offen hält.
+ * Tests the state machine that decides which realtime channels a browser
+ * currently holds open.
  *
- * Warum eigens dafür ein Test: Ein Fehler hier ist unsichtbar. Die Seite sieht
- * völlig normal aus, aber der Abstimmungs-Kanal kommt nach einem Tabwechsel
- * nicht zurück – und der Nutzer wundert sich, warum sich die Zahlen nicht mehr
- * bewegen. Genau das lässt sich im Browser nur schwer bemerken und hier leicht
- * messen.
+ * Why a dedicated test for this: a bug here is invisible. The page looks
+ * completely normal, but the poll channel doesn't come back after a tab
+ * switch - and the user wonders why the numbers stopped moving. That is
+ * exactly the kind of thing that's hard to notice in the browser and easy
+ * to measure here.
  *
- * app.js wird dafür im Quelltext geladen, die beiden echten Importe werden
- * durch Attrappen ersetzt und ein minimales DOM daruntergelegt.
+ * app.js is loaded as source for this, the two real imports are replaced
+ * with stubs and a minimal DOM is laid underneath.
  *
  *   node scripts/test-realtime-switching.mjs
  */
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 // ---------------------------------------------------------------------------
-// DOM-Attrappe: gerade genug, damit app.js beim Laden durchläuft
+// DOM stub: just enough for app.js to get through on load
 // ---------------------------------------------------------------------------
 
 const elements = new Map();
@@ -34,12 +34,12 @@ const makeEl = (sel) => ({
   dataset: {},
   scrollTop: 0,
   scrollHeight: 0,
-  // Leer, aber vorhanden: renderOptionKnoepfe() zaehlt die Kinder des
-  // Optionsfelds. Ohne diese Zeile scheitert schon das Laden.
+  // Empty but present: renderOptionButtons() counts the children of the
+  // options field. Without this line, loading already fails.
   children: [],
-  // Echte Klassenliste statt Attrappe: Mehrere Zustaende der Oberflaeche
-  // haengen daran (gesperrt, keine Antworten, aktiv). Eine contains-Funktion,
-  // die immer false liefert, laesst jede Pruefung darauf still durchfallen.
+  // A real class list instead of a stub: several states of the interface
+  // hang off it (locked, no options, active). A contains function that
+  // always returns false would let every check on it fail silently.
   classList: (() => {
     const set = new Set();
     return {
@@ -49,16 +49,16 @@ const makeEl = (sel) => ({
       toggle: (c, an) => (an ?? !set.has(c)) ? set.add(c) : set.delete(c),
     };
   })(),
-  // Zuhoerer merken statt verwerfen. Genau daran ist einmal etwas
-  // vorbeigerutscht: Beim Aufraeumen verschwand der input-Zuhoerer des
-  // Schwellenfelds, und keine Pruefung merkte es, weil die Attrappe
-  // addEventListener stillschweigend geschluckt hat. Mit __fire laesst sich
-  // jetzt pruefen, ob ein Feld ueberhaupt reagiert.
+  // Remember listeners instead of discarding them. Something once slipped
+  // past exactly this: during cleanup the threshold field's input
+  // listener vanished, and no check noticed, because the stub swallowed
+  // addEventListener silently. With __fire it's now possible to check
+  // whether a field reacts at all.
   __hoerer: {},
   addEventListener(typ, fn) { (this.__hoerer[typ] ??= []).push(fn); },
-  // Attribute merken, damit sich pruefen laesst, was gesetzt wurde – etwa das
-  // aria-label, in dem die Anzahl ungelesener DMs steht, seit am Reiter nur
-  // noch ein Punkt erscheint.
+  // Remember attributes, so it's possible to check what was set - for
+  // instance the aria-label, which carries the unread DM count now that
+  // the tab itself only shows a dot.
   __attr: {},
   setAttribute(name, wert) { this.__attr[name] = String(wert); },
   getAttribute(name) { return this.__attr[name] ?? null; },
@@ -70,19 +70,19 @@ const makeEl = (sel) => ({
   remove() {},
   insertAdjacentHTML() {},
   appendChild() {},
-  // Beide Wege, ein Kind anzuhaengen, und beide werden gebraucht: optionZeile()
-  // benutzt append(), setzeOptionenZurueck() replaceChildren(). Fehlt einer,
-  // scheitert schon das LADEN des Moduls – und dann meldet dieser Test gar
-  // nichts mehr, statt "fehlgeschlagen".
+  // Both ways of attaching a child, and both are needed: optionZeile()
+  // uses append(), setzeOptionenZurueck() uses replaceChildren(). If
+  // either is missing, LOADING the module already fails - and then this
+  // test reports nothing at all instead of "failed".
   append() {},
   replaceChildren() {},
-  // Der Zeichenzaehler sucht von seinem Feld aus nach oben den Kasten, in dem
-  // er sitzt. Die Attrappe kennt keine Verwandtschaft; sie liefert einfach ein
-  // Element zurueck. Das genuegt: Geprueft wird hier das Umschalten zwischen
-  // den Kanaelen, nicht der Zaehler – der hat seinen eigenen Test. Fehlt die
-  // Zeile aber, scheitert schon das LADEN des Moduls, und dann meldet dieser
-  // Test gar nichts mehr statt "fehlgeschlagen".
-  closest: () => makeEl('kasten'),
+  // The character counter searches upward from its field for the box it
+  // sits in. The stub knows no ancestry; it just returns some element.
+  // That's enough: what's tested here is switching between channels, not
+  // the counter - it has its own test. But without this line, LOADING the
+  // module already fails, and then this test reports nothing at all
+  // instead of "failed".
+  closest: () => makeEl('panel'),
   style: {},
 });
 const el = (sel) => {
@@ -99,14 +99,15 @@ globalThis.document = {
   createElement: () => makeEl('created'),
   body: makeEl('body'),
 };
-// Ohne location scheitert schon das Laden des Moduls: Die Adminvorschau liest
-// beim Start die Adresszeile aus. Bewusst ein Wert OHNE ?preview=admin – die
-// Tests sollen den normalen Fall pruefen, nicht die Vorschau.
+// Without location, loading the module already fails: the admin preview
+// reads the address bar on startup. Deliberately a value WITHOUT
+// ?preview=admin - the tests are meant to check the normal case, not the
+// preview.
 globalThis.location = { search: '', hostname: 'sized.gg', href: 'https://sized.gg/' };
 globalThis.window = { addEventListener() {}, location: globalThis.location };
-// app.js haengt seinen keydown-Zuhoerer an den globalen Namensraum, nicht an
-// document. Ohne diese Zeile scheitert schon das LADEN des Moduls – und der
-// ganze Test faellt aus, ohne dass ein einziger Befund gemeldet wird.
+// app.js attaches its keydown listener to the global namespace, not to
+// document. Without this line, LOADING the module already fails - and the
+// whole test aborts without a single finding reported.
 globalThis.addEventListener = (ev, fn) => { (listeners[ev] ??= []).push(fn); };
 globalThis.localStorage = {
   _v: {},
@@ -114,7 +115,7 @@ globalThis.localStorage = {
   setItem(k, v) { this._v[k] = String(v); },
   removeItem(k) { delete this._v[k]; },
 };
-// navigator existiert in Node bereits und ist schreibgeschützt – nur ergänzen.
+// navigator already exists in Node and is read-only - only extend it.
 if (!globalThis.navigator.clipboard) {
   Object.defineProperty(globalThis.navigator, 'clipboard', {
     value: { writeText: async () => {} }, configurable: true,
@@ -125,13 +126,13 @@ globalThis.fetch = async () => { throw new Error('kein Netz im Test'); };
 const fire = (ev) => (listeners[ev] ?? []).forEach((fn) => fn());
 
 // ---------------------------------------------------------------------------
-// Supabase-Attrappe: merkt sich, welche Kanäle offen sind
+// Supabase stub: remembers which channels are open
 // ---------------------------------------------------------------------------
 
 const open = new Set();
-const byTopic = new Map();          // damit der Test Statusmeldungen ausloesen kann
-const optionen = new Map();         // Kanalname -> zweites Argument von channel()
-const bindungen = new Map();        // Kanalname -> Liste der .on()-Aufrufe
+const byTopic = new Map();          // so the test can trigger status messages
+const optionen = new Map();         // channel name -> channel()'s second argument
+const bindungen = new Map();        // channel name -> list of .on() calls
 const fakeDb = {
   channel(topic, opts) {
     optionen.set(topic, opts);
@@ -155,7 +156,7 @@ const fakeDb = {
 };
 
 // ---------------------------------------------------------------------------
-// app.js laden, Importe ersetzen, internen Zustand herausreichen
+// Load app.js, replace imports, hand out internal state
 // ---------------------------------------------------------------------------
 
 const src = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8')
@@ -167,7 +168,7 @@ globalThis.__test = {
   selectTab,
   unsubscribeAll,
   stopFallback,
-  STIMMEN_TAKT_MS,
+  VOTE_CADENCE_MS,
   dmsNachziehen,
   PREVIEW_ADMIN,
   DEMO_DMS,
@@ -175,18 +176,18 @@ globalThis.__test = {
   demoPolls,
   dmHtml,
   dmQuoteHtml,
-  pruefeDmAntworten,
+  checkDmAnswers,
   renderThreads,
   markiereGelesen,
-  kurzUsd,
-  saubereZahl,
+  shortUsd,
+  cleanNumber,
   gruppiere,
   tagLabel,
   dmListeHtml,
   speichereDmMin,
   renderDmMin,
-  MIN_DM_SCHWELLE,
-  MAX_DM_SCHWELLE,
+  MIN_DM_THRESHOLD,
+  MAX_DM_THRESHOLD,
   MAX_STELLEN,
   STRICH_BLEIBT,
   STRICH_MAX,
@@ -202,16 +203,17 @@ try {
   fs.unlinkSync(mod);
 }
 
-const { state, syncRealtime, selectTab, unsubscribeAll, STIMMEN_TAKT_MS, dmsNachziehen, dmHtml, dmQuoteHtml, pruefeDmAntworten, renderThreads, markiereGelesen, kurzUsd, saubereZahl, gruppiere, tagLabel, dmListeHtml, speichereDmMin, renderDmMin, MIN_DM_SCHWELLE, MAX_DM_SCHWELLE, MAX_STELLEN, STRICH_BLEIBT, STRICH_MAX, STRICH_MIN } = globalThis.__test;
+const { state, syncRealtime, selectTab, unsubscribeAll, VOTE_CADENCE_MS, dmsNachziehen, dmHtml, dmQuoteHtml, checkDmAnswers, renderThreads, markiereGelesen, shortUsd, cleanNumber, gruppiere, tagLabel, dmListeHtml, speichereDmMin, renderDmMin, MIN_DM_THRESHOLD, MAX_DM_THRESHOLD, MAX_STELLEN, STRICH_BLEIBT, STRICH_MAX, STRICH_MIN } = globalThis.__test;
 state.db = fakeDb;
-// Der DM-Kanal heisst seit dem Broadcast-Umbau nach der eigenen Wallet. Ohne
-// angemeldeten Nutzer gaebe es ihn gar nicht – siehe wantedChannels().
+// Since the broadcast rework, the DM channel is named after one's own
+// wallet. Without a logged-in user it wouldn't exist at all - see
+// wantedChannels().
 const NUTZER = 'H4v7xKq111111111111111111111111111111111111';
 state.me = { wallet: NUTZER, isAdmin: false };
 const DM_KANAL = `dm:${NUTZER}`;
 
 // ---------------------------------------------------------------------------
-// Prüfungen
+// Checks
 // ---------------------------------------------------------------------------
 
 let failed = 0;
@@ -246,49 +248,49 @@ check('Seite im Hintergrund: alle Kanaele zu', []);
 
 document.visibilityState = 'visible';
 fire('visibilitychange');
-check('Seite wieder sichtbar: die Abstimmungen kommen zurueck', ['hub:polls', DM_KANAL]);
+check('Seite wieder sichtbar: die Abstimmungen kommen back', ['hub:polls', DM_KANAL]);
 
-// Genau der Fehler, der sonst unbemerkt bliebe: mehrfaches Aufrufen darf
-// keinen zweiten Kanal aufmachen und keinen bestehenden abwuergen.
+// Exactly the bug that would otherwise go unnoticed: calling it multiple
+// times must not open a second channel and must not choke off an existing one.
 const before = [...open].sort().join(',');
 syncRealtime();
 syncRealtime();
 check('Mehrfaches Synchronisieren aendert nichts', before.split(','));
 
 // ---------------------------------------------------------------------------
-// Rueckfallebene: kommt die Live-Leitung nicht zustande, muss die Seite
-// selbst nachfragen – und damit aufhoeren, sobald sie wieder da ist.
+// Fallback: if the live connection doesn't come together, the page has to
+// poll itself - and stop doing so as soon as it's back.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Der Stimmen-Takt
+// The vote tick
 //
-// Stimmen werden NICHT mehr zugestellt. Die Zeile .on(... table: 'votes')
-// gab es einmal, und sie war der teuerste Griff der ganzen Seite: Supabase
-// zaehlt Zustellungen einzeln, eine Stimme an 500 Browser sind 500
-// Nachrichten. Bei einer frischen Abstimmung waren das rund 8.300 pro
-// Sekunde gegen ein Kontingent von 500 bis 2.500.
+// Votes are NO LONGER delivered. The line .on(... table: 'votes') used to
+// exist, and it was the most expensive thing on the whole site: Supabase
+// counts deliveries individually, one vote to 500 browsers is 500
+// messages. On a fresh poll that was about 8,300 per second against a
+// quota of 500 to 2,500.
 //
-// Stattdessen fragt der offene Polls-Tab die Zahlen selbst nach. Damit haengt
-// an dem Kanal jetzt eine Uhr, und die muss GENAU so lange laufen wie er --
-// laeuft sie weiter, fragt ein Browser im Hintergrund ewig nach; laeuft sie
-// nicht, stehen die Balken still und niemand sieht einen Fehler.
+// Instead the open polls tab polls for the numbers itself. That means a
+// clock now hangs off the channel, and it has to run for EXACTLY as long
+// as the channel does - if it keeps running, a backgrounded browser polls
+// forever; if it doesn't run, the bars sit still and nobody sees an error.
 // ---------------------------------------------------------------------------
 
-console.log('\nDer Stimmen-Takt laeuft genau so lange wie der Kanal\n');
+console.log('\nDer Stimmen-Takt running genau so lange wie der Kanal\n');
 
-const taktLaeuft = () => state.stimmenTakt !== null && state.stimmenTakt !== undefined;
-function checkTakt(label, erwartet) {
-  const ok = taktLaeuft() === erwartet;
+const cadenceRunning = () => state.stimmenTakt !== null && state.stimmenTakt !== undefined;
+function checkCadence(label, erwartet) {
+  const ok = cadenceRunning() === erwartet;
   if (!ok) failed++;
   console.log(`  ${ok ? 'ok  ' : 'FEHL'}  ${label}`);
-  if (!ok) console.log(`         erwartet: ${erwartet ? 'laeuft' : 'steht'}\n         bekommen: ${taktLaeuft() ? 'laeuft' : 'steht'}`);
+  if (!ok) console.log(`         erwartet: ${erwartet ? 'running' : 'steht'}\n         bekommen: ${cadenceRunning() ? 'running' : 'steht'}`);
 }
 
-// Die Zeile selbst darf nicht zurueckkommen -- sie ist der ganze Grund.
-// Kommentare zaehlen dabei nicht: Direkt ueber der Stelle STEHT beschrieben,
-// was dort einmal stand, samt der Zeile im Wortlaut. Ohne diesen Filter
-// schluege der Test wegen seiner eigenen Begruendung fehl.
+// The line itself must not come back -- it's the whole reason for this.
+// Comments don't count here: right above that spot it's DESCRIBED what
+// used to be there, including the line verbatim. Without this filter the
+// test would fail because of its own justification.
 const appSrc = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const ohneKommentar = appSrc.split('\n')
   .filter((z) => !/^\s*(\/\/|\*|\/\*)/.test(z)).join('\n');
@@ -296,62 +298,62 @@ check2('Kein Browser hoert mehr auf einzelne Stimmen',
   !/table:\s*'votes'/.test(ohneKommentar));
 check2('Neue und beendete Abstimmungen bleiben live',
   /table:\s*'polls'/.test(appSrc) && /table:\s*'poll_options'/.test(appSrc));
-// Und die Datenbank muss dasselbe sagen, sonst arbeitet Realtime die Stimmen
-// weiter aus dem WAL ab, obwohl niemand zuhoert.
+// And the database has to say the same thing, otherwise realtime keeps
+// processing votes out of the WAL even though nobody's listening.
 const wanderung = fs.readFileSync(
   path.join(root, 'supabase/migrations/20260903040000_votes_nicht_mehr_live.sql'), 'utf8');
 check2('public.votes ist aus der Realtime-Veroeffentlichung genommen',
   /drop table public\.votes/.test(wanderung));
 
 selectTab('polls');
-checkTakt('Polls-Tab offen -> der Takt laeuft', true);
+checkCadence('Polls-Tab offen -> der Takt running', true);
 check2('Und zwar langsamer als die alte Sammelfrist von 400 ms',
-  STIMMEN_TAKT_MS >= 3000);
+  VOTE_CADENCE_MS >= 3000);
 
 selectTab('dms');
-checkTakt('DM-Tab -> der Takt steht', false);
+checkCadence('DM-Tab -> der Takt steht', false);
 
 selectTab('polls');
-checkTakt('Zurueck zu den Abstimmungen -> er laeuft wieder', true);
+checkCadence('Zurueck zu den Abstimmungen -> er running wieder', true);
 
 document.visibilityState = 'hidden';
 fire('visibilitychange');
-checkTakt('Seite im Hintergrund -> er steht', false);
+checkCadence('Seite im Hintergrund -> er steht', false);
 
 document.visibilityState = 'visible';
 fire('visibilitychange');
-checkTakt('Seite wieder sichtbar -> er laeuft', true);
+checkCadence('Seite wieder sichtbar -> er running', true);
 
-// Zweimal synchronisieren darf keine zweite Uhr starten -- sonst fragt der
-// Browser doppelt so oft nach, und die alte Uhr laesst sich nie mehr stoppen.
-const uhrVorher = state.stimmenTakt;
+// Syncing twice must not start a second clock -- otherwise the browser
+// polls twice as often, and the old clock can never be stopped again.
+const clockBefore = state.stimmenTakt;
 syncRealtime();
 syncRealtime();
 check2('Mehrfaches Synchronisieren startet keine zweite Uhr',
-  state.stimmenTakt === uhrVorher);
+  state.stimmenTakt === clockBefore);
 
-// Wer selbst abstimmt, darf nicht bis zum naechsten Takt warten -- sonst
-// fuehlt sich der eigene Klick fuenf Sekunden lang wirkungslos an.
+// Whoever votes themselves must not have to wait for the next tick --
+// otherwise their own click feels ineffective for five seconds.
 check2('Wer selbst abstimmt, wartet nicht auf den Takt',
   /await loadPolls\(\);\s*\n\s*toast\('Vote counted'\)/.test(appSrc));
 
 // -------------------------------------------------------------------------
-// DMs: Stups auf einem privaten Kanal statt Meldung an alle
+// DMs: a nudge on a private channel instead of a broadcast to everyone
 //
-// Hier hing die letzte teure Stelle. postgres_changes prueft die Rechte
-// EINZELN je Zuhoerer und Aenderung -- eine DM an Ansem bei 3.000 offenen
-// Seiten sind 3.000 Pruefungen, einfaedig abgearbeitet. Jetzt schickt ein
-// Trigger einen Stups an genau zwei Kanaele.
+// This is where the last expensive spot hung. postgres_changes checks
+// permissions INDIVIDUALLY per listener and change -- one DM to Ansem
+// with 3,000 open pages is 3,000 checks, processed single-threaded. Now a
+// trigger sends a nudge to exactly two channels.
 //
-// Gemessen wird an der Attrappe, nicht am Quelltext: WIE der Kanal wirklich
-// geoeffnet wurde.
+// Measured against the stub, not the source: HOW the channel was actually
+// opened.
 // -------------------------------------------------------------------------
 check2('Kein Browser hoert mehr auf einzelne DM-Zeilen',
   !/table:\s*'dms'/.test(ohneKommentar));
 check2('Der DM-Kanal heisst nach der eigenen Wallet',
   open.has(DM_KANAL), [...open].join(', '));
-// private: true ist nicht optional -- ohne das prueft Supabase die
-// Zugangsregel gar nicht erst und der Kanal steht jedem offen.
+// private: true is not optional -- without it Supabase doesn't even check
+// the access rule and the channel is open to anyone.
 check2('Und er ist als privat geoeffnet',
   optionen.get(DM_KANAL)?.config?.private === true,
   JSON.stringify(optionen.get(DM_KANAL) ?? null));
@@ -359,43 +361,43 @@ check2('Er lauscht auf einen Broadcast, nicht auf Tabellenaenderungen',
   (bindungen.get(DM_KANAL) ?? []).every((b) => b.art === 'broadcast')
     && (bindungen.get(DM_KANAL) ?? []).some((b) => b.filter?.event === 'dm'),
   (bindungen.get(DM_KANAL) ?? []).map((b) => b.art).join(', ') || '(keine)');
-check2('Und sie sammeln weiter nur kurz',
+check2('Und sie sammeln next nur short',
   /reloadSoon\('dms', dmsNachziehen\)/.test(ohneKommentar)
     && /function reloadSoon\(key, fn, delay = 400\)/.test(ohneKommentar));
 
 // -------------------------------------------------------------------------
-// Ein Stups kommt nur EINMAL
+// A nudge only ever arrives ONCE
 //
-// Der Abstimmungs-Takt fragt alle 5 Sekunden erneut nach; wenn dort eine
-// Abfrage scheitert, holt die naechste es nach. Bei den DMs gibt es dieses
-// Netz nicht. Faellt das Nachladen also in eine kurze Stoerung -- gemessen am
-// 4.9.2026 beim Umstellen der Datenbankgroesse: net::ERR_FAILED --, ginge die
-// Nachricht still verloren.
+// The vote tick polls again every 5 seconds; if a fetch fails there, the
+// next one catches up. There is no such safety net for DMs. So if the
+// reload happens to fall into a brief outage -- measured on 2026-09-04
+// while resizing the database: net::ERR_FAILED -- the message would be
+// silently lost.
 //
-// Geprueft wird hier mit einem loadDms(), das die ersten Male scheitert.
+// Tested here with a loadDms() that fails the first few times.
 // -------------------------------------------------------------------------
 {
   const gemerkteDb = state.db;
   state.activeThread = null;
 
-  // Ohne state.db scheitert loadDms -- genau der Fall "keine Antwort".
+  // Without state.db, loadDms fails -- exactly the "no response" case.
   state.db = null;
   const t0 = Date.now();
-  const gescheitert = await dmsNachziehen(3);
-  const gedauert = Date.now() - t0;
+  const didFail = await dmsNachziehen(3);
+  const elapsed = Date.now() - t0;
 
   check2('Scheitert das Nachladen, wird nicht still aufgegeben',
-    gescheitert === false);
-  // 0,6 + 1,2 Sekunden zwischen drei Versuchen.
+    didFail === false);
+  // 0.6 + 1.2 seconds between three attempts.
   check2('Sondern mehrfach nachgefasst, mit wachsendem Abstand',
-    gedauert >= 1700, `${gedauert} ms fuer 3 Versuche`);
+    elapsed >= 1700, `${elapsed} ms fuer 3 Versuche`);
 
-  // Gegenprobe: Klappt es, darf NICHT gewartet werden. Ohne diese Zeile waere
-  // die Pruefung oben auch fuer eine Funktion gruen, die immer wartet.
+  // Control check: if it succeeds, there must NOT be a wait. Without this
+  // line, the check above would also pass for a function that always waits.
   //
-  // Dafuer eine Datenbank-Attrappe, deren Kette wirklich aufloest: loadDms()
-  // holt erst app_config (.select().eq().single()) und dann die Nachrichten
-  // (.select().order()).
+  // For this, a database stub whose chain actually resolves: loadDms()
+  // first fetches app_config (.select().eq().single()) and then the
+  // messages (.select().order()).
   state.db = {
     from: () => {
       const q = {
@@ -409,16 +411,16 @@ check2('Und sie sammeln weiter nur kurz',
   };
   const t1 = Date.now();
   const geklappt = await dmsNachziehen(3);
-  const schnell = Date.now() - t1;
+  const fast = Date.now() - t1;
   check2('Gegenprobe: klappt es beim ersten Mal, wird nicht gewartet',
-    geklappt === true && schnell < 300, `${schnell} ms`);
+    geklappt === true && fast < 300, `${fast} ms`);
 
   state.db = gemerkteDb;
 }
 
-// Ansem hoert an einem anderen Kanal: einem Posteingang fuer ALLE Threads.
-// Haette er denselben wie ein Nutzer, bekaeme er nur seinen eigenen -- und
-// merkte nie, dass ihm jemand geschrieben hat.
+// Ansem listens on a different channel: an inbox for ALL threads. If he
+// had the same one as a user, he'd only get his own -- and would never
+// notice that someone wrote to him.
 {
   unsubscribeAll();
   const alsNutzer = [...open];
@@ -436,8 +438,8 @@ check2('Und sie sammeln weiter nur kurz',
   void alsNutzer;
 }
 
-// Ohne angemeldeten Nutzer darf gar kein DM-Kanal aufgehen -- sonst hiesse er
-// "dm:undefined", wuerde abgewiesen, und die Seite meldete eine Stoerung.
+// Without a logged-in user, no DM channel may open at all -- otherwise it
+// would be called "dm:undefined", get rejected, and the page would report an error.
 {
   unsubscribeAll();
   const gemerkt = state.me;
@@ -463,14 +465,14 @@ function checkPoll(label, expected) {
 }
 
 selectTab('polls');
-checkPoll('Solange alles laeuft, wird nicht nachgefragt', []);
+checkPoll('Solange alles running, wird nicht nachgefragt', []);
 
-// Bricht die Leitung, braucht es fuer die Abstimmungen KEINE zweite Uhr: Der
-// Takt fragt ohnehin nach. Eine Meldung "Live updates unavailable" waere hier
-// sogar falsch -- die Stimmen kommen weiter an.
+// If the connection breaks, polls need NO second clock: the tick polls
+// anyway. A "Live updates unavailable" message would even be wrong here
+// -- the votes keep coming in.
 byTopic.get('hub:polls').cb('CHANNEL_ERROR', new Error('429'));
 checkPoll('Abstimmungs-Kanal abgelehnt -> keine zweite Uhr daneben', []);
-checkTakt('Der Takt laeuft dabei unveraendert weiter', true);
+checkCadence('Der Takt running dabei unveraendert next', true);
 
 byTopic.get(DM_KANAL).cb('TIMED_OUT');
 checkPoll('Der DM-Kanal dagegen wird nachgefragt', ['dms']);
@@ -479,7 +481,7 @@ byTopic.get(DM_KANAL).cb('SUBSCRIBED');
 checkPoll('DMs wieder verbunden -> Nachfragen hoert auf', []);
 
 selectTab('dms');
-checkTakt('Wechsel weg von den Abstimmungen stoppt den Takt', false);
+checkCadence('Wechsel weg von den Abstimmungen stoppt den Takt', false);
 
 document.visibilityState = 'hidden';
 fire('visibilitychange');
@@ -491,130 +493,130 @@ selectTab('polls');
 unsubscribeAll();
 check('Abmelden schliesst alles', []);
 checkPoll('Abmelden beendet auch das Nachfragen', []);
-checkTakt('Und stoppt den Takt', false);
+checkCadence('Und stoppt den Takt', false);
 
 state.cfg.symbol = 'ANSEM';
 state.cfg.admin_wallet = 'AnsemWalletAddress11111111111111111111111111';
 
 // ---------------------------------------------------------------------------
-// Der kurze Betrag: nie mehr als drei Ziffernstellen
+// The short amount: never more than three digits
 // ---------------------------------------------------------------------------
-// Daran haengt die Betragsspalte im Posteingang. Waere ein Betrag auch nur
-// einmal breiter, verschoebe sich in dieser Zeile alles – und genau die
-// Ausrichtung ist der Grund, warum es die Funktion gibt.
+// The amount column in the inbox depends on this. If an amount were wider
+// even once, everything in that row would shift - and that alignment is
+// exactly the reason the function exists.
 
-const kurzProben = [
+const shortSamples = [
   [0, '$0'], [-5, '$0'], [NaN, '$0'],
   [0.04, '<$1'], [0.42, '<$1'],
   [1, '$1'], [3, '$3'], [50, '$50'], [201, '$201'], [999, '$999'],
-  // Aufrunden ueber die Tausendergrenze: 999,6 sind nicht "$1000".
+  // Rounding up across the thousands boundary: 999.6 is not "$1000".
   [999.6, '$1K'],
-  // Zwischen 1.000 und 10.000 KEINE Nachkommastelle.
+  // Between 1,000 and 10,000, NO decimal place.
   //
-  // Hier standen "$1.4K" und "$9.9K". Die Stelle sah nach einer genauen Angabe
-  // aus und war keine: Hinter "$8.8K" steht irgendetwas zwischen 8.750 und
-  // 8.849. Sie behauptete eine Genauigkeit, die die Zahl nicht hat, und
-  // ausgerechnet dort, wo die Betraege dicht beieinanderliegen.
+  // "$1.4K" and "$9.9K" used to be here. That spot looked like an exact
+  // figure and wasn't one: behind "$8.8K" is something between 8,750 and
+  // 8,849. It claimed a precision the number doesn't have, and precisely
+  // where the amounts sit close together.
   [1000, '$1K'], [1412, '$1K'], [3444, '$3K'], [8820, '$9K'], [9940, '$10K'],
-  // Und die Grenze dazwischen, beide Seiten:
+  // And the boundary in between, both sides:
   [1499, '$1K'], [1500, '$2K'], [9499, '$9K'], [9500, '$10K'],
-  // Ab hier faellt die Nachkommastelle ohnehin weg, sonst waeren es vier
-  // Stellen. Der Uebergang ist damit nahtlos: $9K, $10K, $12K.
+  // From here on the decimal place drops away anyway, or it would be four
+  // digits. So the transition is seamless: $9K, $10K, $12K.
   [9990, '$10K'], [10400, '$10K'], [12400, '$12K'],
   [31500, '$32K'], [99900, '$100K'], [781420, '$781K'],
-  // Und hier die naechste Grenze: 999.960 aufgerundet sind 1000K – also 1 M.
+  // And here the next boundary: 999,960 rounded up is 1000K - i.e. 1M.
   [999960, '$1.0M'],
-  // Bei Millionen bleibt die Nachkommastelle: Zwischen "$1M" und "$2M" liegt
-  // eine Million, dort traegt sie eine echte Auskunft.
+  // At millions the decimal place stays: between "$1M" and "$2M" read a
+  // whole million, and there it carries real information.
   [1240000, '$1.2M'], [12400000, '$12M'], [124000000, '$124M'],
   [1.24e9, '$1.2B'], [1.24e12, '$1.2T'],
 ];
-for (const [roh, erwartet] of kurzProben) {
-  const ist = kurzUsd(roh);
-  check2(`kurzUsd(${roh}) = ${erwartet}`, ist === erwartet);
+for (const [roh, erwartet] of shortSamples) {
+  const ist = shortUsd(roh);
+  check2(`shortUsd(${roh}) = ${erwartet}`, ist === erwartet);
   if (ist !== erwartet) console.log(`         bekommen: ${ist}`);
 }
-// Die eigentliche Zusage: nie mehr als fuenf Zeichen, Dollarzeichen inbegriffen.
-const zuBreit = [];
+// The actual guarantee: never more than five characters, dollar sign included.
+const tooWide = [];
 for (let e = -2; e <= 13; e++) {
   for (const f of [1, 1.4, 3.44, 7.81, 9.99]) {
-    const s = kurzUsd(f * 10 ** e);
-    if (s.length > 5) zuBreit.push(`${f}e${e} -> ${s}`);
+    const s = shortUsd(f * 10 ** e);
+    if (s.length > 5) tooWide.push(`${f}e${e} -> ${s}`);
   }
 }
-check2('Kein Betrag wird breiter als fuenf Zeichen', zuBreit.length === 0);
-if (zuBreit.length) console.log(`         ${zuBreit.slice(0, 5).join(', ')}`);
+check2('Kein Betrag wird breiter als fuenf Zeichen', tooWide.length === 0);
+if (tooWide.length) console.log(`         ${tooWide.slice(0, 5).join(', ')}`);
 
 // ---------------------------------------------------------------------------
-// Hier standen drei Abschnitte, die mit dem Chat weggefallen sind:
+// Three sections used to be here, dropped along with the chat:
 //
-//   "Anzeige und Filter"    – msgHtml(), passesFilter(), toMessage(). Die
-//                             Betragsspalte neben einer Chatzeile und die
-//                             Frage, ob Ansem aus dem Filter faellt.
-//   "Schreibrecht im Chat"  – renderChatGate() gegen min_chat_usd.
-//   "Antworten und Zitate"  – msgHtml() mit Zitat, auch wenn das Original aus
-//                             dem Filter gefallen ist.
+//   "Display and filter"    - msgHtml(), passesFilter(), toMessage(). The
+//                             amount column next to a chat row and the
+//                             question of whether Ansem falls out of the
+//                             filter.
+//   "Write access in chat"  - renderChatGate() against min_chat_usd.
+//   "Replies and quotes"    - msgHtml() with a quote, even when the
+//                             original fell out of the filter.
 //
-// Von den drei Zusagen gilt eine weiter, und sie wird unten geprueft: Ein
-// Zitat muss auch dann dastehen, wenn das Original nicht mehr da ist. In den
-// DMs ist der Weg dorthin ein anderer – ein Gespraech wird immer vollstaendig
-// geladen, es gibt keinen Filter, aus dem etwas fallen koennte.
+// Of the three guarantees, one still holds, and it's checked below: a
+// quote must still be there even when the original is no longer around.
+// In DMs the path there is different - a conversation is always loaded in
+// full, there is no filter something could fall out of.
 //
-// Das Schreibrecht selbst ist nicht ungeprueft: renderDmGate() haengt an
-// min_dm_usd und steht weiter unten.
+// Write access itself is not left unchecked: renderDmGate() hangs off
+// min_dm_usd and appears further below.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Antworten in DMs
+// Replies in DMs
 // ---------------------------------------------------------------------------
 
 state.me = { wallet: 'Km9xxx', handle: 'Km9', usd: 500, isAdmin: true };
 state.cfg.symbol = 'ANSEM';
 
-const dmFrage = { id: 8, wallet: 'bH2yyy', from_admin: false, reply_to: null,
+const dmQuestion = { id: 8, wallet: 'bH2yyy', from_admin: false, reply_to: null,
                   body: 'Is the unlock linear or cliff based?', created_at: '2026-08-25T12:00:00Z' };
-const dmAntwort = { id: 9, wallet: 'bH2yyy', from_admin: true, reply_to: 8,
+const dmAnswer = { id: 9, wallet: 'bH2yyy', from_admin: true, reply_to: 8,
                     body: 'Cliff, then linear.', created_at: '2026-08-25T12:01:00Z' };
-state.dmMessages = [dmFrage, dmAntwort];
-pruefeDmAntworten(state.dmMessages);
+state.dmMessages = [dmQuestion, dmAnswer];
+checkDmAnswers(state.dmMessages);
 
 check2('DM-Spalte erkannt', state.dmRepliesAvailable === true);
-check2('DM traegt einen Antwortknopf', dmHtml(dmFrage).includes('data-dm-reply="8"'));
-// Die Blase traegt weiter .msg – die Klasse stammt aus dem Chat, und an ihr
-// haengen Zitat, Antwortpfeil und Aufleuchten. Wer sie hier wegnimmt, nimmt
-// alle drei mit.
-check2('DM traegt weiterhin .msg', dmHtml(dmFrage).includes('class="msg dm'));
-// Der Pfeil steht neben der Blase, nicht darin – sonst schoebe er beim
-// Erscheinen den Text.
-const teile = dmHtml(dmFrage);
+check2('DM traegt einen Antwortknopf', dmHtml(dmQuestion).includes('data-dm-reply="8"'));
+// The bubble still carries .msg - the class comes from the chat, and quote,
+// reply arrow and the flash all hang off it. Removing it here takes all three away.
+check2('DM traegt weiterhin .msg', dmHtml(dmQuestion).includes('class="msg dm'));
+// The arrow sits next to the bubble, not inside it - otherwise it would
+// push the text on appearing.
+const parts = dmHtml(dmQuestion);
 check2('Antwortpfeil steht ausserhalb der Blase',
-  teile.indexOf('</div>') < teile.indexOf('reply-btn'));
-check2('Zeile umschliesst Blase und Pfeil', teile.startsWith('<div class="dm-row'));
-check2('Zitat ohne Namen', !dmQuoteHtml(dmAntwort).includes('class="h'));
-check2('DM hat Zeit im meta-Feld', dmHtml(dmFrage).includes('<span class="meta"'));
-check2('DM ohne Namensspalte', !dmHtml(dmFrage).includes('class="who"'));
-check2('Antwort bekommt has-quote', dmHtml(dmAntwort).includes('has-quote'));
-check2('DM-Antwort zeigt das Zitat', dmQuoteHtml(dmAntwort).includes('Is the unlock linear'));
-check2('Zitat springt zur Ursprungsnachricht', dmQuoteHtml(dmAntwort).includes('data-dm-goto="8"'));
-check2('Ohne Bezug kein Zitat', dmQuoteHtml(dmFrage) === '');
+  parts.indexOf('</div>') < parts.indexOf('reply-btn'));
+check2('Zeile umschliesst Blase und Pfeil', parts.startsWith('<div class="dm-row'));
+check2('Zitat ohne Namen', !dmQuoteHtml(dmAnswer).includes('class="h'));
+check2('DM hat Zeit im meta-Feld', dmHtml(dmQuestion).includes('<span class="meta"'));
+check2('DM ohne Namensspalte', !dmHtml(dmQuestion).includes('class="who"'));
+check2('Antwort bekommt has-quote', dmHtml(dmAnswer).includes('has-quote'));
+check2('DM-Antwort zeigt das Zitat', dmQuoteHtml(dmAnswer).includes('Is the unlock linear'));
+check2('Zitat springt zur Ursprungsnachricht', dmQuoteHtml(dmAnswer).includes('data-dm-goto="8"'));
+check2('Ohne Bezug kein Zitat', dmQuoteHtml(dmQuestion) === '');
 
-// Geloeschtes Original: Hinweis statt wiederhergestelltem Text
-state.dmMessages = [dmAntwort];
-check2('Geloeschtes Original wird benannt', dmQuoteHtml(dmAntwort).includes('is-gone'));
+// Deleted original: a notice instead of restored text
+state.dmMessages = [dmAnswer];
+check2('Geloeschtes Original wird benannt', dmQuoteHtml(dmAnswer).includes('is-gone'));
 
-// Kennt die Datenbank die Spalte nicht, verschwindet der Knopf per Klasse
-pruefeDmAntworten([{ id: 1, wallet: 'a', from_admin: false, body: 'x', created_at: 'y' }]);
+// If the database doesn't know the column, the button disappears via a class
+checkDmAnswers([{ id: 1, wallet: 'a', from_admin: false, body: 'x', created_at: 'y' }]);
 check2('Ohne Spalte keine Antworten', state.dmRepliesAvailable === false);
 check2('Ohne Spalte wird der Bereich markiert',
   el('#dm-admin').classList.contains('no-replies'));
-state.dmMessages = [dmFrage, dmAntwort];
-pruefeDmAntworten(state.dmMessages);
+state.dmMessages = [dmQuestion, dmAnswer];
+checkDmAnswers(state.dmMessages);
 
 // ---------------------------------------------------------------------------
-// Datumstrenner in Gespraechen
+// Date separators in conversations
 // ---------------------------------------------------------------------------
-// Ein Faden laeuft ueber Tage. Ohne Trenner steht dort nur eine Uhrzeit, und
-// "09:12" sagt nicht, ob das heute frueh war oder vor drei Wochen.
+// A thread runs across days. Without a separator there's only a time, and
+// "09:12" doesn't say whether that was this morning or three weeks ago.
 
 const heute = new Date();
 const tagVor = (n) => {
@@ -632,14 +634,14 @@ check2('Aelteres Jahr traegt die Jahreszahl',
   /\d{4}/.test(tagLabel('2021-03-14T12:00:00Z')));
 check2('Dieses Jahr ohne Jahreszahl', !/\d{4}/.test(tagLabel(tagVor(40))));
 
-// Der Vergleich muss ueber den Tagesbeginn laufen, nicht ueber den Abstand:
-// 23:58 und 00:03 liegen fuenf Minuten auseinander und sind zwei Tage.
+// The comparison has to run over the start of the day, not the gap:
+// 23:58 and 00:03 are five minutes apart and are two different days.
 state.me = { wallet: 'Km9xxx', handle: 'Km9', usd: 500, isAdmin: true };
 const g = (id, iso, body) => ({ id, wallet: 'bH2yyy', from_admin: false, reply_to: null,
   body, created_at: iso });
-const spaet = new Date(heute); spaet.setDate(spaet.getDate() - 3); spaet.setHours(23, 58, 0, 0);
-const frueh = new Date(spaet); frueh.setDate(frueh.getDate() + 1); frueh.setHours(0, 3, 0, 0);
-state.dmMessages = [g(1, spaet.toISOString(), 'a'), g(2, frueh.toISOString(), 'b')];
+const late = new Date(heute); late.setDate(late.getDate() - 3); late.setHours(23, 58, 0, 0);
+const early = new Date(late); early.setDate(early.getDate() + 1); early.setHours(0, 3, 0, 0);
+state.dmMessages = [g(1, late.toISOString(), 'a'), g(2, early.toISOString(), 'b')];
 const verlauf = dmListeHtml(state.dmMessages);
 check2('Mitternacht trennt zwei Tage',
   (verlauf.match(/day-sep/g) || []).length === 2);
@@ -651,66 +653,69 @@ check2('Trenner steht vor der Nachricht',
   dmListeHtml(state.dmMessages).indexOf('day-sep') < dmListeHtml(state.dmMessages).indexOf('dm-row'));
 
 // ---------------------------------------------------------------------------
-// Zahlenfelder nehmen nur Zahlen
+// Number fields only accept numbers
 // ---------------------------------------------------------------------------
-// Beide Felder sind type="text", weil ein Zahlenfeld die winzigen Auf-/Ab-
-// Pfeile einblendet. Damit prueft der Browser nichts mehr – das passiert hier.
+// Both fields are type="text", because a number field shows the tiny
+// up/down arrows. That means the browser checks nothing anymore - this
+// happens here instead.
 
-check2('Buchstaben fallen raus', saubereZahl('12ab3') === '123');
-check2('Sonderzeichen fallen raus', saubereZahl('1$2 %3!') === '123');
-// Kommas sind in diesem Feld das Tausendertrennzeichen und werden von der
-// Anzeige gesetzt – beim Auslesen fallen sie weg.
-check2('Tausendertrennzeichen faellt beim Lesen weg', saubereZahl('1,000') === '1000');
-check2('Nur ein Dezimaltrennzeichen', saubereZahl('1.2.3') === '1.23');
+check2('Buchstaben fallen raus', cleanNumber('12ab3') === '123');
+check2('Sonderzeichen fallen raus', cleanNumber('1$2 %3!') === '123');
+// Commas are the thousands separator in this field and are set by the
+// display - they get dropped again on read.
+check2('Tausendertrennzeichen faellt beim Lesen weg', cleanNumber('1,000') === '1000');
+check2('Nur ein Dezimaltrennzeichen', cleanNumber('1.2.3') === '1.23');
 
-// --- Gruppierung: ab vier Stellen ---
+// --- Grouping: from four digits on ---
 check2('Drei Stellen bleiben ungruppiert', gruppiere('999') === '999');
 check2('Vier Stellen werden gruppiert', gruppiere('1000') === '1,000');
 check2('Fuenf Stellen', gruppiere('12480') === '12,480');
 check2('Sechs Stellen', gruppiere('100000') === '100,000');
 check2('Sieben Stellen', gruppiere('1200000') === '1,200,000');
 check2('Nachkommastellen bleiben ungruppiert', gruppiere('1234.5678') === '1,234.5678');
-check2('Leeres bleibt leer beim Gruppieren', gruppiere('') === '');
+check2('Leeres bleibt empty beim Gruppieren', gruppiere('') === '');
 check2('Fuehrender Punkt uebersteht', gruppiere('.5') === '.5');
-// Hin und zurueck muss dasselbe ergeben – sonst waeren Anzeige und Wert
-// irgendwann verschiedener Meinung.
+// Round-trip must give the same result - otherwise display and value
+// would eventually disagree.
 check2('Gruppieren und wieder lesen ergibt das Original',
-  saubereZahl(gruppiere('1234567.89')) === '1234567.89');
-check2('Minus faellt raus', saubereZahl('-5') === '5');
-check2('Leeres bleibt leer', saubereZahl('') === '');
-check2('Reiner Text ergibt nichts', saubereZahl('abc') === '');
-check2('Fuehrendes Trennzeichen bleibt', saubereZahl('.5') === '.5');
-check2('Sauberes bleibt unveraendert', saubereZahl('10000') === '10000');
+  cleanNumber(gruppiere('1234567.89')) === '1234567.89');
+check2('Minus faellt raus', cleanNumber('-5') === '5');
+check2('Leeres bleibt empty', cleanNumber('') === '');
+check2('Reiner Text ergibt nichts', cleanNumber('abc') === '');
+check2('Fuehrendes Trennzeichen bleibt', cleanNumber('.5') === '.5');
+check2('Sauberes bleibt unveraendert', cleanNumber('10000') === '10000');
 
-// --- Wie lang die Zahl werden darf ---
-// Zehn Stellen vor dem Punkt, danach kommt keine mehr durch. Geprueft wird
-// gegen MAX_STELLEN und nicht gegen die 10: Verschiebt sich die Grenze, soll
-// das hier mitgehen – falsch waere erst, wenn Feld und Datenbank verschiedene
-// Zahlen kennen, und genau das prueft der Abschnitt weiter unten.
+// --- How long the number may get ---
+// Ten digits before the decimal point, after that none more get through.
+// Checked against MAX_STELLEN and not against the literal 10: if the
+// limit shifts, this should move with it - it would only be wrong once
+// the field and the database know different numbers, and that's exactly
+// what the section further below checks.
 const zehn = '1'.repeat(MAX_STELLEN);
-check2('Volle Laenge bleibt stehen', saubereZahl(zehn) === zehn);
-check2('Eine Stelle mehr faellt weg', saubereZahl(`${zehn}9`) === zehn);
-check2('Und auch viele mehr', saubereZahl(`${zehn}999999`) === zehn);
-// Nachkommastellen zaehlen nicht mit – sie machen die Zahl nicht groesser.
+check2('Volle Laenge bleibt stehen', cleanNumber(zehn) === zehn);
+check2('Eine Stelle mehr faellt weg', cleanNumber(`${zehn}9`) === zehn);
+check2('Und auch viele mehr', cleanNumber(`${zehn}999999`) === zehn);
+// Decimal places don't count toward it - they don't make the number bigger.
 check2('Nachkommastellen bleiben von der Grenze unberuehrt',
-  saubereZahl(`${zehn}.55`) === `${zehn}.55`,
-  saubereZahl(`${zehn}.55`));
+  cleanNumber(`${zehn}.55`) === `${zehn}.55`,
+  cleanNumber(`${zehn}.55`));
 check2('Auch bei abgeschnittener Zahl bleibt das Komma-Ende erhalten',
-  saubereZahl(`${zehn}99.5`) === `${zehn}.5`);
-// Und die Grenze ist genau der groesste erlaubte Wert – nicht eine Zahl
-// daneben. Ein Feld, das 9999999999 annimmt, waehrend die Grenze bei
-// 1000000000 laege, waere die eine Stelle, die es hier nicht geben darf.
+  cleanNumber(`${zehn}99.5`) === `${zehn}.5`);
+// And the boundary is exactly the largest allowed value - not a number
+// off by one next to it. A field that accepts 9999999999 while the limit
+// sat at 1000000000 would be the one discrepancy that must not exist here.
 check2('Die Obergrenze ist die groesste Zahl, die ins Feld passt',
-  MAX_DM_SCHWELLE === Number(zehn.replace(/1/g, '9')), String(MAX_DM_SCHWELLE));
+  MAX_DM_THRESHOLD === Number(zehn.replace(/1/g, '9')), String(MAX_DM_THRESHOLD));
 
 // ---------------------------------------------------------------------------
-// Posteingang folgt der DM-Schwelle
+// Inbox follows the DM threshold
 // ---------------------------------------------------------------------------
-// Wer weniger haelt als die Schwelle, taucht nicht auf.
-// Wichtig ist, dass nichts geloescht wird – beim Senken sind alle wieder da.
+// Whoever holds less than the threshold doesn't show up.
+// What matters is that nothing gets deleted - lowering it brings
+// everyone back.
 
 state.dmThreads = [
-  { wallet: 'aaa', usd: 31500, preview: 'gross', tokens: 1, unread: 2, last_from_admin: false },
+  { wallet: 'aaa', usd: 31500, preview: 'big', tokens: 1, unread: 2, last_from_admin: false },
   { wallet: 'bbb', usd: 12,    preview: 'knapp drueber', tokens: 1, unread: 0, last_from_admin: true },
   { wallet: 'ccc', usd: 3,     preview: 'zu klein', tokens: 1, unread: 0, last_from_admin: false },
 ];
@@ -718,64 +723,67 @@ state.dmThreads = [
 state.cfg.min_dm_usd = 0;
 renderThreads();
 check2('Ohne Schwelle alle Gespraeche', el('#thread-items').innerHTML.includes('ccc'));
-// Hier stand eine Pruefung auf #thread-hidden – die Zeile, die zaehlte, wie
-// viele Gespraeche die Schwelle ausblendet. Sie ist raus: Der Regler steht
-// direkt darueber und sagt dieselbe Sache. Was bleibt, ist die Wirkung selbst,
-// und die wird weiter unten geprueft.
+// A check on #thread-hidden used to be here - the line that counted how
+// many conversations the threshold hides. It's gone: the slider sits
+// right above it and says the same thing. What remains is the effect
+// itself, and that's checked further below.
 
-// Hat Ansem zuletzt geschrieben, steht "You:" vor der Vorschau.
+// If Ansem wrote last, "You:" shows before the preview.
 //
-// Hier stand das Gegenteil, und die Begruendung war: In einer Liste aus
-// Kuerzeln, Text und Betraegen ist der Zusatz ein vierter Bestandteil, und die
-// Zeile wird davon unruhig. Das galt fuer die Zeile, wie sie damals war –
-// inzwischen endet die Vorschau nach 16 Zeichen und rechts davon ist Luft.
+// The opposite used to be the case here, and the reasoning was: in a list
+// made of handles, text and amounts, the addition is a fourth element,
+// and the row gets crowded by it. That was true for the row as it was
+// back then - the preview now ends after 16 characters and there's room
+// to its right.
 //
-// Und die Auskunft ist mehr wert, als sie damals schien: Ohne sie liest sich
-// die eigene letzte Antwort wie eine neue Nachricht des anderen. Bei vierzig
-// Gespraechen, von denen die meisten beantwortet sind, ist das die haeufigste
-// Zeile.
+// And the information is worth more than it seemed back then: without
+// it, one's own last reply reads like a new message from the other
+// person. Across forty conversations, most of them answered, that's the
+// most common row.
 //
-// Geprueft werden BEIDE Faelle. Eine Regel, die den Zusatz immer oder nie
-// setzt, bestuende die halbe Pruefung – und die haeufigere Zeile ist
-// ausgerechnet die ohne.
+// BOTH cases are checked. A rule that always or never sets the addition
+// would only pass half the check - and the more common row is precisely
+// the one without it.
 {
-  const zeile = (wallet) => {
+  const line = (wallet) => {
     const m = new RegExp(
       `<button class="thread[^"]*"[^>]*data-wallet="${wallet}"[\\s\\S]*?</button>`)
       .exec(el('#thread-items').innerHTML);
     return m ? m[0] : '';
   };
-  // bbb: last_from_admin true, ccc: false – siehe die Fixture oben.
-  check2('Nach Ansems Antwort steht "You:" davor', zeile('bbb').includes('>You:<'));
-  check2('Nach einer fremden Nachricht nicht', !zeile('ccc').includes('You:'));
-  // Als eigenes Element und nicht im Vorschautext: Sonst frisst es von den
-  // 16 Zeichen, die die Vorschau hat, und wuerde selbst mitgekuerzt.
+  // bbb: last_from_admin true, ccc: false - see the fixture above.
+  check2('Nach Ansems Antwort steht "You:" davor', line('bbb').includes('>You:<'));
+  check2('Nach einer fremden Nachricht nicht', !line('ccc').includes('You:'));
+  // As its own element and not in the preview text: otherwise it would
+  // eat into the preview's 16 characters and get truncated along with it.
   check2('Und es steht ausserhalb der Vorschau',
-    zeile('bbb').includes('<span class="thread-du">You:</span>')
-    && !zeile('bbb').includes('thread-prev">You:'));
+    line('bbb').includes('<span class="thread-du">You:</span>')
+    && !line('bbb').includes('thread-prev">You:'));
 
-  // Und die Vorschauen enden alle an derselben Stelle – mit "You:" davor wie
-  // ohne. Das geht nur ueber die gerenderte Breite; die Regel im Blatt rechnet
-  // mit ch und rem, und ob die Rechnung aufgeht, sagt erst der Browser.
+  // And the previews all end at the same spot - with "You:" in front or
+  // without. That only works via the rendered width; the rule in the
+  // sheet computes with ch and rem, and only the browser can say whether
+  // the math works out.
   //
-  // Geprueft wird das in einem eigenen Skript mit echtem Browser
-  // (test-dm-verbergen.mjs). Hier steht nur, dass die Rechnung ueberhaupt da
-  // ist: Wer die zweite Breite entfernt, franst die Kante wieder aus.
+  // That's checked in its own script with a real browser
+  // (test-dm-verbergen.mjs). All that's checked here is that the
+  // calculation exists at all: whoever removes the second width frays the
+  // edge again.
   const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
   check2('Die Zeile mit "You:" bekommt eine eigene, kuerzere Vorschaubreite',
     /\.thread-du \+ \.thread-prev \{[^}]*max-width: calc\(var\(--vorschau\)/s.test(css));
 }
 
-// --- Ungeoeffnete Gespraeche ---
-// Genau die Zeilen mit offenem Zaehler tragen die Klasse, keine andere.
-const zeilen = () => [...el('#thread-items').innerHTML.matchAll(
+// --- Unopened conversations ---
+// Exactly the rows with an open counter carry the class, no others.
+const lines = () => [...el('#thread-items').innerHTML.matchAll(
   /<button class="thread ([^"]*)"[\s\S]*?data-wallet="([^"]+)"/g)]
   .map(([, klassen, wallet]) => ({ wallet, unread: klassen.includes('is-unread') }));
 
 check2('Ungelesenes Gespraech traegt is-unread',
-  zeilen().find((z) => z.wallet === 'aaa').unread === true);
+  lines().find((z) => z.wallet === 'aaa').unread === true);
 check2('Gelesenes Gespraech traegt es nicht',
-  zeilen().every((z) => z.wallet === 'aaa' || !z.unread));
+  lines().every((z) => z.wallet === 'aaa' || !z.unread));
 
 renderThreads();
 
@@ -784,15 +792,16 @@ renderThreads();
 const liste = el('#thread-items').innerHTML;
 check2('Zu kleiner Bestand faellt raus', !liste.includes('ccc'));
 check2('Knapp darueber bleibt', liste.includes('bbb'));
-// Senken bringt alles zurueck – nichts wurde geloescht.
+// Lowering it brings everything back - nothing was deleted.
 state.cfg.min_dm_usd = 0;
 renderThreads();
-check2('Senken bringt die Gespraeche zurueck', el('#thread-items').innerHTML.includes('ccc'));
+check2('Senken bringt die Gespraeche back', el('#thread-items').innerHTML.includes('ccc'));
 
-// Beim Tippen gilt schon der Entwurf, bevor irgendetwas gespeichert wurde.
-// Bewusst ueber das echte Feld und sein input-Ereignis, nicht durch Setzen von
-// state.dmMinEntwurf: Genau dieser Zuhoerer ist einmal beim Aufraeumen
-// verschwunden, und ein Test auf den Zustand allein haette das nicht gemerkt.
+// While typing, the draft already applies, before anything is saved.
+// Deliberately through the real field and its input event, not by
+// setting state.dmMinEntwurf directly: it was exactly this listener that
+// once vanished during cleanup, and a test against the state alone
+// wouldn't have noticed.
 check2('Schwellenfeld hoert auf Eingaben', el('#dm-min-input').__hat('input'));
 
 state.cfg.min_dm_usd = 0;
@@ -805,22 +814,22 @@ check2('Entwurf filtert sofort', !el('#thread-items').innerHTML.includes('bbb'))
 check2('Entwurf laesst Grosse stehen', el('#thread-items').innerHTML.includes('aaa'));
 check2('Gespeicherter Wert bleibt unberuehrt', Number(state.cfg.min_dm_usd) === 0);
 
-// Ein leeres Feld heisst nicht mehr "keine Schwelle", sondern die
-// Untergrenze. Geprueft wird gegen MIN_DM_SCHWELLE und nicht gegen 1000:
-// Wandert die Zahl, soll dieser Test mitwandern – falsch waere erst, wenn
-// das Loeschen wieder unter die Grenze fuehrt.
+// An empty field no longer means "no threshold", but the floor. Checked
+// against MIN_DM_THRESHOLD and not against 1000: if the number moves, this
+// test should move with it - it would only be wrong once clearing it
+// leads below the floor again.
 el('#dm-min-input').value = '';
 el('#dm-min-input').__fire('input');
 check2('Leeres Feld faellt auf die Untergrenze',
-  Number(state.dmMinEntwurf) === MIN_DM_SCHWELLE);
+  Number(state.dmMinEntwurf) === MIN_DM_THRESHOLD);
 
-// Auch eine getippte Zahl darunter. Das ist der eigentliche Punkt: Beim
-// Tippen von "1", "10", "100" darf der Posteingang nicht drei Zustaende
-// zeigen, die es nach dem Loslassen nicht gibt.
+// A typed number below it too. This is the real point: while typing "1",
+// "10", "100", the inbox must not show three states that don't exist once
+// you let go.
 el('#dm-min-input').value = '100';
 el('#dm-min-input').__fire('input');
 check2('Zu kleine Eingabe wird im Entwurf angehoben',
-  Number(state.dmMinEntwurf) === MIN_DM_SCHWELLE);
+  Number(state.dmMinEntwurf) === MIN_DM_THRESHOLD);
 renderThreads();
 check2('Unter der Untergrenze bleibt niemand Kleines stehen',
   !el('#thread-items').innerHTML.includes('ccc'));
@@ -829,21 +838,22 @@ check2('Ueber der Untergrenze bleibt das grosse Gespraech',
 state.dmMinEntwurf = null;
 
 // ---------------------------------------------------------------------------
-// Die Untergrenze: nichts unter $1.000
+// The floor: nothing under $1,000
 // ---------------------------------------------------------------------------
-// Der Posteingang laesst sich nicht mehr ganz oeffnen. Hier stand das
-// Gegenteil – ein leeres Feld hiess 0, also aus, mit der Begruendung: Wer die
-// Zahl loescht, will sie loswerden.
+// The inbox can no longer be opened all the way. The opposite used to be
+// the case here - an empty field meant 0, i.e. off, with the reasoning:
+// whoever deletes the number wants to get rid of it.
 //
-// Das galt, solange 0 ein erlaubter Wert war. Und es war ausserdem die
-// gefaehrlichste Stelle der ganzen Oberflaeche: Wer die Zahl markierte und
-// loeschte, um eine neue zu tippen, und dann wegklickte, hatte den
-// Posteingang fuer alle geoeffnet – ohne einen Schritt, der danach aussah.
+// That held as long as 0 was an allowed value. It was also the most
+// dangerous spot in the whole interface: whoever selected the number and
+// deleted it in order to type a new one, then clicked away, had opened
+// the inbox for everyone - without a step that looked like it.
 //
-// Angehoben statt abgelehnt, und zwar NUR hier im Formular: Wer gerade tippt,
-// soll keine rote Meldung fuer eine Zahl bekommen, die die Seite selbst kennt.
-// Die Datenbank lehnt dagegen ab (Migration 20260831030000) – sie ist die
-// Sperre, das hier ist die Hoeflichkeit davor.
+// Raised instead of rejected, and ONLY here in the form: whoever is
+// currently typing shouldn't get a red error for a number the page
+// itself already knows about. The database, by contrast, rejects it
+// (migration 20260831030000) - that's the actual lock, this here is the
+// politeness in front of it.
 const echteDb = state.db;
 let gesendet = null;
 state.db = { rpc: async (name, args) => { gesendet = { name, args }; return { data: args.p_usd, error: null }; } };
@@ -852,36 +862,36 @@ state.cfg.min_dm_usd = 25;
 el('#dm-min-input').value = '';
 await speichereDmMin();
 check2('Leeres Feld speichert die Untergrenze',
-  gesendet?.args?.p_usd === MIN_DM_SCHWELLE, JSON.stringify(gesendet));
+  gesendet?.args?.p_usd === MIN_DM_THRESHOLD, JSON.stringify(gesendet));
 check2('Gespeichert ist danach die Untergrenze',
-  Number(state.cfg.min_dm_usd) === MIN_DM_SCHWELLE);
-// Und das Feld steht nicht leer da. Genau das war die Rueckfrage: Wer alles
-// loescht, soll die 1.000 sehen und nicht einen leeren Kasten, dem man nicht
-// ansieht, was gilt.
+  Number(state.cfg.min_dm_usd) === MIN_DM_THRESHOLD);
+// And the field doesn't sit empty. That was exactly the follow-up
+// question: whoever deletes everything should see the 1,000, not an
+// empty box you can't tell the current value from.
 check2('Nach dem Loeschen steht die Zahl wieder im Feld',
-  el('#dm-min-input').value === gruppiere(MIN_DM_SCHWELLE),
+  el('#dm-min-input').value === gruppiere(MIN_DM_THRESHOLD),
   el('#dm-min-input').value);
 
-// Nur ein Punkt ist auch keine Zahl – und faellt auf dasselbe zurueck.
+// A lone period is not a number either - and falls back to the same value.
 gesendet = null;
 state.cfg.min_dm_usd = 25000;
 el('#dm-min-input').value = '.';
 await speichereDmMin();
 check2('Alleinstehender Punkt speichert die Untergrenze',
-  gesendet?.args?.p_usd === MIN_DM_SCHWELLE);
+  gesendet?.args?.p_usd === MIN_DM_THRESHOLD);
 
-// Eine getippte Zahl unter der Grenze wird angehoben, nicht abgelehnt.
+// A typed number below the limit gets raised, not rejected.
 gesendet = null;
 state.cfg.min_dm_usd = 25000;
 el('#dm-min-input').value = '500';
 await speichereDmMin();
 check2('Zu kleine Zahl wird angehoben statt abgelehnt',
-  gesendet?.args?.p_usd === MIN_DM_SCHWELLE, JSON.stringify(gesendet));
+  gesendet?.args?.p_usd === MIN_DM_THRESHOLD, JSON.stringify(gesendet));
 check2('Angehoben heisst auch: kein Fehler, sondern die Zahl im Feld',
-  el('#dm-min-input').value === gruppiere(MIN_DM_SCHWELLE),
+  el('#dm-min-input').value === gruppiere(MIN_DM_THRESHOLD),
   el('#dm-min-input').value);
 
-// Darueber bleibt getippt, was getippt wurde.
+// Above it, what was typed stays typed.
 gesendet = null;
 state.cfg.min_dm_usd = 25000;
 el('#dm-min-input').value = '5,000';
@@ -889,94 +899,94 @@ await speichereDmMin();
 check2('Ueber der Grenze bleibt die Eingabe stehen',
   gesendet?.args?.p_usd === 5000, JSON.stringify(gesendet));
 
-// Auch die groesste Zahl, die ins Feld passt, geht unveraendert durch – sie
-// ist erlaubt, nicht gerade noch geduldet.
+// Even the largest number that fits in the field passes through
+// unchanged - it's allowed, not merely tolerated at the edge.
 gesendet = null;
 state.cfg.min_dm_usd = 25000;
-el('#dm-min-input').value = gruppiere(String(MAX_DM_SCHWELLE));
+el('#dm-min-input').value = gruppiere(String(MAX_DM_THRESHOLD));
 await speichereDmMin();
 check2('Die volle Laenge wird gespeichert, nicht gedeckelt',
-  gesendet?.args?.p_usd === MAX_DM_SCHWELLE, JSON.stringify(gesendet));
+  gesendet?.args?.p_usd === MAX_DM_THRESHOLD, JSON.stringify(gesendet));
 
-// Zu viele Stellen kommen gar nicht erst durch – saubereZahl schneidet ab.
+// Too many digits don't get through in the first place - cleanNumber cuts them off.
 gesendet = null;
 state.cfg.min_dm_usd = 25000;
 el('#dm-min-input').value = '99,999,999,999,999';
 await speichereDmMin();
 check2('Zu lange Zahlen werden auf die volle Laenge gekuerzt',
-  gesendet?.args?.p_usd === MAX_DM_SCHWELLE, JSON.stringify(gesendet));
+  gesendet?.args?.p_usd === MAX_DM_THRESHOLD, JSON.stringify(gesendet));
 
-// Der eine Weg, auf dem die Zahl trotzdem zu gross wird: Nachkommastellen
-// zaehlen nicht mit, und 9999999999.99 ist groesser als 9999999999. Ohne den
-// Deckel im Speichern ginge genau dieser Wert an die Datenbank – die ihn
-// ablehnen wuerde, obwohl das Feld ihn hat tippen lassen.
+// The one path on which the number still gets too big: decimal places
+// don't count toward the length, and 9999999999.99 is larger than
+// 9999999999. Without the cap on save, exactly this value would go to the
+// database - which would reject it, even though the field let it be typed.
 gesendet = null;
 state.cfg.min_dm_usd = 25000;
-el('#dm-min-input').value = `${gruppiere(String(MAX_DM_SCHWELLE))}.99`;
+el('#dm-min-input').value = `${gruppiere(String(MAX_DM_THRESHOLD))}.99`;
 await speichereDmMin();
 check2('Nachkommastellen heben die Zahl nicht ueber die Grenze',
-  gesendet?.args?.p_usd === MAX_DM_SCHWELLE, JSON.stringify(gesendet));
+  gesendet?.args?.p_usd === MAX_DM_THRESHOLD, JSON.stringify(gesendet));
 
-// Die Untergrenze ist bereits der gespeicherte Stand: Loeschen aendert dann
-// nichts und darf auch nichts schreiben.
+// The floor is already the saved value: clearing then changes nothing and
+// must not write anything either.
 gesendet = null;
-state.cfg.min_dm_usd = MIN_DM_SCHWELLE;
+state.cfg.min_dm_usd = MIN_DM_THRESHOLD;
 el('#dm-min-input').value = '';
 await speichereDmMin();
 check2('Loeschen auf dem Mindestwert schreibt nichts', gesendet === null);
 check2('Und das Feld zeigt trotzdem die Zahl',
-  el('#dm-min-input').value === gruppiere(MIN_DM_SCHWELLE),
+  el('#dm-min-input').value === gruppiere(MIN_DM_THRESHOLD),
   el('#dm-min-input').value);
 
-// Unveraendert heisst: gar nicht schreiben.
+// Unchanged means: don't write at all.
 gesendet = null;
 state.cfg.min_dm_usd = 10000;
 el('#dm-min-input').value = '10,000';
 await speichereDmMin();
-check2('Ohne Aenderung wird nichts geschrieben', gesendet === null);
+check2('Ohne Aenderung wird nichts written', gesendet === null);
 
 state.db = echteDb;
 state.cfg.min_dm_usd = 0;
 
-// Die Datenbank haelt dieselbe Zahl – sonst waere das Formular hier
-// hoeflich zu einem Wert, den die Sperre dahinter ablehnt.
-const untergrenzeSql = fs.readFileSync(
+// The database holds the same number - otherwise the form here would be
+// polite about a value that the lock behind it rejects.
+const lowerBoundSql = fs.readFileSync(
   path.join(root, 'supabase', 'migrations', '20260831030000_dm_untergrenze.sql'), 'utf8');
 check2('Migration lehnt unterhalb derselben Zahl ab',
-  new RegExp(`p_usd\\s*<\\s*${MIN_DM_SCHWELLE}\\b`).test(untergrenzeSql));
+  new RegExp(`p_usd\\s*<\\s*${MIN_DM_THRESHOLD}\\b`).test(lowerBoundSql));
 check2('Migration hebt bestehende Zeilen auf dieselbe Zahl',
-  new RegExp(`min_dm_usd\\s*=\\s*${MIN_DM_SCHWELLE}\\b`).test(untergrenzeSql));
-// Und dasselbe am oberen Ende. Das ist die Zahl, die auseinanderlaufen kann,
-// ohne dass es auffaellt: Das Feld nimmt zehn Stellen an, die Datenbank
-// lehnte bis eben ab sieben ab. Wer dann 5.000.000.000 tippte, bekam eine
-// rote Meldung fuer eine Zahl, die die Seite selbst hatte tippen lassen.
+  new RegExp(`min_dm_usd\\s*=\\s*${MIN_DM_THRESHOLD}\\b`).test(lowerBoundSql));
+// And the same at the upper end. That's the number that can drift apart
+// without it being noticed: the field accepts ten digits, the database
+// used to reject anything from seven digits on. Anyone who then typed
+// 5,000,000,000 got a red error for a number the page itself had let them type.
 check2('Migration erlaubt genau bis zur Obergrenze des Feldes',
-  new RegExp(`p_usd\\s*>\\s*${MAX_DM_SCHWELLE}\\b`).test(untergrenzeSql));
+  new RegExp(`p_usd\\s*>\\s*${MAX_DM_THRESHOLD}\\b`).test(lowerBoundSql));
 
 // ---------------------------------------------------------------------------
-// Der Rollstrich im Posteingang
+// The scroll thumb in the inbox
 // ---------------------------------------------------------------------------
-// Er ist immer gezeichnet und nur beim Rollen eingefaerbt – eine selbst
-// gestaltete Rollleiste steht in Chrome sonst dauerhaft da, und das
-// Verschwinden, das man vom Betriebssystem kennt, gehoert zur ueberlagerten
-// Leiste, die keine Pixelbreite kennt.
+// It is always drawn and only colored in while scrolling - a custom-styled
+// scrollbar otherwise sits there permanently in Chrome, and the fading
+// out you know from the operating system belongs to the overlaid bar that
+// has no fixed pixel width.
 //
-// Getragen wird das von einer Klasse, die hier gesetzt und wieder
-// weggenommen wird. Faellt der Zuhoerer weg, sieht man nichts: Der Strich
-// bliebe schlicht immer unsichtbar, und die Liste saehe aus wie vorher – nur
-// ohne jede Anzeige, wo man steht. Genau diese Sorte Verlust hat sich hier
-// schon einmal am Schwellenfeld versteckt.
+// This is carried by a class that gets set and removed again here. If the
+// listener drops out, you see nothing: the thumb would simply stay
+// invisible always, and the list would look like before - just with no
+// indication at all of where you stand. This exact kind of loss has
+// already once hidden itself at the threshold field.
 {
   const liste = el('#thread-items');
   const strich = el('#thread-strich');
-  // Die Attrappe hat keine Masse – hier gesetzt, damit sich die Rechnung
-  // pruefen laesst: 209 px Bahn.
+  // The stub has no dimensions - set here so the calculation can be
+  // checked: a 209 px track.
   strich.style = {};
   liste.clientHeight = 209;
   liste.scrollHeight = 1463;
 
   const hoch = () => parseFloat(strich.style.height);
-  const oben = () => parseFloat(strich.style.top);
+  const peek = () => parseFloat(strich.style.top);
 
   check2('Die Liste hoert aufs Rollen', liste.__hat('scroll'));
 
@@ -985,22 +995,23 @@ check2('Migration erlaubt genau bis zur Obergrenze des Feldes',
   liste.__fire('scroll');
   check2('Beim Rollen traegt sie die Klasse', liste.classList.contains('rollt'));
 
-  // --- Wie lang sie wird ---
-  // Nach Anteil, aber mit Deckel und Boden. Der Anteil allein waere bei acht
-  // Gespraechen ein Streifen ueber die halbe Bahn, ohne Boden bei sehr langen
-  // Listen ein Punkt, den man beim Rollen verliert.
-  check2('Bei einer langen Liste ist sie kurz',
+  // --- How long it gets ---
+  // Proportional to the share, but with a cap and a floor. The share
+  // alone would be a strip across half the track for eight conversations,
+  // and without a floor a mere dot on very long lists that gets lost
+  // while scrolling.
+  check2('Bei einer langen Liste ist sie short',
     hoch() === Math.round(209 * 209 / 1463), `${hoch()} px`);
 
-  // Kurze Liste, gerade eben laenger als der Kasten: ohne Deckel waeren das
-  // fast 200 px.
+  // A short list, just barely longer than the box: without a cap that
+  // would be nearly 200 px.
   liste.scrollHeight = 240;
   liste.scrollTop = 0;
   liste.__fire('scroll');
   check2('Bei einer kurzen Liste bleibt der Deckel',
     hoch() === STRICH_MAX, `${hoch()} px statt ${Math.round(209 * 209 / 240)}`);
 
-  // Sehr lange Liste: ohne Boden waeren das 3 px.
+  // A very long list: without a floor that would be 3 px.
   liste.scrollHeight = 14000;
   liste.__fire('scroll');
   check2('Bei einer sehr langen Liste haelt der Boden',
@@ -1010,34 +1021,34 @@ check2('Migration erlaubt genau bis zur Obergrenze des Feldes',
   liste.scrollTop = 0;
   liste.__fire('scroll');
 
-  // --- Wo sie steht ---
-  check2('Ganz oben steht sie ganz oben', oben() === 0, strich.style.top);
+  // --- Where it sits ---
+  check2('Ganz peek steht sie ganz peek', peek() === 0, strich.style.top);
 
   liste.scrollTop = liste.scrollHeight - liste.clientHeight;
   liste.__fire('scroll');
-  check2('Ganz unten steht sie ganz unten',
-    oben() === 209 - hoch(), `${strich.style.top} bei ${hoch()} px Marke`);
+  check2('Ganz bottom steht sie ganz bottom',
+    peek() === 209 - hoch(), `${strich.style.top} bei ${hoch()} px Marke`);
 
   liste.scrollTop = (liste.scrollHeight - liste.clientHeight) / 2;
   liste.__fire('scroll');
   check2('Und in der Mitte in der Mitte',
-    oben() === Math.round((209 - hoch()) / 2), strich.style.top);
+    peek() === Math.round((209 - hoch()) / 2), strich.style.top);
 
-  // Die Marke faellt nie unten heraus – das waere sie sonst, wenn die Hoehe
-  // aus der vorigen Rechnung stammte und die Lage aus der neuen.
+  // The mark never drops out at the bottom - it would otherwise, if the
+  // height came from the previous calculation and the position from the new one.
   for (const gesamt of [240, 800, 1463, 14000]) {
     liste.scrollHeight = gesamt;
     liste.scrollTop = gesamt - liste.clientHeight;
     liste.__fire('scroll');
-    if (oben() + hoch() > 209) {
+    if (peek() + hoch() > 209) {
       check2(`Marke bleibt im Kasten (${gesamt} px Liste)`, false,
-        `${oben()} + ${hoch()} > 209`);
+        `${peek()} + ${hoch()} > 209`);
     }
   }
   check2('Marke bleibt bei jeder Listenlaenge im Kasten', true);
   liste.scrollHeight = 1463;
 
-  // Nichts zu rollen: dann gibt es auch keine Stelle, an der man stuende.
+  // Nothing to scroll: then there's also no position to be standing at.
   liste.scrollHeight = liste.clientHeight;
   liste.scrollTop = 0;
   liste.__fire('scroll');
@@ -1045,14 +1056,14 @@ check2('Migration erlaubt genau bis zur Obergrenze des Feldes',
   liste.scrollHeight = 1463;
   liste.__fire('scroll');
 
-  // Und sie geht wieder. Gewartet wird ueber die Zahl aus app.js, nicht ueber
-  // eine hier abgeschriebene: Sonst prueft man nach einer Aenderung an ihr
-  // gegen die alte Spanne und bekommt einen Fehlschlag, der keiner ist.
+  // And it fades out again. The wait uses the number from app.js, not one
+  // copied out here: otherwise, after a change to it, this would check
+  // against the old span and produce a failure that isn't one.
   await new Promise((r) => setTimeout(r, STRICH_BLEIBT + 120));
   check2('Danach ist sie wieder weg', !liste.classList.contains('rollt'));
 
-  // Nachschieben verlaengert, statt zwischendurch abzuschalten: Wer mit dem
-  // Finger nachsetzt, soll den Strich nicht verlieren.
+  // A follow-up scroll extends it instead of switching it off in between:
+  // whoever keeps their finger moving shouldn't lose the thumb.
   liste.__fire('scroll');
   await new Promise((r) => setTimeout(r, STRICH_BLEIBT * 0.6));
   liste.__fire('scroll');
@@ -1063,16 +1074,15 @@ check2('Migration erlaubt genau bis zur Obergrenze des Feldes',
 }
 
 // ---------------------------------------------------------------------------
-// Gelesen markieren: erst die Ansicht, dann die Datenbank
+// Marking as read: the view first, then the database
 // ---------------------------------------------------------------------------
-// Beim Durchgehen vieler Gespraeche darf die blaue Flaeche nicht erst
-// verschwinden, wenn der Server geantwortet hat. Schlaegt das Speichern fehl,
-// muss sie zurueckkommen – sonst zeigt die Liste einen Stand, den nur dieser
-// Browser kennt.
+// While going through many conversations, the blue marker must not
+// disappear only once the server has answered. If saving fails, it has to
+// come back - otherwise the list shows a state that only this browser knows.
 
-// Ein Zaehler, der die Kette .from().update().eq().eq().eq() mitschreibt und
-// am Ende auflaesst. Der fakeDb-Proxy taugt hier nicht: Er liefert fuer jede
-// Eigenschaft eine Funktion, also auch fuer 'error'.
+// A counter that records the chain .from().update().eq().eq().eq() and
+// resolves at the end. The fakeDb proxy doesn't work here: it returns a
+// function for every property, including 'error'.
 function dmDbStub(fehler) {
   let aufgerufen = 0;
   const kette = {
@@ -1085,7 +1095,7 @@ function dmDbStub(fehler) {
 
 state.cfg.min_dm_usd = 0;
 state.dmThreads = [
-  { wallet: 'aaa', usd: 31500, preview: 'gross', tokens: 1, unread: 2 },
+  { wallet: 'aaa', usd: 31500, preview: 'big', tokens: 1, unread: 2 },
   { wallet: 'bbb', usd: 12, preview: 'klein', tokens: 1, unread: 0 },
 ];
 
@@ -1098,18 +1108,18 @@ check2('Zaehler steht danach auf null',
 check2('Blaue Flaeche ist weg',
   !el('#thread-items').innerHTML.includes('is-unread'));
 
-// Fehlschlag: Der Zaehler kommt zurueck, gemeldet wird nichts.
+// Failure: the counter comes back, nothing gets reported.
 state.dmThreads.find((t) => t.wallet === 'aaa').unread = 2;
-const schlecht = dmDbStub({ message: 'kein Netz' });
-state.db = schlecht.db;
+const bad = dmDbStub({ message: 'kein Netz' });
+state.db = bad.db;
 await markiereGelesen('aaa');
 check2('Nach Fehlschlag steht der Zaehler wieder',
   Number(state.dmThreads.find((t) => t.wallet === 'aaa').unread) === 2);
 check2('Nach Fehlschlag ist die Flaeche wieder blau',
   el('#thread-items').innerHTML.includes('is-unread'));
 
-// Ein bereits gelesenes Gespraech zeichnet die Liste nicht neu, schreibt aber
-// trotzdem – die Abfrage trifft dann einfach keine Zeile.
+// A conversation already marked read doesn't redraw the list, but writes
+// anyway - the query just then matches no row.
 const nochmal = dmDbStub(null);
 state.db = nochmal.db;
 await markiereGelesen('bbb');
@@ -1117,93 +1127,92 @@ check2('Gelesenes Gespraech schreibt trotzdem', nochmal.zaehler() === 1);
 check2('Gelesenes Gespraech bleibt bei null',
   Number(state.dmThreads.find((t) => t.wallet === 'bbb').unread) === 0);
 
-// Ein Gespraech, das die Liste gar nicht kennt, darf nicht stolpern.
+// A conversation the list doesn't even know must not trip anything up.
 const unbekannt = dmDbStub(null);
 state.db = unbekannt.db;
 await markiereGelesen('gibtsnicht');
 check2('Unbekanntes Gespraech schreibt ohne Fehler', unbekannt.zaehler() === 1);
 
 // ---------------------------------------------------------------------------
-// Der Punkt verschwindet beim Oeffnen, nicht nach der Antwort des Servers
+// The dot disappears on opening, not after the server responds
 // ---------------------------------------------------------------------------
-// Das ist einmal kaputtgegangen, und zwar unsichtbar: Der Demomodus stieg aus
-// openThread() aus, BEVOR markiereGelesen() drankam. Man klickte ein
-// ungelesenes Gespraech an, las es, und die Liste behauptete weiter, da sei
-// etwas offen.
+// This broke once, and invisibly: demo mode exited openThread() BEFORE
+// markiereGelesen() got its turn. You clicked an unread conversation,
+// read it, and the list kept claiming something was still open.
 //
-// Geprueft wird deshalb die REIHENFOLGE in openThread() – dass der Vermerk vor
-// jedem Ausstieg steht – und die Wirkung: Der Zaehler ist sofort null, ohne auf
-// die Datenbank zu warten.
+// That's why the ORDER inside openThread() is checked here - that the
+// mark-as-read sits before every exit point - and the effect: the counter
+// is zero immediately, without waiting on the database.
 {
-  const quelle = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-  const koerper = quelle.slice(quelle.indexOf('async function openThread'),
-    quelle.indexOf('\n}', quelle.indexOf('async function openThread')));
+  const source = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  const bodyText = source.slice(source.indexOf('async function openThread'),
+    source.indexOf('\n}', source.indexOf('async function openThread')));
   check2('markiereGelesen steht vor jedem return in openThread',
-    koerper.indexOf('markiereGelesen(wallet)') < koerper.indexOf('return;'));
+    bodyText.indexOf('markiereGelesen(wallet)') < bodyText.indexOf('return;'));
 
-  // Das geoeffnete Demogespraech muss dasselbe sagen wie die Zeile davor.
+  // The opened demo conversation has to say the same thing as the row before it.
   //
-  // Hier stand als letzte Nachricht fest verdrahtet Ansem mit "will look at
-  // it" – in JEDEM Gespraech, auch in denen, die in der Liste ohne "You:"
-  // stehen. Die Vorschau lag eine Zeile darueber, war also gar nicht die
-  // letzte Nachricht.
+  // Here the last message used to be hard-wired to Ansem with "will look
+  // at it" - in EVERY conversation, even the ones showing without "You:"
+  // in the list. The preview sat one line above it, so it wasn't the last
+  // message at all.
   //
-  // Geprueft wird die Verbindung selbst: Die letzte der drei Zeilen traegt den
-  // Vorschautext, und ihr Absender kommt aus derselben Angabe, aus der die
-  // Liste ihr "You:" nimmt. Ein fester Wert an einer der beiden Stellen faellt
-  // damit auf.
-  check2('Die letzte Demo-Nachricht ist die Vorschau, vom Absender der Liste',
-    /from_admin: duZuletzt, body: zeile\?\.preview/.test(koerper));
-  check2('Und duZuletzt kommt aus last_from_admin',
-    /const duZuletzt = !!zeile\?\.last_from_admin/.test(koerper));
+  // What's checked is the connection itself: the last of the three lines
+  // carries the preview text, and its sender comes from the same field
+  // the list takes its "You:" from. A hardcoded value at either spot
+  // stands out this way.
+  check2('Die last Demo-Nachricht ist die Vorschau, vom Absender der Liste',
+    /from_admin: youLatest, body: line\?\.preview/.test(bodyText));
+  check2('Und youLatest kommt aus last_from_admin',
+    /const youLatest = !!line\?\.last_from_admin/.test(bodyText));
 
-  // Und die Wirkung, ueber die echte Funktion: Der Server wird aufgehalten,
-  // der Zaehler muss trotzdem schon null sein.
+  // And the effect, through the real function: the server is held up,
+  // the counter still has to already be zero.
   state.dmThreads = [{ wallet: 'zzz', usd: 100, tokens: 1, unread: 3, preview: 'x', last_from_admin: false }];
-  let loesen;
+  let resolve;
   state.db = { from: () => ({ update: () => ({ eq: () => ({ eq: () => ({
-    eq: () => new Promise((r) => { loesen = () => r({ error: null }); }) }) }) }) }) };
-  const laeuft = markiereGelesen('zzz');
+    eq: () => new Promise((r) => { resolve = () => r({ error: null }); }) }) }) }) }) };
+  const running = markiereGelesen('zzz');
   check2('Der Zaehler ist sofort null, vor der Antwort des Servers',
     Number(state.dmThreads[0].unread) === 0, String(state.dmThreads[0].unread));
   renderThreads();
   check2('Und die Zeile traegt is-unread nicht mehr',
     !el('#thread-items').innerHTML.includes('is-unread'));
-  loesen();
-  await laeuft;
+  resolve();
+  await running;
   state.db = echteDb;
 }
 
 state.db = echteDb;
 
 // ---------------------------------------------------------------------------
-// Adminvorschau: nur auf dem eigenen Rechner
+// Admin preview: only on the operator's own machine
 // ---------------------------------------------------------------------------
-// Die eigentliche Sperre gegen fremde Adminrechte sitzt in der Datenbank. Aber
-// eine Oberflaeche, die auf der echten Seite Ansems Posteingang zeigt, waere
-// trotzdem falsch – deshalb wird hier geprueft, dass der Parameter dort nichts
-// bewirkt. Modul jeweils frisch laden, weil der Wert beim Start gelesen wird.
+// The actual lock against foreign admin rights sits in the database. But
+// an interface that shows Ansem's inbox on the real site would still be
+// wrong - that's why this checks that the parameter has no effect there.
+// Load the module fresh each time, because the value is read at startup.
 const { PREVIEW_ADMIN: jetzt } = globalThis.__test;
 check2('Ohne Parameter keine Vorschau', jetzt === false);
 
 async function ladeMit(search, hostname) {
   globalThis.location = { search, hostname, href: `https://${hostname}/${search}` };
   globalThis.window.location = globalThis.location;
-  // Der Dateiname muss je Aufruf verschieden sein: Node legt geladene Module
-  // ab, ein zweiter Import desselben Pfades laeuft nicht noch einmal – und
-  // beide Werte werden beim Start gelesen.
-  const zweit = path.join(root,
+  // The file name has to differ per call: Node caches loaded modules, a
+  // second import of the same path doesn't run again - and both values
+  // are read at startup.
+  const second = path.join(root,
     `.test-app-${hostname.replace(/\W/g, '')}-${search.replace(/\W/g, '')}.mjs`);
-  fs.writeFileSync(zweit, src);
+  fs.writeFileSync(second, src);
   try {
-    await import('file://' + zweit);
+    await import('file://' + second);
     return {
       preview: globalThis.__test.PREVIEW_ADMIN,
       demo: globalThis.__test.DEMO_DMS,
       demoThreads: globalThis.__test.demoThreads,
       demoPolls: globalThis.__test.demoPolls,
     };
-  } finally { fs.unlinkSync(zweit); }
+  } finally { fs.unlinkSync(second); }
 }
 
 check2('Vorschau greift auf localhost',
@@ -1211,15 +1220,15 @@ check2('Vorschau greift auf localhost',
 check2('Vorschau greift NICHT auf der echten Seite',
   (await ladeMit('?preview=admin', 'sized.gg')).preview === false);
 // ---------------------------------------------------------------------------
-// Der Demomodus: dieselbe Sperre, und aus einem schaerferen Grund
+// Demo mode: the same lock, and for a sharper reason
 // ---------------------------------------------------------------------------
-// ?demo=40 fuellt den Posteingang mit erfundenen Gespraechen. Auf der echten
-// Seite waere das keine Vorschau, sondern eine Luege: vierzig Unterhaltungen,
-// die es nicht gibt, mit Betraegen, die niemand haelt. Und weil im Demomodus
-// nichts geladen wird, saehe man auch die echten nicht mehr.
+// ?demo=40 fills the inbox with invented conversations. On the real site
+// that wouldn't be a preview, it would be a lie: forty conversations that
+// don't exist, with balances nobody holds. And because nothing gets
+// loaded in demo mode, you wouldn't see the real ones anymore either.
 //
-// Geprueft wird deshalb beides – dass er hier greift UND dass er dort nicht
-// greift. Nur zusammen ist es eine Aussage.
+// So both are checked - that it applies here AND that it doesn't apply
+// there. Only together is it a meaningful statement.
 {
   const daheim = await ladeMit('?demo=40', 'localhost');
   check2('Demomodus greift auf localhost', daheim.demo === 40);
@@ -1227,68 +1236,68 @@ check2('Vorschau greift NICHT auf der echten Seite',
   check2('Demomodus greift NICHT auf der echten Seite', draussen.demo === 0);
   const sub = await ladeMit('?demo=40', 'evil.localhost.example.com');
   check2('Und auch nicht auf einer Unterdomain', sub.demo === 0);
-  // Ohne Zahl vierzig, mit Zahl die Zahl – und gedeckelt, damit ein Vertipper
-  // nicht fuenfzigtausend Zeilen baut.
+  // Without a number, forty; with a number, that number - and capped, so
+  // a typo doesn't build fifty thousand rows.
   check2('Ohne Zahl sind es vierzig',
     (await ladeMit('?demo', 'localhost')).demo === 40);
   check2('Mit Zahl die Zahl',
     (await ladeMit('?demo=7', 'localhost')).demo === 7);
-  check2('Nach oben gedeckelt',
+  check2('Nach peek gedeckelt',
     (await ladeMit('?demo=999999', 'localhost')).demo === 500);
 
-  // Der gelbe Balken gehoert der Adminvorschau, nicht dem Demomodus.
+  // The yellow bar belongs to the admin preview, not to demo mode.
   // ---------------------------------------------------------------------
-  // Im Demomodus stand dort einmal ein Hinweis auf die erfundenen Daten. Er
-  // ist raus, weil er in jedem Bildschirmfoto und jedem Mitschnitt quer ueber
-  // dem unteren Rand lag – und ihn ohnehin nur sieht, wer ?demo= selbst
-  // getippt hat.
+  // In demo mode there used to be a notice there about the invented data.
+  // It's gone, because it sat across the bottom edge in every screenshot
+  // and every recording - and only whoever typed ?demo= themselves ever
+  // saw it anyway.
   //
-  // Geprueft wird die Bedingung im Quelltext, nicht das Bild: Der Balken wird
-  // beim Start gesetzt, und den Start hier nachzustellen hiesse, die halbe
-  // App nachzustellen. Was zaehlt, ist, dass DEMO_DMS in der Bedingung nicht
-  // mehr vorkommt und PREVIEW_ADMIN schon.
+  // What's checked is the condition in the source, not the image: the bar
+  // gets set at startup, and reconstructing the startup here would mean
+  // reconstructing half the app. What matters is that DEMO_DMS no longer
+  // appears in the condition and PREVIEW_ADMIN does.
   {
-    const zeile = /flagge\.hidden = ([^;]+);/.exec(src);
-    check2('Der Balken haengt noch an der Adminvorschau',
-      !!zeile && zeile[1].includes('PREVIEW_ADMIN'), zeile?.[1]);
+    const line = /flagge\.hidden = ([^;]+);/.exec(src);
+    check2('Der Balken hangs noch an der Adminvorschau',
+      !!line && line[1].includes('PREVIEW_ADMIN'), line?.[1]);
     check2('Und nicht mehr am Demomodus',
-      !!zeile && !zeile[1].includes('DEMO_DMS'), zeile?.[1]);
-    // Gegenprobe zur Pruefung selbst: Traefe der Ausdruck oben nichts, waeren
-    // beide Zeilen still durchgefallen-nach-oben. Also muss er etwas treffen.
-    check2('Gegenprobe: die Zeile wurde ueberhaupt gefunden', !!zeile);
-    // Und der Text darf auch nicht auf einem anderen Weg zurueckkommen.
+      !!line && !line[1].includes('DEMO_DMS'), line?.[1]);
+    // A check on the check itself: if the pattern above matched nothing,
+    // both checks would silently pass upward. So it has to match something.
+    check2('Gegenprobe: die Zeile wurde ueberhaupt gefunden', !!line);
+    // And the text must not come back through some other path either.
     check2('Kein Demotext, der den Balken doch wieder fuellt',
       !/flagge\.textContent/.test(src));
   }
 
-  // Erfundene Daten muessen dieselben Regeln einhalten wie echte.
+  // Invented data has to follow the same rules as real data.
   //
-  // Hier war eine falsch: last_from_admin wurde frei gewuerfelt, unabhaengig
-  // vom Ungelesen-Zaehler. Im Bild standen dann Zeilen mit "You:" UND blauem
-  // Punkt – ein Zustand, den es nicht geben kann. Ungelesen zaehlt Nachrichten
-  // DES ANDEREN, die Ansem noch nicht gesehen hat; um zu antworten, muss er
-  // das Gespraech oeffnen, und das vermerkt sie als gelesen.
+  // One rule was wrong here: last_from_admin was rolled at random,
+  // independent of the unread counter. That put rows on screen with
+  // "You:" AND a blue dot at the same time - a state that cannot exist.
+  // Unread counts messages FROM THE OTHER PERSON that Ansem hasn't seen
+  // yet; to reply he has to open the conversation, and that marks it as read.
   //
-  // Der Schaden waere nicht der falsche Datensatz gewesen, sondern was man
-  // daran entscheidet: Man prueft die Oberflaeche gegen einen Fall, den sie
-  // nie sieht, und uebersieht dafuer, wie sie im echten aussieht.
-  const bauen = daheim.demoThreads;
-  const erfunden = bauen(200);
+  // The damage wouldn't have been the wrong dataset itself, but what gets
+  // decided from it: you test the interface against a case it never sees,
+  // and in doing so miss how it actually looks in reality.
+  const construct = daheim.demoThreads;
+  const erfunden = construct(200);
   check2('Erfundene Gespraeche: keins hat "You:" und offene Nachrichten zugleich',
     erfunden.every((t) => !(t.last_from_admin && Number(t.unread) > 0)),
     `${erfunden.filter((t) => t.last_from_admin && Number(t.unread) > 0).length} Widersprueche`);
-  // Und die Gegenprobe: Beide Faelle muessen ueberhaupt vorkommen, sonst
-  // bestuende die Regel nur, weil es nichts zu pruefen gibt.
+  // And the control check: both cases have to occur at all, otherwise the
+  // rule would only pass because there's nothing to check.
   check2('Es gibt beide Faelle im Datensatz',
     erfunden.some((t) => t.last_from_admin) && erfunden.some((t) => Number(t.unread) > 0));
 
-  // Dieselbe Regel eine Ebene tiefer: Wer die letzte Nachricht geschrieben
-  // hat, entscheidet auch, wie sie klingt. Aus einem gemeinsamen Topf kam
-  // "You: wen poll" – Ansem, der sich selbst nach einer Umfrage fragt.
+  // The same rule one level down: whoever wrote the last message also
+  // decides how it sounds. Drawing from one shared pool produced "You:
+  // wen poll" - Ansem asking himself when the next poll is.
   //
-  // Geprueft wird, dass die beiden Textmengen sich nicht ueberschneiden. Das
-  // kommt ohne die Listen selbst aus: Waeren es wieder dieselben Saetze,
-  // taeuchten bei 200 Gespraechen zwangslaeufig welche in beiden auf.
+  // What's checked is that the two sets of texts don't overlap. This
+  // works without needing the lists themselves: if they were the same
+  // sentences again, some would inevitably show up in both across 200 conversations.
   const vonAnsem = new Set(erfunden.filter((t) => t.last_from_admin).map((t) => t.preview));
   const vonNutzern = new Set(erfunden.filter((t) => !t.last_from_admin).map((t) => t.preview));
   check2('Ansem und die Nutzer schreiben nicht dieselben Saetze',
@@ -1299,57 +1308,58 @@ check2('Vorschau greift NICHT auf der echten Seite',
 }
 
 // ---------------------------------------------------------------------------
-// Was der Demomodus sonst noch faelscht
+// What else demo mode fakes
 // ---------------------------------------------------------------------------
-// Nicht nur Gespraeche: auch drei Abstimmungen und die eigenen Antworten.
-// Beides gehoert dazu, weil man den Posteingang sonst in einer Seite ansieht,
-// deren andere Haelfte leer ist – und weil ein Antwortfeld, das beim Absenden
-// eine Fehlermeldung wirft, genau das verbirgt, was man sehen wollte.
+// Not just conversations: three polls too, and their own options. Both
+// belong here, because otherwise you'd be looking at the inbox on a page
+// whose other half is empty - and because a reply field that throws an
+// error on submit hides exactly what you wanted to see.
 {
-  const { demoPolls: bauen } = await ladeMit('?demo=8', 'localhost');
-  const polls = bauen();
+  const { demoPolls: construct } = await ladeMit('?demo=8', 'localhost');
+  const polls = construct();
 
   check2('Der Demomodus liefert drei Abstimmungen', polls.length === 3);
 
-  // Verschiedene Groessenordnungen, und das ist der Zweck: Bei drei
-  // Abstimmungen derselben Groesse sieht jede Fassung der Zeile gut aus.
+  // Different orders of magnitude, and that's the point: with three polls
+  // of the same size, every version of the row looks fine.
   const stellen = polls.map((p) => String(Math.round(p.totalUsd)).length);
   check2('Mit sehr verschiedenen Summen',
     new Set(stellen).size === 3, polls.map((p) => Math.round(p.totalUsd)).join(' / '));
 
-  // Und drei verschiedene Zustaende – sie sehen verschieden aus.
+  // And three different states - they look different from each other.
   check2('Und drei verschiedenen Zustaenden',
     polls.filter((p) => p.closed).length === 1
     && polls.filter((p) => !p.closed && p.closesAt).length === 1
     && polls.filter((p) => !p.closed && !p.closesAt).length === 1);
 
-  // Die Anteile tragen die Balkenbreite. Ergaeben sie nicht genau eins, waere
-  // die Karte in der Simulation eine andere als im Betrieb.
+  // The shares carry the bar width. If they don't add up to exactly one,
+  // the card in the simulation would differ from the one in production.
   for (const p of polls) {
     const summe = p.options.reduce((a, o) => a + o.share, 0);
     if (Math.abs(summe - 1) > 0.001) {
       check2(`Anteile von "${p.question}" ergeben eins`, false, String(summe));
     }
-    const betraege = p.options.reduce((a, o) => a + o.usd, 0);
-    if (Math.abs(betraege - p.totalUsd) > 0.01) {
-      check2(`Summe von "${p.question}" stimmt`, false, `${betraege} gegen ${p.totalUsd}`);
+    const amounts = p.options.reduce((a, o) => a + o.usd, 0);
+    if (Math.abs(amounts - p.totalUsd) > 0.01) {
+      check2(`Summe von "${p.question}" stimmt`, false, `${amounts} gegen ${p.totalUsd}`);
     }
   }
   check2('Anteile und Summen stimmen in allen dreien', true);
 }
 
-// Die Antwort im Demomodus bleibt im Speicher. Geprueft wird die REIHENFOLGE
-// im Quelltext: Der Demozweig muss VOR dem insert stehen und mit return
-// enden. Steht er dahinter, faellt die Antwort trotzdem in die Datenbank –
-// und das saehe man in der Simulation nicht, weil dort alles gleich aussieht.
+// The reply in demo mode stays in memory. What's checked is the ORDER in
+// the source: the demo branch has to sit BEFORE the insert and end with a
+// return. If it sits after it, the reply still falls into the database -
+// and you wouldn't see that in the simulation, because everything looks
+// the same there.
 //
-// Eine Messung waere schoener. Sie geht hier nicht: Der Zuhoerer haengt am
-// Formular, und ein zweiter Modulimport haengt einen zweiten daneben – dann
-// liefe beim Absenden auch der alte Zweig mit. Das ist als Quelltextpruefung
-// ehrlicher als eine Messung, die etwas anderes misst.
+// A measurement would be nicer. It doesn't work here: the listener hangs
+// off the form, and a second module import hangs a second one right next
+// to it - then the old branch would run along on submit too. As a source
+// check this is more honest than a measurement that measures something else.
 {
-  const quelle = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-  const block = quelle.slice(quelle.indexOf("$('#admin-dm-form').addEventListener"));
+  const source = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  const block = source.slice(source.indexOf("$('#admin-dm-form').addEventListener"));
   const demo = block.indexOf('if (DEMO_DMS) {');
   const insert = block.indexOf("from('dms').insert");
   check2('Der Demozweig steht vor dem Schreiben in die Datenbank',

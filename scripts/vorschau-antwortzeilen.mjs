@@ -1,32 +1,32 @@
 // ============================================================================
-// Die Antwortzeilen einer Abstimmung auf dem Handy
+// A poll's answer rows on a phone
 //
-// Das Problem, im Bild bei 375 px:
+// The problem, in the picture at 375 px:
 //
-//   "Wait for | the audit"     <- die Kante der Füllung läuft durch das Wort
+//   "Wait for | the audit"     <- the fill's edge runs right through the word
 //   "Do | neither and keep building quietly"
 //
-// Der Antworttext liegt ÜBER dem Balken. Endet die Füllung mitten in einer
-// Zeile, steht dort eine senkrechte Helligkeitskante quer durch die Schrift.
-// Auf breiten Bildschirmen fällt das kaum auf, weil die Beschriftung dann in
-// eine Zeile passt und die Kante meist daneben liegt. Auf dem Handy bricht sie
-// um und trifft die Kante mehrfach.
+// The answer text sits ON TOP of the bar. When the fill ends mid-line, a
+// vertical brightness edge cuts straight through the text there. On wide
+// screens this hardly shows, because the label then fits on one line and the
+// edge usually lands beside it. On a phone it wraps and hits the edge
+// several times.
 //
-// Im Stylesheet steht dazu schon eine Begründung: Der Text sei auf beiden
-// Seiten der Kante gut lesbar, gemessen in Kontrastwerten. Das stimmt auch –
-// nur ist Lesbarkeit nicht der Einwand. Der Einwand ist, dass es nach einem
-// Anzeigefehler aussieht.
+// The stylesheet already has a justification for this: the text is readable
+// on both sides of the edge, measured in contrast values. That's true too -
+// but readability isn't the objection. The objection is that it looks like a
+// rendering bug.
 //
 // ----------------------------------------------------------------------------
-// Was hier gemessen wird
+// What's actually measured here
 //
-// Nicht "sieht besser aus", sondern: WIE OFT liegt die Kante der Füllung
-// innerhalb einer Textzeile? Diese Zahl muss auf null, alles andere ist
-// Geschmack. Dazu die Höhen der drei Antwortzeilen – gleich hohe Zeilen sind
-// der zweite Teil von "übersichtlich".
+// Not "looks better", but: HOW OFTEN does the fill's edge fall inside a text
+// line? That number has to hit zero, everything else is taste. Plus the
+// heights of the three answer rows - equal-height rows are the second half
+// of "tidy".
 //
-// Gezeichnet mit der echten index.html, der echten styles.css und dem echten
-// pollHtml() aus app.js.
+// Rendered with the real index.html, the real styles.css, and the real
+// pollHtml() from app.js.
 //
 //   node scripts/vorschau-antwortzeilen.mjs
 // ============================================================================
@@ -40,26 +40,40 @@ import { chromium } from 'playwright';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
 const POLL_CODE = [
-  schneide('const esc = (s) =>', '\n\n'),
-  schneide('const nfGanz =', 'const ganzeZahl'),
-  schneide('const ganzeZahl =', '\n'),
-  schneide('const LINK_SVG =', '\n/**\n * Die Adresse einer einzelnen'),
-  schneide('function fristText(closesAt)', '\n// Unter einer Stunde'),
-  schneide('const BALD_MS =', '\n/**\n * Der Zeiger'),
-  schneide('const fuehrenderAnteil =', '\nasync function zeichnePoll'),
-  schneide('function pollHtml(p) {', '\n/**\n * Eine Abstimmung löschen'),
+  cut('const esc = (s) =>', '\n\n'),
+  cut('const nfGanz =', 'const wholeNumber'),
+  cut('const wholeNumber =', '\n'),
+  cut('const LINK_SVG =', 'const pollLink = (id) => `${location.origin}/p/${id}`;'),
+  cut('function fristText(closesAt)', 'const BALD_MS = 60 * 60 * 1000;'),
+  cut('const BALD_MS =', 'let fristT = null;'),
+  cut('const leadingShare =', '\nasync function drawPoll'),
+  cut('function pollHtml(p) {', 'async function deletePoll(id) {'),
 ].join('\n');
 
-// Eine offene Abstimmung mit drei Antworten – kurz, mittel, lang. Genau die
-// Mischung, bei der die Kante heute dreimal trifft.
-const POLLS = [
+// The edge case the database is built for - not a comfortable example. 60
+// characters is the upper bound for an answer (the check constraint in
+// poll_options), and an eight-figure amount is normal for a poll with large
+// holders. Testing only with "Ship it this week" tests the case that never
+// causes trouble anyway.
+const GRENZFALL = process.env.GRENZFALL === '1';
+
+const POLLS = GRENZFALL ? [
+  { id: 1, closed: false, myOptionId: 1, totalUsd: 42881420,
+    closesAt: new Date(Date.now() + 29 * 3600e3).toISOString(),
+    question: 'Should we open the token gate to smaller holders?',
+    options: [
+      { id: 1, label: 'Extend the vesting cliff by six months for everyone', usd: 28429000, share: 0.663 },
+      { id: 2, label: 'Keep the current schedule exactly as it is written', usd: 12105400, share: 0.282 },
+      { id: 3, label: 'Do neither and keep building quietly for a while yet', usd: 2347020, share: 0.055 },
+    ] },
+] : [
   { id: 1, closed: false, myOptionId: 1, totalUsd: 781420,
     closesAt: new Date(Date.now() + 29 * 3600e3).toISOString(),
     question: 'Should we open the token gate to smaller holders?',
@@ -70,47 +84,50 @@ const POLLS = [
     ] },
 ];
 
+// The phone rules that undo the desktop layout. They live in styles.css in
+// the block below 900 px:
+//
+//   .opt-text { flex-direction: column; align-items: flex-start; }
+//   .opt-num  { margin-left: 0; text-align: left; display: flex; }
+//
+// This CSS reverts them - the row is then built exactly as it is on
+// desktop.
+const WIE_AM_COMPUTER = `
+  .opt-text { flex-direction: row; align-items: center; gap: .8rem; }
+  .opt-num { margin-left: auto; text-align: right; display: block; }
+  .opt-num .held { display: block; font-size: .95rem; }`;
+
 const FASSUNGEN = [
   {
-    nr: 1, name: 'Wie es jetzt ist',
-    was: 'Die Füllung ist eine deckende Fläche mit harter Kante. Der Text '
-       + 'liegt darauf. Zum Vergleich.',
+    nr: 1, name: 'Der Computer – so expected es aussehen', width: 1280,
+    was: 'Zum Vergleich, in echter Schreibtischbreite: Antwort left, Betrag '
+       + 'right, alle Zeilen gleich hoch.',
     css: '',
   },
   {
-    nr: 2, name: 'Weiche Kante',
-    was: 'Dieselbe Fläche, aber die Kante läuft über 28 px aus. Genau so war '
-       + 'es früher schon einmal, mit derselben Begründung. Die Kante sagt '
-       + 'dann nicht mehr genau, wo der Anteil endet – dafür sieht kein Wort '
-       + 'mehr zerschnitten aus.',
-    css: `.opt-fill { -webkit-mask-image: linear-gradient(to right,
-            #000 calc(100% - 28px), transparent 100%);
-            mask-image: linear-gradient(to right,
-            #000 calc(100% - 28px), transparent 100%); }`,
+    nr: 2, name: 'Handy heute', width: 375,
+    was: 'Auf dem Handy stehen Antwort und Betrag untereinander. Das war '
+       + 'Absicht – eine lange Antwort und ein sechsstelliger Betrag passen '
+       + 'nicht nebeneinander. Der Preis: verschieden hohe Zeilen.',
+    css: '',
   },
   {
-    nr: 3, name: 'Füllung als Streifen unter dem Text',
-    was: 'Der Balken wird ein 4 px hoher Streifen an der Unterkante der Zeile. '
-       + 'Der Text steht auf ruhigem Grund, die Kante kann ihn gar nicht mehr '
-       + 'treffen – und der Anteil bleibt exakt ablesbar. Die Zeile verliert '
-       + 'dafür ihre Fläche als Signal.',
-    css: `.opt-fill { inset: auto 0 0 auto; left: 0; height: 4px;
-            border-radius: 0 2px 2px 0; }
-          .opt-text { padding-bottom: .75rem; }`,
+    nr: 3, name: 'Handy mit dem Aufbau vom Computer', width: 375,
+    was: 'Dieselben Regeln wie am Schreibtisch, ohne jede Anpassung. Genau '
+       + 'das, wonach du gefragt hast – und hier zeigt sich, ob der '
+       + 'ursprüngliche Einwand trägt.',
+    css: WIE_AM_COMPUTER,
   },
   {
-    nr: 4, name: 'Fläche gedämpft, Kante weich, Betrag rechts',
-    was: 'Die Fläche bleibt, wird aber deutlich zurückhaltender und läuft weich '
-       + 'aus; der Betrag rückt wieder nach rechts neben die Antwort. Damit '
-       + 'sind alle drei Zeilen gleich hoch, solange die Antwort in eine Zeile '
-       + 'passt – bei der langen bricht sie weiter um.',
-    css: `.opt-fill { opacity: .5;
-            -webkit-mask-image: linear-gradient(to right,
-              #000 calc(100% - 24px), transparent 100%);
-            mask-image: linear-gradient(to right,
-              #000 calc(100% - 24px), transparent 100%); }
-          .opt-text { flex-direction: row; align-items: center; gap: .8rem; }
-          .opt-num { margin-left: auto; text-align: right; display: block; }`,
+    nr: 4, name: 'Wie 3, aber der Betrag kann nicht squeezed werden', width: 375,
+    was: 'Aufbau wie am Computer, mit einer einzigen Zutat: Der Betrag behält '
+       + 'seine Breite (er darf nicht schrumpfen), die Antwort bricht davor '
+       + 'um. Damit kann keine Zahl mehr zusammengedrückt oder abgeschnitten '
+       + 'werden, egal wie long die Antwort ist.',
+    css: `${WIE_AM_COMPUTER}
+      .opt-num { flex: none; }
+      .opt-label { min-width: 0; }
+      .opt-text { align-items: flex-start; }`,
   },
 ];
 
@@ -119,15 +136,15 @@ const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascrip
 const server = http.createServer((q, res) => {
   let pfad = decodeURIComponent(q.url.split('?')[0]);
   if (pfad === '/') pfad = '/index.html';
-  const datei = path.join(root, 'public', pfad);
-  if (!datei.startsWith(path.join(root, 'public')) || !fs.existsSync(datei)) {
+  const file = path.join(root, 'public', pfad);
+  if (!file.startsWith(path.join(root, 'public')) || !fs.existsSync(file)) {
     return res.writeHead(404).end('');
   }
   if (pfad === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('');
   }
-  res.writeHead(200, { 'content-type': TYPEN[path.extname(datei)] ?? 'application/octet-stream' })
-     .end(fs.readFileSync(datei));
+  res.writeHead(200, { 'content-type': TYPEN[path.extname(file)] ?? 'application/octet-stream' })
+     .end(fs.readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -135,17 +152,19 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
 
-async function schuss(f) {
-  const seite = await browser.newPage({
-    viewport: { width: 375, height: 667 }, deviceScaleFactor: 2,
-    isMobile: true, hasTouch: true,
+async function shoot(f) {
+  const wide = f.width ?? 375;
+  const page = await browser.newPage({
+    viewport: { width: wide, height: wide < 700 ? 667 : 900 },
+    deviceScaleFactor: 2,
+    isMobile: wide < 700, hasTouch: wide < 700,
   });
-  await seite.goto(base);
-  await seite.addScriptTag({ content:
+  await page.goto(base);
+  await page.addScriptTag({ content:
     `const state = { cfg: { symbol: 'ANSEM' }, me: { isAdmin: false } };
      ${POLL_CODE}
      window.pollHtml = pollHtml;` });
-  await seite.evaluate((polls) => {
+  await page.evaluate((polls) => {
     document.querySelector('#login').hidden = true;
     document.querySelector('#app').hidden = false;
     document.querySelector('#me-handle').outerHTML =
@@ -154,75 +173,90 @@ async function schuss(f) {
     document.querySelector('#pane-polls').hidden = false;
     document.querySelector('#poll-list').innerHTML = polls.map(window.pollHtml).join('');
   }, POLLS);
-  if (f.css) await seite.addStyleTag({ content: f.css });
-  await seite.waitForTimeout(700);   // die Füllung wächst mit einer Bewegung
+  if (f.css) await page.addStyleTag({ content: f.css });
+  await page.waitForTimeout(700);   // the fill grows with an animation
 
-  // Die eigentliche Messung.
+  // The actual measurement.
   //
-  // Für jede Antwortzeile: Wo endet die Füllung, und liegt diese Kante
-  // INNERHALB einer Textzeile? Dafür werden die einzelnen Zeilenkästen des
-  // Textes geholt (getClientRects, nicht getBoundingClientRect – nur so sieht
-  // man umgebrochene Zeilen einzeln).
-  const mass = await seite.evaluate(() => {
+  // For each answer row: where does the fill end, and does that edge fall
+  // INSIDE a text line? For that, the individual line boxes of the text are
+  // fetched (getClientRects, not getBoundingClientRect - only that way do
+  // wrapped lines show up separately).
+  const mass = await page.evaluate(() => {
     const treffer = [];
-    const hoehen = [];
+    const heights = [];
     for (const opt of document.querySelectorAll('.opt')) {
       const fill = opt.querySelector('.opt-fill');
       const bar = opt.querySelector('.opt-bar');
-      hoehen.push(Math.round(bar.getBoundingClientRect().height));
+      heights.push(Math.round(bar.getBoundingClientRect().height));
       const fr = fill.getBoundingClientRect();
-      // Ein Streifen an der Unterkante kann den Text gar nicht treffen.
+      // A strip along the bottom edge can't hit the text at all.
       const kanteX = fr.right;
-      const kanteOben = fr.top, kanteUnten = fr.bottom;
+      const edgeTop = fr.top, kanteUnten = fr.bottom;
       for (const el of opt.querySelectorAll('.opt-label, .opt-num, .held')) {
         for (const z of el.getClientRects()) {
-          const senkrecht = z.bottom > kanteOben + 1 && z.top < kanteUnten - 1;
-          if (senkrecht && kanteX > z.left + 2 && kanteX < z.right - 2) {
+          const vertical = z.bottom > edgeTop + 1 && z.top < kanteUnten - 1;
+          if (vertical && kanteX > z.left + 2 && kanteX < z.right - 2) {
             treffer.push(el.textContent.trim().slice(0, 28));
           }
         }
       }
     }
-    return { treffer, hoehen };
+    // Is a number getting squeezed? That's the original objection to the
+    // desktop layout on a phone, and you can barely see it in a screenshot:
+    // the box ends up narrower than the text inside it.
+    const squeezed = [];
+    for (const held of document.querySelectorAll('.opt-num .held')) {
+      const b = held.getBoundingClientRect().width;
+      if (held.scrollWidth > Math.ceil(b) + 1) {
+        squeezed.push(`${held.textContent.trim()} (${Math.round(b)} statt ${held.scrollWidth} px)`);
+      }
+    }
+    return { treffer, heights, squeezed };
   });
 
-  const puffer = await seite.screenshot({
-    clip: await seite.evaluate(() => {
+  const puffer = await page.screenshot({
+    clip: await page.evaluate(() => {
       const r = document.querySelector('.poll').getBoundingClientRect();
       return { x: r.x - 6, y: r.y - 6, width: r.width + 12, height: r.height + 12 };
     }),
   });
-  await seite.close();
+  await page.close();
   return { bild: `data:image/png;base64,${puffer.toString('base64')}`, ...mass };
 }
 
 fs.mkdirSync(path.join(root, 'preview'), { recursive: true });
 const bilder = [];
-for (const f of FASSUNGEN) bilder.push({ ...f, ...(await schuss(f)) });
+for (const f of FASSUNGEN) bilder.push({ ...f, ...(await shoot(f)) });
 
-const blatt = await browser.newPage({ viewport: { width: 1180, height: 1100 }, deviceScaleFactor: 2 });
+const blatt = await browser.newPage({ viewport: { width: 1400, height: 1100 }, deviceScaleFactor: 2 });
 await blatt.setContent(`
 <style>
   body { margin: 0; padding: 26px; background: #0d0d0f; color: #e6e6e6;
          font-family: system-ui, sans-serif; }
-  .reihe { display: flex; gap: 22px; align-items: flex-start; }
+  .row { display: flex; gap: 22px; align-items: flex-start; }
   .fall { width: 262px; }
+  .fall.wide { width: 430px; }
+  .fall.wide img { width: 430px; }
   h2 { font-size: 13.5px; margin: 0 0 3px; line-height: 1.3; }
   p { font-size: 11px; line-height: 1.5; color: #8b8b93; margin: 0 0 8px; }
   .mass { font-family: ui-monospace, Menlo, monospace; font-size: 10px; margin: 0 0 8px; }
-  .gut { color: #6cc79a; } .schlecht { color: #e8b45c; }
+  .gut { color: #6cc79a; } .bad { color: #e8b45c; }
   img { width: 262px; display: block; border-radius: 10px; border: 1px solid #23232a; }
 </style>
-<div class="reihe">
+<div class="row">
 ${bilder.map((b) => `
-  <div class="fall">
+  <div class="fall${b.width > 700 ? ' wide' : ''}">
     <h2>${b.nr}. ${b.name}</h2>
     <p>${b.was}</p>
-    <p class="mass ${b.treffer.length ? 'schlecht' : 'gut'}">
+    <p class="mass ${b.treffer.length ? 'bad' : 'gut'}">
       ${b.treffer.length
         ? `Kante schneidet ${b.treffer.length}x durch Text`
         : 'Kante schneidet durch keinen Text'}<br>
-      Zeilenhöhen ${b.hoehen.join(' / ')} px</p>
+      Zeilenhöhen ${b.heights.join(' / ')} px<br>
+      <span class="${b.squeezed.length ? 'bad' : 'gut'}">${b.squeezed.length
+        ? `Betrag squeezed: ${b.squeezed.join(', ')}`
+        : 'kein Betrag squeezed'}</span></p>
     <img src="${b.bild}">
   </div>`).join('')}
 </div>
@@ -235,7 +269,8 @@ for (const b of bilder) {
   console.log(`  ${b.nr}. ${b.name}`);
   console.log(`     Kante durch Text: ${b.treffer.length}x`
     + (b.treffer.length ? ` (${b.treffer.join(', ')})` : '')
-    + `   Höhen: ${b.hoehen.join(' / ')} px`);
+    + `   Höhen: ${b.heights.join(' / ')} px`
+    + (b.squeezed.length ? `\n     GEQUETSCHT: ${b.squeezed.join(', ')}` : ''));
 }
 console.log(`\n  ${FASSUNGEN.length} Fassungen in preview/antwortzeilen.png\n`);
 await browser.close();

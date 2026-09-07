@@ -1,44 +1,43 @@
 -- ----------------------------------------------------------------------------
--- public.votes verlässt die Realtime-Veröffentlichung
+-- public.votes leaves the Realtime publication
 --
--- Warum
+-- Why
 --
--- Realtime zählt Zustellungen, nicht Änderungen: Eine Zeile, die an 500
--- Zuhörer geht, sind 500 Nachrichten. Und votes_read steht auf `using (true)` –
--- Stimmen sind absichtlich für alle einsehbar, damit die Gewichtung
--- nachvollziehbar bleibt. Also fällt kein einziger Zuhörer durch die
--- Rechteprüfung heraus.
+-- Realtime counts deliveries, not changes: one row going out to 500
+-- listeners is 500 messages. And votes_read is `using (true)` -
+-- votes are deliberately visible to everyone, so the weighting stays
+-- verifiable. So not a single listener drops out of the permission check.
 --
--- Der Fall, auf den die Seite hinarbeitet: Ansem stellt eine Abstimmung online,
--- 500 Leute sind da und stimmen in einer halben Minute ab. Rund 17 Stimmen pro
--- Sekunde mal 500 Browser sind etwa 8.300 Nachrichten pro Sekunde. Das
--- Kontingent liegt je nach Tarif bei 500 oder 2.500. Darüber schliesst Supabase
--- die Kanäle mit „Too many messages per second", alle Browser treten
--- gleichzeitig neu bei und laufen ins Beitritts-Limit hinterher.
+-- The case the site is built for: Ansem puts up a poll, 500 people are
+-- there and vote within half a minute. About 17 votes per second times
+-- 500 browsers is roughly 8,300 messages per second. The quota is 500 or
+-- 2,500 depending on plan. Above that, Supabase closes the channels with
+-- "Too many messages per second", every browser rejoins at once and they
+-- all pile up against the join-rate limit.
 --
--- Eine Stimmenzahl ist ein Zähler, kein Ereignis. Der Polls-Tab fragt sie
--- deshalb alle 5 Sekunden selbst nach (STIMMEN_TAKT_MS in public/app.js).
--- Gewöhnliche Abfragen zählen gegen kein Realtime-Kontingent.
+-- A vote count is a counter, not an event. The polls tab already polls
+-- for it itself every 5 seconds (STIMMEN_TAKT_MS in public/app.js).
+-- Ordinary queries don't count against any Realtime quota.
 --
--- Was live bleibt
+-- What stays live
 --
---   polls, poll_options -> eine neue oder beendete Abstimmung, ein paar Mal am
---                          Tag, soll sofort erscheinen
---   dms                 -> ein Satz an einen einzelnen Menschen, der auf
---                          Antwort wartet
---   messages            -> unverändert
+--   polls, poll_options -> a new or closed poll, a few times a day,
+--                          should appear immediately
+--   dms                 -> a message to a single person waiting for
+--                          a reply
+--   messages            -> unchanged
 --
--- ACHTUNG für später
+-- HEADS UP for later
 --
--- Wer in public/app.js die Zeile `.on(… table: 'votes' …)` wieder einbaut, muss
--- die Tabelle hier ebenfalls wieder aufnehmen. Sonst kommt schlicht nichts an –
--- ohne Fehler, ohne Warnung, ohne Eintrag in der Konsole. Diese Wanderung ist
--- die einzige Stelle, an der das steht.
+-- Whoever adds the `.on(… table: 'votes' …)` line back into public/app.js
+-- must also add the table back here. Otherwise nothing arrives at all -
+-- no error, no warning, no console entry. This migration is the only
+-- place that says so.
 --
--- replica identity full bleibt
+-- replica identity full stays
 --
--- Das kostet nichts, solange die Tabelle nicht veröffentlicht ist, und wäre der
--- stille Fallstrick beim Wiedereinschalten. Also stehen lassen.
+-- It costs nothing as long as the table isn't published, and would be
+-- the silent trap when switching it back on. So leave it in place.
 -- ----------------------------------------------------------------------------
 
 do $$

@@ -1,39 +1,38 @@
 // ============================================================================
-// Vorschaubilder: Eine andere Farbe für den Balken, der die Antworten füllt
+// Preview images: a different color for the bar that fills the answers
 //
-// Der Balken ist heute knochenweiss bei 24 % Deckkraft – dieselbe Farbe wie
-// alles andere im Blatt, nur durchsichtiger. Er hat damit keinen eigenen
-// Klang; er ist "die Seite, etwas heller".
+// Today the bar is bone-white at 24% opacity - the same color as
+// everything else in the stylesheet, just more transparent. That gives it
+// no voice of its own; it's "the page, a little lighter".
 //
 // ----------------------------------------------------------------------------
-// Was beim Wechsel schiefgehen kann, und warum hier gerechnet wird
+// What can go wrong on a switch, and why this computes instead of guesses
 //
-// Drei Dinge liegen ÜBER oder NEBEN dieser Fläche, und alle drei kann eine
-// neue Farbe kaputtmachen, ohne dass man es beim Hinsehen sofort merkt:
+// Three things sit ON TOP OF or NEXT TO this area, and a new color can
+// break all three without it being obvious at a glance:
 //
-//  1. Der Antworttext (--text) liegt auf der Füllung und wird von der harten
-//     Kante gekreuzt. Er muss links und rechts der Kante gleich gut lesbar
-//     bleiben – sonst kommt der Grund zurück, aus dem der alte Verlauf weich
-//     auslief.
-//  2. Die Stimmenzahl (--votes) liegt bei der führenden Antwort fast immer auf
-//     der Füllung. Sie stand schon einmal bei 1,3:1 und war unsichtbar; --votes
-//     ist eigens gegen die JETZIGE Mischung auf 4,3:1 gestellt worden. Eine
-//     andere Füllfarbe verschiebt genau diese Zahl.
-//  3. Die Kante selbst muss man sehen. Die Füllung muss sich also vom
-//     Zeilengrund (--bg-3) absetzen – das ist der eigentliche Zweck.
+//  1. The answer text (--text) sits on the fill and gets crossed by the
+//     hard edge. It must stay equally readable on both sides of that edge -
+//     otherwise the reason the old gradient faded out softly comes back.
+//  2. The vote count (--votes) sits on the fill for the leading answer
+//     almost always. It once measured 1.3:1 and was invisible; --votes
+//     was specifically tuned against the CURRENT mix to reach 4.3:1. A
+//     different fill color shifts exactly that number.
+//  3. The edge itself has to be visible. So the fill must stand apart
+//     from the row background (--bg-3) - that's the actual point of it.
 //
-// Deshalb ist die Deckkraft hier KEIN fester Wert, sondern wird je Farbton so
-// eingestellt, dass der Helligkeitssprung gegenüber dem Zeilengrund derselbe
-// ist wie heute. Sonst verglichen wir Farben, die verschieden laut sind, und
-// entschieden am Ende über die Lautstärke statt über den Ton. Ein Blau bei
-// 24 % ist deutlich dunkler als ein Weiss bei 24 %; ungetunt sähe jedes
-// dunkle Blau "zu schwach" aus, obwohl das nur an der Deckkraft liegt.
+// That's why opacity here is NOT a fixed value, but set per hue so the
+// brightness jump against the row background stays the same as it is
+// today. Otherwise we'd be comparing colors of different loudness and end
+// up deciding based on volume instead of hue. A blue at 24% is
+// noticeably darker than a white at 24%; left untuned, every dark blue
+// would look "too weak", when that's really only the opacity.
 //
-// Gerechnet wird mit WCAG-Kontrast (relative Luminanz), nicht geschätzt.
+// Computed using WCAG contrast (relative luminance), not estimated.
 //
-// Violett kommt nicht vor: ausdrücklich abgelehnt ("das lila soll weg").
+// Purple doesn't appear: explicitly rejected ("the purple has to go").
 //
-// Erzeugt preview/balkenfarbe-*.png und preview/balkenfarbe-uebersicht.png
+// Produces preview/balkenfarbe-*.png and preview/balkenfarbe-uebersicht.png
 //   node scripts/vorschau-balken-farbe.mjs
 // ============================================================================
 
@@ -47,29 +46,29 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
 
-// Wörtlich aus der Quelle, nicht nachgebaut: Zeichner, Markup, Formate, Symbole.
-const zeichner = schneide('const cssWert =', '\nasync function ladeOgBildHoch');
-const markup = schneide('function pollHtml(p) {', '\n/**\n * Eine Abstimmung löschen');
-const formate = schneide('const nfGanz =', 'const ganzeZahl')
-  + schneide('const ganzeZahl =', '\n');
-const escFn = schneide('const esc = (s) =>', '\n\n');
-const symbole = schneide('const LINK_SVG =', '\n/**\n * Die Adresse einer einzelnen');
+// Verbatim from the source, not rebuilt: drawer, markup, formats, icons.
+const drawSource = cut('const cssWert =', '\nasync function ladeOgBildHoch');
+const markup = cut('function pollHtml(p) {', 'async function deletePoll(id) {');
+const formate = cut('const nfGanz =', 'const wholeNumber')
+  + cut('const wholeNumber =', '\n');
+const escFn = cut('const esc = (s) =>', '\n\n');
+const symbole = cut('const LINK_SVG =', 'const pollLink = (id) => `${location.origin}/p/${id}`;');
 
-// Die beiden Stellen, an denen dieselbe Entscheidung steht.
+// The two places where the same decision is written down.
 const CSS_STELLE = 'background: rgba(var(--accent-rgb), .24);';
-const JS_STELLE = 'ctx.fillStyle = `rgba(${farbe.akzentRgb}, .24)`;';
+const JS_STELLE = 'ctx.fillStyle = `rgba(${color.akzentRgb}, .24)`;';
 if (!css.includes(CSS_STELLE)) throw new Error('Die Füllung im Blatt sieht anders aus als erwartet');
-if (!zeichner.includes(JS_STELLE)) throw new Error('Die Füllung im Zeichner sieht anders aus als erwartet');
+if (!drawSource.includes(JS_STELLE)) throw new Error('Die Füllung im Zeichner sieht anders aus als erwartet');
 
 // ---------------------------------------------------------------------------
-// Farbrechnung
+// Color math
 // ---------------------------------------------------------------------------
 const hex = (h) => {
   const s = h.replace('#', '');
@@ -83,7 +82,7 @@ const kontrast = (a, b) => {
   const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
 };
-const mische = (vorne, alpha, hinten) =>
+const mix = (vorne, alpha, hinten) =>
   vorne.map((c, i) => Math.round(alpha * c + (1 - alpha) * hinten[i]));
 
 const cssVar = (name) => {
@@ -92,46 +91,46 @@ const cssVar = (name) => {
   return m[1].trim();
 };
 
-const GRUND = hex(cssVar('--bg-3'));     // Zeilengrund unter der Füllung
-const TEXT = hex(cssVar('--text'));      // Antworttext auf der Füllung
-const VOTES = hex(cssVar('--votes'));    // Stimmenzahl auf der Füllung
-const AKZENT = hex(cssVar('--accent'));  // heutige Füllfarbe
-const LINIE = hex(cssVar('--line'));     // Rahmen der Zeile
+const GRUND = hex(cssVar('--bg-3'));     // row background under the fill
+const TEXT = hex(cssVar('--text'));      // answer text on the fill
+const VOTES = hex(cssVar('--votes'));    // vote count on the fill
+const AKZENT = hex(cssVar('--accent'));  // today's fill color
+const LINIE = hex(cssVar('--line'));     // the row's border
 
-// Der Maßstab: der Helligkeitssprung, den die jetzige Füllung macht.
-const JETZT_MISCHUNG = mische(AKZENT, 0.24, GRUND);
-const ZIEL_SPRUNG = kontrast(JETZT_MISCHUNG, GRUND);
+// The yardstick: the brightness jump the current fill makes.
+const NOW_MIX = mix(AKZENT, 0.24, GRUND);
+const ZIEL_SPRUNG = kontrast(NOW_MIX, GRUND);
 
-// Die Deckkraft, bei der ein Farbton denselben Sprung macht. Binäre Suche,
-// weil sich der Kontrast nicht geschlossen nach alpha auflösen lässt.
-const alphaFuer = (farbe) => {
+// The opacity at which a hue makes the same jump. Binary search, because
+// contrast can't be solved for alpha in closed form.
+const alphaFor = (color) => {
   let lo = 0, hi = 1;
   for (let i = 0; i < 40; i++) {
     const m = (lo + hi) / 2;
-    if (kontrast(mische(farbe, m, GRUND), GRUND) < ZIEL_SPRUNG) lo = m; else hi = m;
+    if (kontrast(mix(color, m, GRUND), GRUND) < ZIEL_SPRUNG) lo = m; else hi = m;
   }
   return Math.round(((lo + hi) / 2) * 100) / 100;
 };
 
 // ---------------------------------------------------------------------------
-// Die Töne
+// The hues
 // ---------------------------------------------------------------------------
-const TOENE = [
-  { datei: 'jetzt', name: 'Jetzt: Knochenweiss', hex: null, feste: 0.24,
-    hinweis: 'Die Füllung ist dieselbe Farbe wie der Text, nur durchsichtig. Sie hat keinen eigenen Klang – der Balken ist "die Seite, etwas heller". Zum Vergleich hier oben.' },
-  { datei: 'mint', name: 'Solana-Mint', hex: '#14f195',
+const TONES = [
+  { file: 'jetzt', name: 'Jetzt: Knochenweiss', hex: null, feste: 0.24,
+    hinweis: 'Die Füllung ist dieselbe Farbe wie der Text, nur durchsichtig. Sie hat keinen eigenen Klang – der Balken ist "die Seite, etwas heller". Zum Vergleich hier peek.' },
+  { file: 'mint', name: 'Solana-Mint', hex: '#14f195',
     hinweis: 'Der Grünton aus dem Solana-Logo. Der einzige Vorschlag, der von aussen etwas mitbringt: Wer die Karte auf X sieht, ordnet sie ohne Text ein. Das Violett aus demselben Logo bleibt draussen.' },
-  { datei: 'gruen', name: 'Ruhiges Grün', hex: '#3ddc84',
+  { file: 'gruen', name: 'Ruhiges Grün', hex: '#3ddc84',
     hinweis: 'Dasselbe Feld, aber weniger elektrisch. Grün heisst hier nicht "richtig", sondern nur "so viel steht dahinter" – das trägt, solange nirgends sonst im Blatt Grün für "erledigt" steht.' },
-  { datei: 'blau', name: 'Kühles Blau', hex: '#4d8dff',
+  { file: 'blau', name: 'Kühles Blau', hex: '#4d8dff',
     hinweis: 'Der klassische Balkenton. Sitzt am nächsten am jetzigen Grau und fällt am wenigsten auf – das ist Vor- und Nachteil zugleich.' },
-  { datei: 'stahl', name: 'Stahlblau', hex: '#5ac8e0',
+  { file: 'stahl', name: 'Stahlblau', hex: '#5ac8e0',
     hinweis: 'Blau mit einem Stich ins Türkis. Näher am jetzigen Weiss als das kräftige Blau, aber deutlich als Farbe erkennbar.' },
-  { datei: 'gold', name: 'Gold', hex: cssVar('--gold'),
+  { file: 'gold', name: 'Gold', hex: cssVar('--gold'),
     hinweis: 'Die einzige warme Farbe, die das Blatt schon kennt – --gold steckt bereits in der Palette. Warm liest sich neben Dollarbeträgen naheliegend; es zieht aber auch am meisten Aufmerksamkeit.' },
-  { datei: 'bernstein', name: 'Gedämpftes Bernstein', hex: '#c9964a',
+  { file: 'bernstein', name: 'Gedämpftes Bernstein', hex: '#c9964a',
     hinweis: 'Dasselbe Feld, ohne den Leuchtstift. Wirkt gedruckt statt beleuchtet und passt zum flachen Kartenhintergrund.' },
-  { datei: 'schiefer', name: 'Heller Schiefer', hex: '#7f8ba6',
+  { file: 'schiefer', name: 'Heller Schiefer', hex: '#7f8ba6',
     hinweis: 'Kein Farbton, sondern ein eigener Grauwert: Die Füllung ist nicht mehr "der Text, durchsichtig", sondern eine Fläche mit eigener Herkunft. Der leiseste Schritt weg vom Jetzt.' },
 ];
 
@@ -139,19 +138,19 @@ console.log(`\n  Zeilengrund --bg-3 ${cssVar('--bg-3')}`);
 console.log(`  Maßstab: die jetzige Füllung springt ${ZIEL_SPRUNG.toFixed(2)}:1 vom Grund ab.`);
 console.log('  Jede Farbe bekommt die Deckkraft, die denselben Sprung macht.\n');
 
-const kopf = ['Ton', 'Deckkraft', 'Sprung', 'Antwort', 'Stimmen', 'Kante'];
-console.log('  ' + kopf[0].padEnd(24) + kopf[1].padEnd(11) + kopf[2].padEnd(9)
-  + kopf[3].padEnd(10) + kopf[4].padEnd(10) + kopf[5]);
+const header = ['Ton', 'Deckkraft', 'Sprung', 'Antwort', 'Stimmen', 'Kante'];
+console.log('  ' + header[0].padEnd(24) + header[1].padEnd(11) + header[2].padEnd(9)
+  + header[3].padEnd(10) + header[4].padEnd(10) + header[5]);
 
-for (const t of TOENE) {
-  const farbe = t.hex ? hex(t.hex) : AKZENT;
-  t.alpha = t.feste ?? alphaFuer(farbe);
-  t.rgb = farbe.join(', ');
-  t.mischung = mische(farbe, t.alpha, GRUND);
+for (const t of TONES) {
+  const color = t.hex ? hex(t.hex) : AKZENT;
+  t.alpha = t.feste ?? alphaFor(color);
+  t.rgb = color.join(', ');
+  t.mischung = mix(color, t.alpha, GRUND);
   t.sprung = kontrast(t.mischung, GRUND);
-  t.aufText = kontrast(TEXT, t.mischung);        // Antworttext auf der Füllung
-  t.aufVotes = kontrast(VOTES, t.mischung);      // Stimmenzahl auf der Füllung
-  t.kante = kontrast(t.mischung, LINIE);         // Füllung gegen den Rahmen
+  t.aufText = kontrast(TEXT, t.mischung);        // answer text on the fill
+  t.aufVotes = kontrast(VOTES, t.mischung);      // vote count on the fill
+  t.kante = kontrast(t.mischung, LINIE);         // fill against the border
   console.log('  ' + t.name.padEnd(24)
     + `${(t.alpha * 100).toFixed(0)} %`.padEnd(11)
     + `${t.sprung.toFixed(2)}:1`.padEnd(9)
@@ -160,14 +159,14 @@ for (const t of TOENE) {
     + `${t.kante.toFixed(2)}:1`);
 }
 
-// Die Schwellen, die nicht unterschritten werden dürfen.
-const eng = TOENE.filter((t) => t.aufVotes < 4);
+// The thresholds that must not be undercut.
+const eng = TONES.filter((t) => t.aufVotes < 4);
 console.log(eng.length
-  ? `\n  ACHTUNG: Stimmenzahl unter 4:1 bei – ${eng.map((t) => t.name).join(', ')}`
-  : '\n  Alle Töne halten die Stimmenzahl über 4:1 und den Antworttext weit über 4,5:1.');
+  ? `\n  ACHTUNG: Stimmenzahl under 4:1 bei – ${eng.map((t) => t.name).join(', ')}`
+  : '\n  Alle Töne halten die Stimmenzahl über 4:1 und den Antworttext far über 4,5:1.');
 
 // ---------------------------------------------------------------------------
-// Bilder
+// Images
 // ---------------------------------------------------------------------------
 const opt = (id, label, votes, usd, share) => ({ id, label, votes, usd, share });
 const POLL = {
@@ -192,14 +191,15 @@ const ausgabe = path.join(root, 'preview');
 fs.mkdirSync(ausgabe, { recursive: true });
 
 const ergebnisse = [];
-for (const t of TOENE) {
-  const neuCss = `rgba(${t.rgb}, ${t.alpha})`;
-  const seite = await browser.newPage({ viewport: { width: 760, height: 420 } });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
+for (const t of TONES) {
+  const newCss = `rgba(${t.rgb}, ${t.alpha})`;
+  const page = await browser.newPage({ viewport: { width: 760, height: 420 } });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
 
-  // Nur die eine Deklaration wird ersetzt – der Rest des Blattes bleibt echt.
-  await seite.addStyleTag({ content: `.opt-fill { background: ${neuCss} !important; }` });
-  await seite.addScriptTag({
+  // Only this one declaration gets replaced - the rest of the stylesheet
+  // stays real.
+  await page.addStyleTag({ content: `.opt-fill { background: ${newCss} !important; }` });
+  await page.addScriptTag({
     content: `
       const state = { cfg: { symbol: 'ANSEM' }, me: { isAdmin: false }, polls: [] };
       const fmtUsd = (n) => '$' + Math.round(Number(n)).toLocaleString('en-US');
@@ -208,24 +208,24 @@ for (const t of TOENE) {
       ${formate}
       ${symbole}
       ${markup}
-      ${zeichner.replace(JS_STELLE, 'ctx.fillStyle = ' + JSON.stringify(neuCss) + ';')}
+      ${drawSource.replace(JS_STELLE, 'ctx.fillStyle = ' + JSON.stringify(newCss) + ';')}
       window.pollHtml = pollHtml;
-      window.zeichnePoll = zeichnePoll;`,
+      window.drawPoll = drawPoll;`,
   });
-  await seite.evaluate((p) => { document.querySelector('#ziel').innerHTML = window.pollHtml(p); }, POLL);
-  await seite.waitForTimeout(120);
+  await page.evaluate((p) => { document.querySelector('#ziel').innerHTML = window.pollHtml(p); }, POLL);
+  await page.waitForTimeout(120);
 
-  const seitenBild = await seite.locator('#ziel').screenshot();
-  const daten = await seite.evaluate(async (p) => ({
-    gross: (await window.zeichnePoll(p)).toDataURL('image/png'),
-    karte: (await window.zeichnePoll(p, { fuerKarte: true })).toDataURL('image/png'),
+  const pageImage = await page.locator('#ziel').screenshot();
+  const daten = await page.evaluate(async (p) => ({
+    big: (await window.drawPoll(p)).toDataURL('image/png'),
+    card: (await window.drawPoll(p, { fuerKarte: true })).toDataURL('image/png'),
   }), POLL);
-  await seite.close();
+  await page.close();
 
   const roh = (d) => Buffer.from(d.split(',')[1], 'base64');
-  fs.writeFileSync(path.join(ausgabe, `balkenfarbe-${t.datei}-seite.png`), seitenBild);
-  fs.writeFileSync(path.join(ausgabe, `balkenfarbe-${t.datei}-download.png`), roh(daten.gross));
-  ergebnisse.push({ seite: 'data:image/png;base64,' + seitenBild.toString('base64'), ...daten });
+  fs.writeFileSync(path.join(ausgabe, `balkenfarbe-${t.file}-seite.png`), pageImage);
+  fs.writeFileSync(path.join(ausgabe, `balkenfarbe-${t.file}-download.png`), roh(daten.big));
+  ergebnisse.push({ page: 'data:image/png;base64,' + pageImage.toString('base64'), ...daten });
 }
 
 const blatt = `<!doctype html>
@@ -244,17 +244,17 @@ const blatt = `<!doctype html>
   .werte { font-size: .7rem; color: var(--dimmer); font-weight: 400; }
   p.t { margin: .3rem 0 .8rem; font-size: .84rem; color: #8b93a7; line-height: 1.55; max-width: 118ch; }
   .paar { display: grid; grid-template-columns: 1.05fr 1fr; gap: 20px; align-items: start; }
-  .beschriftung { font-size: .72rem; color: var(--dimmer); margin: 0 0 .35rem; }
+  .caption { font-size: .72rem; color: var(--dimmer); margin: 0 0 .35rem; }
   img { width: 100%; display: block; border-radius: 8px; }
   .buehne { background: #16181c; padding: 12px; border-radius: 12px; }
 </style>
 <h1>Die Farbe der Balkenfüllung</h1>
-<p class="lead">Links die Abstimmung auf der Seite, rechts das Bild zum Herunterladen – dieselbe Zahl steuert beides.
-Jeder Ton hat die Deckkraft bekommen, bei der er genauso weit vom Zeilengrund abspringt wie die jetzige Füllung
+<p class="lead">Links die Abstimmung auf der Seite, right das Bild zum Herunterladen – dieselbe Zahl steuert beides.
+Jeder Ton hat die Deckkraft bekommen, bei der er genauso far vom Zeilengrund abspringt wie die jetzige Füllung
 (${ZIEL_SPRUNG.toFixed(2)}:1). So unterscheiden sich die Fassungen im Ton und nicht in der Lautstärke.
 Unter jeder Überschrift steht, wie gut Antworttext und Stimmenzahl auf der Füllung noch lesbar sind;
 die Stimmenzahl ist die kritische – sie stand schon einmal bei 1,3:1 und war unsichtbar.</p>
-${TOENE.map((t, i) => `
+${TONES.map((t, i) => `
 <section>
   <h2><span class="nr">${i}</span>
     <span class="probe" style="background: rgba(${t.rgb}, ${t.alpha})"></span>${t.name}
@@ -262,15 +262,15 @@ ${TOENE.map((t, i) => `
       · Antwort ${t.aufText.toFixed(1)}:1 · Stimmen ${t.aufVotes.toFixed(1)}:1</span></h2>
   <p class="t">${t.hinweis}</p>
   <div class="paar">
-    <div><p class="beschriftung">Auf der Seite</p><div class="buehne"><img src="${ergebnisse[i].seite}"></div></div>
-    <div><p class="beschriftung">Bild zum Herunterladen</p><div class="buehne"><img src="${ergebnisse[i].gross}"></div></div>
+    <div><p class="caption">Auf der Seite</p><div class="buehne"><img src="${ergebnisse[i].page}"></div></div>
+    <div><p class="caption">Bild zum Herunterladen</p><div class="buehne"><img src="${ergebnisse[i].big}"></div></div>
   </div>
 </section>`).join('')}`;
 
-const seite = await browser.newPage({ viewport: { width: 1700, height: 1200 }, deviceScaleFactor: 1.5 });
-await seite.setContent(blatt);
-await seite.waitForTimeout(700);
-await seite.screenshot({ path: path.join(ausgabe, 'balkenfarbe-uebersicht.png'), fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1700, height: 1200 }, deviceScaleFactor: 1.5 });
+await page.setContent(blatt);
+await page.waitForTimeout(700);
+await page.screenshot({ path: path.join(ausgabe, 'balkenfarbe-uebersicht.png'), fullPage: true });
 await browser.close();
 server.close();
 

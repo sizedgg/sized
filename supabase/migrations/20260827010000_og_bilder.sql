@@ -1,22 +1,21 @@
 -- ===========================================================================
--- Ablage für die Vorschaubilder, die X unter einem geteilten Link zeigt
+-- Storage for the preview images X shows under a shared link
 --
--- Warum es diese Ablage überhaupt braucht:
+-- Why this storage is needed at all:
 --
--- Das Bild einer Abstimmung wird im Browser gezeichnet. Der Besucher, der den
--- Link auf X anklickt, ist aber nicht der Erste, der ihn öffnet – der Erste
--- ist Xs Crawler, und der führt kein JavaScript aus. Er liest die Meta-Zeilen
--- im Kopf der Seite und holt genau die Adresse, die dort als Bild steht. Also
--- muss das Bild schon fertig irgendwo liegen, bevor der Link gepostet wird.
+-- A poll's image is drawn in the browser. But the visitor who clicks the link
+-- on X isn't the first one to open it - the first is X's crawler, and it
+-- doesn't run JavaScript. It reads the meta tags in the page head and fetches
+-- exactly the address given there as the image. So the image has to already
+-- be sitting somewhere finished before the link gets posted.
 --
--- Deshalb: Sobald Ansem eine Abstimmung anlegt, lädt sein Browser das Bild
--- hier hoch. Der öffentliche Eimer liefert es ohne Anmeldung aus – das muss
--- er, denn der Crawler hat keine.
+-- So: as soon as Ansem creates a poll, his browser uploads the image here.
+-- The public bucket serves it without login - it has to, because the crawler
+-- doesn't have one.
 --
--- Dass in dem Bild dann "0 votes" steht, ist kein Mangel: Genau so sieht die
--- Abstimmung in dem Moment aus, in dem der Link gepostet wird. Und X speichert
--- die Karte ohnehin zwischen, ein später erneuertes Bild würde dort tagelang
--- nicht ankommen.
+-- That the image then says "0 votes" is not a defect: that is exactly what
+-- the poll looks like at the moment the link gets posted. And X caches the
+-- card anyway - a later refreshed image wouldn't arrive there for days.
 -- ===========================================================================
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -26,39 +25,39 @@ on conflict (id) do update
       file_size_limit = 4194304,
       allowed_mime_types = array['image/png'];
 
--- Lesen darf jeder, auch ohne Anmeldung. Der Crawler von X bringt kein Token
--- mit, und ein Vorschaubild ist ohnehin für die Öffentlichkeit bestimmt –
--- es steht am Ende in einer Zeitleiste.
+-- Anyone may read, even without login. X's crawler carries no token, and a
+-- preview image is meant for the public anyway - it ends up sitting in a
+-- timeline.
 drop policy if exists og_read on storage.objects;
 create policy og_read on storage.objects
   for select to anon, authenticated
   using (bucket_id = 'og');
 
--- Schreiben nur Ansem. app.is_admin() liest die Wallet aus demselben Token,
--- das auch für Nachrichten und Abstimmungen gilt – Storage-Regeln sind
--- gewöhnliche RLS-Regeln auf storage.objects, also greift dieselbe Funktion.
+-- Only Ansem may write. app.is_admin() reads the wallet from the same token
+-- used for messages and polls - storage policies are ordinary RLS policies
+-- on storage.objects, so the same function applies.
 drop policy if exists og_admin_write on storage.objects;
 create policy og_admin_write on storage.objects
   for insert to authenticated
   with check (bucket_id = 'og' and app.is_admin());
 
--- Getrennt von insert, weil ein erneutes Hochladen desselben Namens ein
--- update ist. Ohne diese Regel liefe das Auffrischen einer Karte ins Leere.
+-- Separate from insert, because re-uploading the same name is an update.
+-- Without this policy, refreshing a card would go nowhere.
 drop policy if exists og_admin_update on storage.objects;
 create policy og_admin_update on storage.objects
   for update to authenticated
   using (bucket_id = 'og' and app.is_admin())
   with check (bucket_id = 'og' and app.is_admin());
 
--- Löschen ebenfalls: Wird eine Abstimmung gelöscht, soll ihr Bild nicht als
--- Leiche liegen bleiben.
+-- Delete as well: when a poll is deleted, its image shouldn't stay behind
+-- as a corpse.
 drop policy if exists og_admin_delete on storage.objects;
 create policy og_admin_delete on storage.objects
   for delete to authenticated
   using (bucket_id = 'og' and app.is_admin());
 
--- Ansems Browser trägt beim Start fehlende Karten nach. Dafür muss er einmal
--- auflisten dürfen, was schon da ist – sonst müsste er für jede Abstimmung
--- einzeln nachsehen. Das Auflisten läuft über dieselbe select-Regel wie das
--- Lesen (og_read), die gilt bereits für alle. Hier steht nur der Hinweis,
--- damit niemand die Regel für überflüssig hält und sie entfernt.
+-- On startup, Ansem's browser backfills any missing cards. For that it needs
+-- to list once what's already there - otherwise it would have to check each
+-- poll individually. Listing runs through the same select policy as reading
+-- (og_read), which already applies to everyone. This note just exists so no
+-- one thinks that policy is redundant and removes it.

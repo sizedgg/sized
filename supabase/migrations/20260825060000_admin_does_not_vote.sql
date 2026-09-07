@@ -1,19 +1,19 @@
 -- ============================================================================
--- Ansem stimmt in seinen eigenen Umfragen nicht ab
+-- Ansem does not vote in his own polls
 --
--- Er legt die Frage fest, er bestimmt die Auswahlmöglichkeiten, und er schließt
--- die Abstimmung. Wenn er zusätzlich mitstimmt, ist das Ergebnis kein Ergebnis
--- mehr, sondern seine Meinung mit einer Zahl daneben – und zwar mit dem
--- schwersten Gewicht im Raum, weil Gewicht am Bestand hängt.
+-- He sets the question, he decides the options, and he closes the poll.
+-- If he also votes, the result is no longer a result, but his opinion with
+-- a number next to it - and with the heaviest weight in the room, because
+-- weight tracks holdings.
 --
--- Das ist keine Frage der Höflichkeit. Die Umfragen sind der einzige Ort, an
--- dem die Gemeinschaft etwas entscheidet; wer sie stellt, muss draußen bleiben,
--- damit die Antwort etwas wert ist.
+-- This isn't a matter of courtesy. The polls are the one place where the
+-- community decides something; whoever poses the question has to stay
+-- outside it for the answer to be worth anything.
 --
--- Die Prüfung steht im Trigger und nicht in der RLS-Regel: guard_vote hat die
--- übrigen Bedingungen schon (Umfrage offen, Option passt, Gewicht > 0) und
--- meldet sie mit lesbarem Text. Eine abgewiesene RLS-Regel sagt dem Nutzer
--- dagegen nur, dass irgendetwas nicht erlaubt war.
+-- The check lives in the trigger, not in the RLS policy: guard_vote already
+-- has the other conditions (poll open, option matches, weight > 0) and
+-- reports them with readable text. A rejected RLS policy, by contrast,
+-- only tells the user that something wasn't allowed.
 -- ============================================================================
 
 create or replace function app.guard_vote()
@@ -25,13 +25,14 @@ as $$
 declare
   p public.polls%rowtype;
 begin
-  -- Zuerst, denn es ist die grundsätzlichste der Bedingungen.
+  -- First, because it's the most fundamental of the conditions.
   --
-  -- Bewusst app.is_admin() und nicht ein Vergleich mit new.wallet: is_admin()
-  -- geht von der Wallet im Token aus. Ein Vergleich mit dem eingesendeten Feld
-  -- ließe sich umgehen, indem man dort etwas anderes einträgt – die RLS-Regel
-  -- votes_insert würde die Zeile am Ende zwar abweisen, aber dann hinge diese
-  -- Sperre an einer anderen Regel statt an sich selbst.
+  -- Deliberately app.is_admin() and not a comparison with new.wallet:
+  -- is_admin() goes by the wallet in the token. Comparing against the
+  -- submitted field could be worked around by putting something else
+  -- there - the votes_insert RLS policy would still reject the row in
+  -- the end, but then this block would depend on a different rule
+  -- instead of standing on its own.
   if app.is_admin() then
     raise exception 'You cannot vote in your own polls';
   end if;
@@ -56,9 +57,9 @@ begin
 end;
 $$;
 
--- Falls Ansem beim Testen schon abgestimmt hat: Diese Stimmen wieder entfernen.
--- Sie würden sonst in laufenden Umfragen weiterzählen, weil der Trigger nur
--- beim Einfügen und Ändern greift.
+-- In case Ansem already voted while testing: remove those votes again.
+-- Otherwise they'd keep counting in running polls, since the trigger only
+-- fires on insert and update.
 delete from public.votes v
  using public.app_config c
  where c.id = 1

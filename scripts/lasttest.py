@@ -42,7 +42,7 @@
 #
 #   3. Im Terminal:
 #
-#        cd <projektordner>
+#        cd ~/Documents/ansem-hub
 #        python3 scripts/lasttest.py --jwt "$(pbpaste)"
 #
 #   4. WÄHRENDDESSEN im Supabase-Dashboard unter Reports die CPU-Kurve

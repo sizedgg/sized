@@ -1,55 +1,56 @@
 /**
- * Die Seite, die X unter einem geteilten Abstimmungslink liest.
+ * The page X reads when someone shares a poll link.
  *
- * Zwei Dinge machen diese Function nötig, und beide sind nicht zu umgehen:
+ * Two things make this function necessary, and neither can be worked
+ * around:
  *
- * 1. Die Raute reicht nicht. Bei "sized.gg/#poll-12" wird alles ab dem #
- *    niemals an einen Server geschickt – das ist keine Einstellung, das ist
- *    die Definition eines Fragments. Für X sähen alle Abstimmungen gleich
- *    aus, weil sie dieselbe Adresse hätten. Der Link muss deshalb
- *    "sized.gg/p/12" lauten, mit der Nummer im Pfad.
+ * 1. The hash isn't enough. With "sized.gg/#poll-12", everything from the #
+ *    onward is never sent to a server - that's not a setting, that's the
+ *    definition of a fragment. To X, every poll would look the same,
+ *    because they'd all have the same address. The link therefore has to
+ *    read "sized.gg/p/12", with the number in the path.
  *
- * 2. Xs Crawler führt kein JavaScript aus. Er lädt die Adresse, liest die
- *    Meta-Zeilen im Kopf und ist fertig. Die App zeichnet ihre Oberfläche
- *    aber erst im Browser – der Crawler sähe eine leere Seite. Also liefert
- *    diese Function ihm eine eigene, winzige Seite, in der nichts steht außer
- *    dem, was er braucht.
+ * 2. X's crawler doesn't run JavaScript. It loads the address, reads the
+ *    meta tags in the head, and it's done. But the app only draws its UI
+ *    in the browser - the crawler would see an empty page. So this
+ *    function serves it its own, tiny page that contains nothing but what
+ *    it needs.
  *
- * Menschen bekommen diese Seite gar nicht erst: Sie werden mit einer echten
- * HTTP-Weiterleitung auf /#poll-12 geschickt, wo die App übernimmt. Warum das
- * nötig ist, steht unten am Crawler-Test.
+ * Humans never get this page at all: they're sent on with a real HTTP
+ * redirect to /#poll-12, where the app takes over. Why that's necessary is
+ * explained below, at the crawler check.
  *
  * ---------------------------------------------------------------------------
- * BEWUSST OHNE IMPORTE AUS ../_shared/
+ * DELIBERATELY WITHOUT IMPORTS FROM ../_shared/
  *
- * Alle anderen Functions hier teilen sich common.ts. Diese nicht, und das ist
- * kein Versehen: Sie muss sich als eine einzige Datei in den Editor des
- * Dashboards einfügen lassen, ohne dass man dafür eine CLI braucht. Der Preis
- * sind die zwanzig Zeilen unten, die es woanders schon gibt. Wer sie ändert,
- * muss dort mitziehen – dafür kann man sie ausrollen, ohne etwas zu
- * installieren.
+ * Every other function here shares common.ts. This one doesn't, and that's
+ * not an oversight: it has to be pastable as a single file into the
+ * dashboard's editor, without needing a CLI for that. The price is the
+ * twenty lines below that already exist elsewhere. Whoever changes them has
+ * to keep both in sync - in exchange, this can be deployed without
+ * installing anything.
  * ---------------------------------------------------------------------------
  *
- * Ausrollen über den CLI, falls vorhanden – OHNE JWT-Prüfung, der Crawler
- * bringt kein Token mit:
+ * Deploy via the CLI if available - WITHOUT JWT verification, the crawler
+ * doesn't carry a token:
  *   supabase functions deploy og --no-verify-jwt
  *
- * Oder im Dashboard: Edge Functions → Deploy a new function → Name "og",
- * diesen Inhalt einfügen, den Haken bei "Verify JWT" abwählen.
+ * Or in the dashboard: Edge Functions -> Deploy a new function -> name
+ * "og", paste this content, uncheck "Verify JWT".
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-// Service-Role: umgeht RLS. Das ist hier richtig, weil der Crawler kein Token
-// hat – und die Function gibt nur Dinge heraus, die ohnehin öffentlich sind:
-// Frage, Stimmenzahl, Summe.
+// Service role: bypasses RLS. That's correct here, because the crawler has
+// no token - and the function only ever hands out things that are public
+// anyway: question, vote count, total.
 const db = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 
-/** Wohin die Karte zeigt und woher das Ersatzbild kommt. */
-const SEITE = (Deno.env.get('SITE_URL') ?? 'https://sized.gg').replace(/\/+$/, '');
+/** Where the card left to, and where the fallback image comes from. */
+const PAGE = (Deno.env.get('SITE_URL') ?? 'https://sized.gg').replace(/\/+$/, '');
 
 const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => (
@@ -59,63 +60,63 @@ const esc = (s: unknown) =>
 const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 /**
- * Die Fassung des Kartenbilds.
+ * The version of the card image.
  *
- * MUSS mit KARTEN_VERSION in public/app.js übereinstimmen. Dort wird die Datei
- * geschrieben, hier wird sie gesucht – laufen die beiden Zahlen auseinander,
- * zeigt jeder Link die Ersatzkarte.
+ * MUST match CARD_VERSION in public/app.js. That's where the file gets
+ * written, this is where it gets looked up - if the two numbers drift
+ * apart, every link shows the fallback card.
  *
- * Hochgezählt wird sie, wenn sich das Aussehen der Karte ändert: Die Bilder
- * werden nur einmal geschrieben, eine neue Nummer ist also der einzige Weg,
- * bestehende Abstimmungen neu zeichnen zu lassen.
+ * It gets bumped when the card's appearance changes: images are written
+ * only once, so a new number is the only way to make existing polls redraw
+ * their card.
  */
-const KARTEN_VERSION = 9;
+const CARD_VERSION = 9;
 
 /**
- * Die Seite für den Crawler.
+ * The page for the crawler.
  *
- * twitter:card = summary_large_image ist die Sorte, die das Bild groß über
- * dem Titel zeigt und als Ganzes anklickbar ist – genau das gewünschte
- * Aussehen. Ohne diese Zeile macht X eine kleine Kachel mit Vorschaubild
- * links daneben.
+ * twitter:card = summary_large_image is the kind that shows the image
+ * large above the title and makes the whole thing clickable - exactly the
+ * look wanted here. Without this line X builds a small tile with a
+ * thumbnail next to it instead.
  *
- * og:image:width/height stehen dabei, damit X die Kachel schon vor dem Laden
- * des Bildes richtig einrichtet; fehlen sie, springt die Zeitleiste beim
- * Nachladen. Die Werte sind fest, weil das Kartenbild fest 1600 × 838 ist –
- * also 1,91:1, genau das Verhältnis, auf das X eine Linkkarte ohnehin
- * zuschneidet. Ein höheres Bild verlöre oben und unten je einen Streifen, und
- * als Erstes fiele der Rahmen weg.
+ * og:image:width/height are included so X can lay out the tile correctly
+ * before the image even loads; without them the timeline jumps when it
+ * loads in. The values are fixed because the card image is a fixed
+ * 1600 x 838 - i.e. 1.91:1, exactly the ratio X crops a link card to
+ * anyway. A taller image would lose a strip top and bottom, and the frame
+ * would be the first thing to go.
  *
- * 1600 px und nicht 3200: PNG rastert den Lichtschein im Grund mit einem
- * Rauschen, das sich bei doppelter Auflösung vervierfacht – 1,5 MB gegen
- * 400 KB, ohne sichtbaren Unterschied. X zeigt eine Kachel ohnehin rund 600 px
- * breit an.
+ * 1600 px and not 3200: PNG rasterizes the glow in the background with
+ * noise that quadruples at double the resolution - 1.5 MB versus 400 KB,
+ * with no visible difference. X displays a tile at around 600 px wide
+ * anyway.
  */
 /*
- * Der Titel MUSS drinstehen.
+ * The title MUST be present.
  *
- * Einmal probiert, ihn wegzulassen – X zeichnet ihn seit der neuen
- * Kachelgestaltung als schwarzen Kasten unten links INS Bild, wo er die
- * Fusszeile der Karte verdeckt. Ohne Titel baut X aber gar keine Kachel mehr,
- * sondern zeigt den nackten Link. Der Titel ist Pflicht, nicht Zierde.
+ * Tried leaving it out once - since the new tile layout, X draws it as a
+ * black box in the bottom left INTO the image, where it covers the card's
+ * footer. But without a title, X doesn't build a tile at all, it just
+ * shows the bare link. The title is mandatory, not decoration.
  *
- * Der Kasten ist stattdessen im Bild geloest: Das Kartenbild laesst unten
- * einen Streifen frei (siehe zeichnePoll, fuerKarte). Der Kasten landet dort
- * auf leerem Grund und verdeckt nichts.
+ * The box is instead accounted for in the image: the card image leaves a
+ * strip free at the bottom (see drawPoll, fuerKarte). The box lands
+ * there on empty ground and covers nothing.
  */
-function seite(opts: { id: number; titel: string; beschreibung: string; bild: string }) {
-  const ziel = `${SEITE}/#poll-${opts.id}`;
+function page(opts: { id: number; titel: string; beschreibung: string; bild: string }) {
+  const ziel = `${PAGE}/#poll-${opts.id}`;
   return `<!doctype html>
-<html lang="en">
+<html long="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(opts.titel)} · SIZED</title>
-<link rel="canonical" href="${esc(`${SEITE}/p/${opts.id}`)}">
+<link rel="canonical" href="${esc(`${PAGE}/p/${opts.id}`)}">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="SIZED">
-<meta property="og:url" content="${esc(`${SEITE}/p/${opts.id}`)}">
+<meta property="og:url" content="${esc(`${PAGE}/p/${opts.id}`)}">
 <meta property="og:title" content="${esc(opts.titel)}">
 <meta property="og:description" content="${esc(opts.beschreibung)}">
 <meta property="og:image" content="${esc(opts.bild)}">
@@ -130,9 +131,9 @@ function seite(opts: { id: number; titel: string; beschreibung: string; bild: st
 <meta name="twitter:description" content="${esc(opts.beschreibung)}">
 <meta name="twitter:image" content="${esc(opts.bild)}">
 
-<!-- Für Menschen: sofort weiter in die App. Der Crawler folgt dem nicht,
-     er hat oben schon alles gelesen, was er braucht. Das noscript-Refresh
-     ist der Rückfall für abgeschaltetes JavaScript. -->
+<!-- For humans: straight on into the app. The crawler doesn't follow
+     this, it's already read everything it needs above. The noscript
+     refresh is the fallback for JavaScript being disabled. -->
 <noscript><meta http-equiv="refresh" content="0; url=${esc(ziel)}"></noscript>
 <script>location.replace(${JSON.stringify(ziel)});</script>
 <style>
@@ -147,60 +148,58 @@ function seite(opts: { id: number; titel: string; beschreibung: string; bild: st
 Deno.serve(async (req) => {
   const url = new URL(req.url);
 
-  // Der Pfad kommt als /og/p/12 an (Supabase hängt den Funktionsnamen davor).
-  // Über den Netlify-Proxy landet /p/12 genau hier.
+  // The path arrives as /og/p/12 (Supabase prepends the function name).
+  // Through the Netlify proxy, /p/12 lands right here.
   const treffer = /\/p\/(\d+)/.exec(url.pathname);
 
-  const kopf = {
+  const header = {
     'content-type': 'text/html; charset=utf-8',
-    // Fünf Minuten am Rand, damit ein Schwall von Klicks nach einem Post nicht
-    // jedes Mal die Datenbank fragt. Länger nicht: Ändert Ansem die Frage,
-    // soll die Karte nicht tagelang die alte zeigen.
+    // Five minutes at the edge, so a burst of clicks after a post doesn't
+    // hit the database every single time. Not longer than that: if Ansem
+    // changes the question, the card shouldn't keep showing the old one
+    // for days.
     'cache-control': 'public, max-age=60, s-maxage=300',
   };
 
   if (!treffer) {
     return new Response(
-      `<!doctype html><meta http-equiv="refresh" content="0; url=${SEITE}/">`,
-      { status: 302, headers: { ...kopf, location: `${SEITE}/` } },
+      `<!doctype html><meta http-equiv="refresh" content="0; url=${PAGE}/">`,
+      { status: 302, headers: { ...header, location: `${PAGE}/` } },
     );
   }
 
   const id = Number(treffer[1]);
-  const ersatz = `${SEITE}/og-karte.png`;
-  const ziel = `${SEITE}/#poll-${id}`;
+  const ersatz = `${PAGE}/og-karte.png`;
+  const ziel = `${PAGE}/#poll-${id}`;
 
-  // Menschen bekommen eine echte Weiterleitung, Crawler die Seite mit den
-  // Meta-Zeilen.
+  // Humans get a real redirect, crawlers get the page with the meta tags.
   //
-  // Der Grund ist Netlify. Die Seite wird über sized.gg/p/12 durchgereicht,
-  // und Netlify entschaerft HTML, das von einem fremden Server kommt: Es
-  // liefert es als text/plain mit "default-src 'none'; sandbox" aus. Das ist
-  // Absicht und nicht abzustellen – sonst koennte jeder, der eine
-  // Weiterleitung auf seine Domain legt, dort fremdes HTML ausfuehren lassen.
+  // The reason is Netlify. The page gets proxied through sized.gg/p/12,
+  // and Netlify defangs HTML that comes from a foreign server: it serves
+  // it as text/plain with "default-src 'none'; sandbox". That's
+  // intentional and can't be turned off - otherwise anyone who points a
+  // redirect at their domain could run foreign HTML there.
   //
-  // Fuer den Crawler ist das egal, er liest den Text und findet die Meta-Zeilen
-  // trotzdem. Fuer einen Browser ist es fatal: Er zeigt Quelltext statt einer
-  // Seite, und das eingebettete location.replace laeuft nie.
+  // For the crawler that doesn't matter, it reads the text and finds the
+  // meta tags regardless. For a browser it's fatal: it shows source code
+  // instead of a page, and the embedded location.replace never runs.
   //
-  // Eine Weiterleitung hat keinen Inhalt, den man entschaerfen koennte. Sie
-  // geht unveraendert durch.
+  // A redirect has no content to defang. It passes through unchanged.
   //
-  // Erkannt wird der Crawler, nicht der Browser – im Zweifel wird
-  // weitergeleitet.
+  // What's detected is the crawler, not the browser - when in doubt, we
+  // redirect.
   //
-  // Beide Irrtuemer sind moeglich, aber sie kosten Unterschiedliches. Halten
-  // wir einen Browser faelschlich fuer einen Crawler, sieht ein Mensch
-  // Quelltext – kaputt. Halten wir einen Crawler faelschlich fuer einen
-  // Browser, folgt er der Weiterleitung, landet auf der App und liest deren
-  // allgemeine Meta-Zeilen: Er zeigt dann die SIZED-Karte statt der
-  // Abstimmung. Unschoen, aber nicht kaputt.
+  // Both mistakes are possible, but they cost different things. If we
+  // mistake a browser for a crawler, a human sees source code - broken. If
+  // we mistake a crawler for a browser, it follows the redirect, lands on
+  // the app and reads its generic meta tags: it then shows the SIZED card
+  // instead of the poll. Ugly, but not broken.
   //
-  // Deshalb faellt die Entscheidung so herum: Nur wer sich als Bot zu erkennen
-  // gibt, bekommt HTML. Kein Browser traegt "bot" im Namen; Discordbot und
-  // Konsorten schon.
+  // So the decision falls this way round: only whoever identifies as a bot
+  // gets HTML. No browser carries "bot" in its name; Discordbot and its
+  // like do.
   //
-  // curl steht bewusst NICHT auf der Liste – zum Pruefen der Meta-Zeilen:
+  // curl is deliberately NOT on the list - to check the meta tags:
   //   curl -sI -A Twitterbot https://sized.gg/p/16
   const ua = req.headers.get('user-agent') ?? '';
   const istCrawler = /bot|crawler|spider|preview|facebookexternalhit|slack|discord|telegram|whatsapp|embedly|quora|pinterest|vkshare|skype|applebot|bluesky|mastodon|twitter|linkedin|iframely|validator/i
@@ -211,33 +210,33 @@ Deno.serve(async (req) => {
       status: 302,
       headers: {
         location: ziel,
-        // Kurz zwischenspeichern, aber nicht lange: Sollte die Erkennung
-        // einmal danebenliegen, soll ein Fehler nicht tagelang haengen.
+        // Cache briefly, but not for long: should the detection ever be
+        // wrong, an error shouldn't linger for days.
         'cache-control': 'public, max-age=60',
       },
     });
   }
 
-  // Die Bildprüfung braucht nur die Nummer, und die steht schon in der
-  // Adresse. Sie wird deshalb hier losgeschickt und erst ganz unten abgeholt.
+  // The image check only needs the number, and that's already in the
+  // address. So it's fired off here and only picked up much further down.
   //
-  // Vorher stand sie am Ende und wartete auf Dinge, von denen sie nichts
-  // braucht: erst Abstimmung und Konfiguration, dann die Zahlen, dann das
-  // Bild. Vier Wege nacheinander, obwohl der vierte vom ersten bis dritten
-  // nicht abhängt. Für einen Menschen wäre das gleichgültig – hier wartet
-  // Xs Crawler darauf, und der entscheidet in dieser Zeit, ob er eine Kachel
-  // baut oder den nackten Link stehen lässt.
+  // It used to sit at the end and wait on things it doesn't need: first
+  // poll and config, then the numbers, then the image. Four round trips in
+  // a row, even though the fourth doesn't depend on the first three. For a
+  // human that wouldn't matter - here X's crawler is waiting on it, and
+  // during that time it decides whether to build a tile or leave the bare
+  // link standing.
   //
-  // Kostet im seltenen Fall eine überflüssige Anfrage: Wenn die Abstimmung
-  // gelöscht ist, war die Bildprüfung umsonst. Eine HEAD-Anfrage auf einen
-  // öffentlichen Eimer ist billiger als eine Wartezeit für alle anderen.
+  // Costs one wasted request in the rare case: if the poll has been
+  // deleted, the image check was for nothing. A HEAD request against a
+  // public bucket is cheaper than a wait for everyone else.
   const bildAdresse = `${Deno.env.get('SUPABASE_URL')}`
-    + `/storage/v1/object/public/og/poll-${id}-v${KARTEN_VERSION}.png`;
-  // Nummer 0 ist der Aufwaermruf des Cronjobs, alle zwei Minuten. Ihn hier
-  // auszunehmen spart nicht die Zeit – die interessiert bei einem Aufwaermruf
-  // niemanden –, sondern das Protokoll: Sonst stuenden dort 21.000
-  // Warnungen im Monat ueber ein Bild, das es nie geben sollte, und echte
-  // Warnungen gingen darin unter.
+    + `/storage/v1/object/public/og/poll-${id}-v${CARD_VERSION}.png`;
+  // Number 0 is the cron job's warm-up call, every two minutes. Excluding
+  // it here doesn't save time - nobody cares about timing on a warm-up
+  // call - it saves the log: otherwise there'd be 21,000 warnings a month
+  // about an image that was never supposed to exist, and real warnings
+  // would get lost in them.
   const bildProbe = id > 0
     ? fetch(bildAdresse, { method: 'HEAD' })
         .then((r) => {
@@ -251,14 +250,14 @@ Deno.serve(async (req) => {
     : Promise.resolve(false);
 
   try {
-    // Alle drei Abfragen gleichzeitig, nicht zwei und danach eine.
+    // All three queries at once, not two and then one.
     //
-    // Die Zahlen hingen vorher an den Options-Nummern aus der ersten Abfrage
-    // (`in (...)`) und mussten deshalb warten. Sie muessen es nicht: Die Sicht
-    // poll_results traegt poll_id selbst, und die steht schon in der Adresse.
-    // Aus zwei Wegen nacheinander wird einer – und genau in dieser Zeit
-    // entscheidet Xs Crawler, ob er eine Kachel baut oder den nackten Link
-    // stehen laesst.
+    // The numbers used to depend on the option ids from the first query
+    // (`in (...)`) and therefore had to wait. They don't have to: the
+    // poll_results view carries poll_id itself, and that's already in the
+    // address. Two round trips in sequence become one - and it's exactly
+    // during this time that X's crawler decides whether to build a tile or
+    // leave the bare link standing.
     const [{ data: poll }, { data: cfg }, { data: ergebnisse }] = await Promise.all([
       db.from('polls').select('id, question, closed, closes_at')
         .eq('id', id).maybeSingle(),
@@ -269,71 +268,69 @@ Deno.serve(async (req) => {
     const symbol = cfg?.symbol ?? 'ANSEM';
 
     if (!poll) {
-      // Gelöscht oder nie dagewesen. Keine Fehlerseite: Wer den Link
-      // anklickt, soll in der App landen und dort die ehrliche Meldung
-      // bekommen, statt hier in einer Sackgasse zu stehen.
-      return new Response(seite({
+      // Deleted, or never existed. No error page: whoever clicks the link
+      // should land in the app and get the honest message there, instead
+      // of standing here in a dead end.
+      return new Response(page({
         id,
         titel: 'This poll is gone',
         beschreibung: `Community votes weighted by $${symbol} holdings.`,
         bild: ersatz,
-      }), { status: 200, headers: kopf });
+      }), { status: 200, headers: header });
     }
 
     const stimmen = (ergebnisse ?? []).reduce((a, r) => a + Number(r.votes ?? 0), 0);
     const usd = (ergebnisse ?? []).reduce((a, r) => a + Number(r.usd ?? 0), 0);
     const zu = poll.closed || (poll.closes_at && new Date(poll.closes_at) < new Date());
 
-    // Kein "N votes" mehr, nur der Betrag.
+    // No more "N votes", just the amount.
     //
-    // Die Stimmenzahl war die einzige Angabe, die sich billig faelschen liess:
-    // Wer 100k auf zehn Wallets verteilt, aendert am Betrag nichts, macht aus
-    // einer Stimme aber zehn. Der Betrag ist dagegen an den Bestand gebunden –
-    // dieselben Token koennen nicht zweimal zaehlen.
+    // The vote count was the one figure that was cheap to fake: splitting
+    // 100k across ten wallets doesn't change the amount, but turns one
+    // vote into ten. The amount, by contrast, is tied to the holding -
+    // the same tokens can't count twice.
     //
-    // Gezaehlt wird sie hier trotzdem noch: Sie entscheidet, ob ueberhaupt
-    // schon jemand abgestimmt hat, und das ist ein anderer Satz.
+    // It's still counted here regardless: it decides whether anyone has
+    // voted at all yet, and that's a different sentence.
     const beschreibung = stimmen === 0
       ? `Hold $${symbol} to vote. Your weight is your balance.`
       : `$${nf.format(Math.round(usd))} in $${symbol}` + (zu ? ' · closed' : '');
 
-    // Das Bild liegt im öffentlichen Eimer und wird von Ansems Browser dorthin
-    // gelegt: beim Anlegen der Abstimmung und noch einmal, wenn er es
-    // herunterlädt. Der Name ist fest, damit die Adresse vorhersagbar ist –
-    // X merkt sie sich ohnehin tagelang, ein wechselnder Name brächte also
-    // nichts als kalte Zwischenspeicher.
+    // The image lives in the public bucket and is put there by Ansem's
+    // browser: when the poll is created, and again when he downloads it.
+    // The name is fixed so the address is predictable - X caches it for
+    // days anyway, so a changing name would bring nothing but cold caches.
     //
-    // Nachgesehen wird trotzdem, ob es wirklich da ist: Abstimmungen aus der
-    // Zeit vor dieser Function haben keins, und eine Kachel mit kaputtem
-    // Bildsymbol sieht aus, als sei die ganze Seite hin. Losgeschickt wurde
-    // die Prüfung ganz oben; hier wird nur noch abgeholt, was längst
-    // unterwegs war.
-    // Auf die Bildpruefung wird gewartet – aber nicht unbegrenzt.
+    // It's still checked whether it's really there: polls from before this
+    // function existed don't have one, and a tile with a broken image icon
+    // looks like the whole site is down. The check was fired off way up
+    // top; here it's just picked up, having long been in flight.
+    // The image check is awaited - but not indefinitely.
     //
-    // Sie ist eine Hoeflichkeit gegenueber alten Abstimmungen ohne Karte. Ist
-    // der Speicher gerade langsam, waere sie das Gegenteil davon: Der Crawler
-    // haengt an einer Frage, deren Antwort in aller Regel "ja" lautet.
+    // It's a courtesy toward old polls without a card. If storage happens
+    // to be slow, it would be the opposite of that: the crawler would hang
+    // on a question whose answer is almost always "yes".
     //
-    // Nach 400 ms wird deshalb "ja" angenommen. Der Irrtum kostet eine Kachel
-    // mit kaputtem Bildsymbol bei einer alten Abstimmung; das Warten kostet
-    // die Kachel bei jeder.
+    // So after 400 ms, "yes" is assumed. The mistake costs a tile with a
+    // broken image icon on an old poll; waiting costs the tile on every
+    // single one.
     const bildDa = await Promise.race([
       bildProbe,
       new Promise<boolean>((r) => setTimeout(() => r(true), 400)),
     ]);
     const bild = bildDa ? bildAdresse : ersatz;
 
-    return new Response(seite({ id, titel: poll.question, beschreibung, bild }),
-      { status: 200, headers: kopf });
+    return new Response(page({ id, titel: poll.question, beschreibung, bild }),
+      { status: 200, headers: header });
   } catch (err) {
     console.error('[og] Abstimmung nicht lesbar:', err);
-    // Auch im Fehlerfall eine gültige Seite: Ein 500 würde auf X als kaputter
-    // Link erscheinen, obwohl die Abstimmung selbst in Ordnung ist.
-    return new Response(seite({
+    // A valid page even on error: a 500 would show up on X as a broken
+    // link, even though the poll itself is fine.
+    return new Response(page({
       id,
       titel: 'SIZED',
       beschreibung: 'Community votes weighted by holdings.',
       bild: ersatz,
-    }), { status: 200, headers: kopf });
+    }), { status: 200, headers: header });
   }
 });

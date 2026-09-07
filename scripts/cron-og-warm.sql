@@ -1,36 +1,35 @@
 -- ============================================================================
--- Die og-Function wach halten
+-- Keep the og function warm
 --
--- Einzuspielen im Supabase-Dashboard unter SQL Editor.
+-- Run this in the Supabase dashboard under SQL Editor.
 --
--- Das Problem, das dieser Job löst:
+-- The problem this job solves:
 --
--- Wer einen Abstimmungslink in Xs Schreibfenster einfügt, sieht erst nur den
--- Link. Die Kachel erscheint, sobald Xs Crawler die Seite geholt hat. Das
--- Warten kommt fast vollständig aus einer Stelle: Eine Edge Function, die
--- eine Weile nicht gebraucht wurde, schläft. Der erste Aufruf muss sie
--- aufwecken, und das kostet ein bis zwei Sekunden – mehr als alles andere im
--- ganzen Weg zusammen.
+-- Someone who pastes a poll link into X's compose box first sees only the
+-- link. The card appears once X's crawler has fetched the page. The wait
+-- comes almost entirely from one place: an edge function that hasn't been
+-- called in a while goes to sleep. The first call has to wake it, and that
+-- costs one to two seconds - more than everything else in the whole path
+-- combined.
 --
--- Genau dieser erste Aufruf ist aber der, auf den es ankommt. Ein Link wird
--- einmal gepostet; danach merkt X sich die Kachel tagelang und fragt gar
--- nicht mehr nach. Die Function ist also fast immer kalt, wenn sie gebraucht
--- wird – ein perfektes Gegenteil von dem, was man will.
+-- And that first call is exactly the one that matters. A link gets posted
+-- once; after that X caches the card for days and never asks again. So the
+-- function is almost always cold when it's needed - the exact opposite of
+-- what you want.
 --
--- Alle zwei Minuten ein Aufruf hält sie wach. Das sind rund 21.000 Aufrufe im
--- Monat; im Pro-Tarif sind zwei Millionen enthalten, es kostet also nichts.
+-- One call every two minutes keeps it warm. That's about 21,000 calls a
+-- month; the Pro plan includes two million, so it costs nothing.
 --
--- Aufgerufen wird /p/0 – eine Abstimmung mit dieser Nummer gibt es nicht. Das
--- ist Absicht: Der Weg durch die Function ist derselbe (Datenbank fragen,
--- Antwort bauen), nur ohne Bildprüfung. Es wärmt, was gewärmt werden muss,
--- und rührt sonst nichts an.
+-- What gets called is /p/0 - there is no poll with that number. That's
+-- deliberate: the path through the function is the same (query the
+-- database, build the response), just without the image work. It warms
+-- what needs warming and touches nothing else.
 --
--- Der User-Agent muss nach Bot aussehen, sonst antwortet die Function mit
--- einer Weiterleitung und der eigentliche Weg – Datenbank, Seitenbau – bliebe
--- kalt.
+-- The user agent has to look like a bot, or the function answers with a
+-- redirect and the actual work - database, page build - stays cold.
 --
--- Wiederholbar: Ein gleichnamiger Job wird vorher weggeräumt. cron.schedule
--- überschreibt NICHT, es legt einen zweiten mit demselben Namen an.
+-- Repeatable: a job with the same name is removed first. cron.schedule does
+-- NOT overwrite - it creates a second job with the same name.
 -- ============================================================================
 
 do $$
@@ -47,5 +46,5 @@ select cron.schedule('og-warm', '*/2 * * * *', $$
   );
 $$);
 
--- Prüfen: Der Job muss dastehen und active = true sein.
+-- Check: the job must be listed and active = true.
 select jobname, schedule, active from cron.job where jobname = 'og-warm';

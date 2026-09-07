@@ -1,7 +1,7 @@
 /**
- * Prüft die reine Logik der Edge Functions ohne Deno-Runtime: Adressen,
- * Base58, JWT-Ausstellung und -Prüfung und das Zuordnen von Treasury-Zahlungen
- * zu offenen Challenges.
+ * Tests the pure logic of the Edge Functions without a Deno runtime:
+ * addresses, base58, issuing and verifying JWTs, and matching treasury
+ * payments to open challenges.
  */
 import fs from 'node:fs';
 import { isSolanaAddress, decodeBase58, encodeBase58 } from '../supabase/functions/_shared/base58.ts';
@@ -24,7 +24,7 @@ check('Gültige Adressen werden akzeptiert', VALID.every(isSolanaAddress));
 check('32 Byte nach Dekodierung', VALID.every((a) => decodeBase58(a).length === 32));
 
 const INVALID = [
-  '', 'kurz', 'nicht-base58!', 'IOl0OI0lIOl0OI0lIOl0OI0lIOl0OI0l',
+  '', 'short', 'nicht-base58!', 'IOl0OI0lIOl0OI0lIOl0OI0lIOl0OI0l',
   'EsZCz3LJMMwPuBc6NhjAUFSUGRpY1Xnhj7oZX2TTZ',          // dekodiert zu 30 Byte
   '1EsZCz3LJMMwPuBc6NhjAUFSUGRpY1Xnhj7oZX2TTZCWa',      // dekodiert zu 33 Byte
   'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz',       // Wert zu groß
@@ -36,9 +36,9 @@ const rejected = INVALID.filter((v) => !isSolanaAddress(v));
 check('Alles Ungültige wird abgelehnt', rejected.length === INVALID.length,
   `${rejected.length}/${INVALID.length}`);
 
-// Solana-Adressen haben keine Prüfsumme: ein um ein Zeichen gekürzter String
-// kann rein strukturell noch gültig sein. Ein Tippfehler in der Adresse führt
-// deshalb zu einer Zahlung ins Nichts – die Oberfläche weist darauf hin.
+// Solana addresses have no checksum: a string shortened by one character can
+// still be structurally valid. A typo in the address therefore leads to a
+// payment into the void - the interface calls this out.
 check('Ohne Prüfsumme bleibt ein Vertipper strukturell gültig',
   isSolanaAddress('EsZCz3LJMMwPuBc6NhjAUFSUGRpY1Xnhj7oZX2TTZCW'));
 
@@ -80,7 +80,7 @@ check('encode(decode(x)) === x', VALID.every((a) => encodeBase58(decodeBase58(a)
 
 console.log('\n── Zahlungszuordnung ──');
 
-/** Nachbau der Matching-Regel aus verify/index.ts für einen isolierten Test. */
+/** Reconstruction of the matching rule from verify/index.ts for an isolated test. */
 function match(payment, challenges, seen) {
   if (seen.has(payment.signature)) return null;
   return challenges.find((c) =>
@@ -112,23 +112,23 @@ seen.add('s5');
 check('Bereits verbuchte Signatur wird ignoriert (kein Replay)',
   match({ signature: 's5', sender: WALLET, lamports: 2_042_779 }, challenges, seen) === null);
 
-// Der Nonce-Aufschlag ist das, was die fremde Zahlung unbrauchbar macht:
-// Ein Angreifer, der WALLET einträgt, kennt den erwarteten Betrag nicht.
+// The nonce surcharge is what makes a stranger's payment useless: an
+// attacker who enters WALLET doesn't know the expected amount.
 const BASE = 2_000_000, NONCE_MAX = 100_000;
 const amounts = new Set(Array.from({ length: 500 },
   () => BASE + 1 + Math.floor(Math.random() * (NONCE_MAX - 1))));
-check('Nonce-Beträge streuen breit genug',
+check('Nonce-Beträge streuen wide genug',
   amounts.size > 480, `${amounts.size} verschiedene aus 500 Ziehungen`);
 check('Betrag liegt immer im erwarteten Fenster',
   [...amounts].every((a) => a > BASE && a < BASE + NONCE_MAX));
 
 
-// ── Freischaltung ──
+// ── Gate access ──
 //
-// Solange open_to_public false ist, kommt nur Ansem herein. Geprueft wird die
-// Regel selbst und nicht ihr Aufrufort, weil sie an ZWEI Toren gebraucht wird:
-// bei der Anmeldung und beim Verlaengern einer Sitzung. Fehlte sie an einem
-// davon, faellt das niemandem auf – es sieht ja aus wie geschlossen.
+// As long as open_to_public is false, only Ansem gets in. What's tested is
+// the rule itself and not where it's called from, because it's needed at
+// TWO gates: at login and when renewing a session. If it were missing at
+// one of them, nobody would notice - it still looks closed.
 console.log('\n── Freischaltung ──');
 const ADMIN = 'EsZCz3LJMMwPuBc6NhjAUFSUGRpY1Xnhj7oZX2TTZCWa';
 const FREMD = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -138,36 +138,36 @@ const auf = { admin_wallet: ADMIN, test_wallet: TEST, open_to_public: true };
 
 check('Zu: ein Fremder kommt nicht herein', !mayEnter(zu, FREMD));
 check('Zu: Ansem schon', mayEnter(zu, ADMIN));
-// Die zweite Adresse ist nicht Bequemlichkeit: Die Nutzerseite verhaelt sich
-// anders als Ansems, und nur mit seiner Wallet saehe man sie nie.
+// The second address isn't for convenience: the user-facing side behaves
+// differently from Ansem's, and with only his wallet you'd never see it.
 check('Zu: die Testwallet auch', mayEnter(zu, TEST));
 check('Auf: jeder kommt herein', mayEnter(auf, FREMD) && mayEnter(auf, ADMIN));
 
-// Beide Auswege haengen an einem gesetzten Wert. Steht dort nichts, darf das
-// nicht zur offenen Tuer werden: null gleich null waere sonst genau das – und
-// zwar fuer JEDEN, der ohne Adresse anfragt.
-const leer = { admin_wallet: null, test_wallet: null, open_to_public: false };
+// Both ways out hinge on a value being set. If nothing is set there, that
+// must not turn into an open door: null equals null would otherwise be
+// exactly that - for EVERYONE who asks without an address.
+const empty = { admin_wallet: null, test_wallet: null, open_to_public: false };
 check('Ohne gesetzte Adressen gibt es keinen Ausweg',
-  !mayEnter(leer, FREMD) && !mayEnter(leer, null));
+  !mayEnter(empty, FREMD) && !mayEnter(empty, null));
 
-// Und der Fall, der nicht "zu" heissen darf: Die Spalte fehlt.
+// And the case that must not count as "closed": the column is missing.
 //
-// Das passiert, wenn die Function ausgerollt wird und die Migration nicht –
-// zwei Wege, die von Hand gegangen werden und deshalb verschieden alt sein
-// koennen. Frueher hiess das hier "zu", mit dem Argument: im Zweifel
-// niemanden hereinlassen. Nach dem Start ist das die schlechtere Richtung:
-// Dann sperrt ein Deployment aus einem ganz anderen Grund die Seite, ohne
-// dass es jemand wollte. Zusperren muss eine Handlung sein, kein Versehen.
-const ohneSpalte = { admin_wallet: ADMIN, test_wallet: null };
-check('Fehlt die Spalte, ist die Seite offen', mayEnter(ohneSpalte, FREMD));
+// That happens when the function is rolled out and the migration isn't -
+// two paths that are walked by hand and can therefore end up out of sync in
+// age. This used to say "closed" here, with the argument: when in doubt,
+// let nobody in. After launch that's the worse direction: then a deployment
+// locks the site for a completely different reason, without anyone wanting
+// that. Locking it must be an action, not an accident.
+const withoutColumn = { admin_wallet: ADMIN, test_wallet: null };
+check('Fehlt die Spalte, ist die Seite offen', mayEnter(withoutColumn, FREMD));
 check('Und null zaehlt genauso',
-  mayEnter({ ...ohneSpalte, open_to_public: null }, FREMD));
-// Zu ist sie nur bei einem ausdruecklichen false.
+  mayEnter({ ...withoutColumn, open_to_public: null }, FREMD));
+// It's only closed on an explicit false.
 check('Nur ein ausdrueckliches false sperrt', !mayEnter(zu, FREMD));
 
-// Und die Sperre steht an beiden Toren in verify – vor allem VOR der Stelle,
-// die einen Betrag nennt. Die Anmeldung ist eine Ueberweisung: Wer erst zahlt
-// und dann abgewiesen wird, hat Geld fuer nichts geschickt.
+// And the lock sits at both gates in verify - above all BEFORE the spot
+// that names an amount. Logging in is a bank transfer: whoever pays first
+// and gets turned away afterwards has sent money for nothing.
 const verifySrc = fs.readFileSync(
   new URL('../supabase/functions/verify/index.ts', import.meta.url), 'utf8');
 check('Beide Tore in verify benutzen die Regel',

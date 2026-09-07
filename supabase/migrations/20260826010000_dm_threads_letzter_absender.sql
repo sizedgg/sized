@@ -1,27 +1,27 @@
 -- ============================================================================
--- Der Posteingang soll zeigen, wer zuletzt geschrieben hat
+-- The inbox should show who wrote last
 --
--- Bisher lieferte dm_threads nur den Text der letzten Nachricht. Ob er von
--- Ansem stammt oder vom Gegenüber, war daraus nicht zu erkennen – im
--- Posteingang stand also "checking" neben "any chance of a mobile app later",
--- ohne dass sichtbar war, dass das erste seine eigene Antwort ist.
+-- Until now, dm_threads only delivered the text of the last message.
+-- Whether it came from Ansem or from the other side couldn't be told from
+-- that - so the inbox showed "checking" next to "any chance of a mobile app
+-- later" with no way to see that the first one is his own reply.
 --
--- Das ist die Auskunft, auf die es beim Abarbeiten ankommt: Liegt der Ball
--- noch bei mir?
+-- That's the piece of information that matters when working through it: is
+-- the ball still in my court?
 --
--- Ermittelt wird es wie der Vorschautext selbst – über die höchste id, nicht
--- über created_at. Die id ist streng aufsteigend, zwei Nachrichten in
--- derselben Sekunde bleiben damit eindeutig sortiert.
+-- This is determined the same way the preview text itself is - via the
+-- highest id, not via created_at. The id is strictly increasing, so two
+-- messages in the same second stay unambiguously ordered.
 --
--- create or replace bei einer View darf Spalten nur anhängen, nicht
--- umbenennen oder entfernen. last_from_admin steht deshalb am Ende.
+-- create or replace on a view can only append columns, not rename or remove
+-- them. That's why last_from_admin sits at the end.
 -- ============================================================================
 
--- Erst weg, dann neu. "create or replace view" kann Spalten nur ANHAENGEN,
--- nicht wegnehmen – und eine spaetere Migration erweitert diese Sicht. Beim
--- zweiten Durchlauf der Migrationen (der laufen koennen muss, etwa beim
--- Aufsetzen eines frischen Projekts) traefe diese Zeile sonst auf die breitere
--- Fassung und stiege mit "cannot drop columns from view" aus.
+-- Drop first, then recreate. "create or replace view" can only APPEND
+-- columns, not remove them - and a later migration extends this view. On
+-- the second run of the migrations (which has to work, e.g. when setting up
+-- a fresh project), this line would otherwise hit the wider version and
+-- bail out with "cannot drop columns from view".
 drop view if exists public.dm_threads;
 create or replace view public.dm_threads
 with (security_invoker = on) as

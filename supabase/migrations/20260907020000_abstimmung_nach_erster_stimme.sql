@@ -1,54 +1,53 @@
 -- ============================================================================
--- Eine Abstimmung, die schon laeuft, aendert ihren Wortlaut nicht mehr
+-- A poll that's already running no longer changes its wording
 -- ============================================================================
 --
--- Der Fall, um den es geht: Ansem legt "A oder B?" an, dreissig Wallets
--- stimmen ab, dann bearbeitet er die Frage zu "C oder D?". Die Stimmen bleiben
--- stehen, die Zahlen bleiben stehen – nur beantworten sie jetzt eine andere
--- Frage. Wer fuer A gestimmt hat, steht hinterher unter C.
+-- The case this is about: Ansem creates "A or B?", thirty wallets vote,
+-- then he edits the question to "C or D?". The votes stay, the numbers
+-- stay - they just answer a different question now. Whoever voted for A
+-- ends up standing under C afterward.
 --
--- Bis hierher war das erlaubt. polls_admin_write gibt Ansem "for all", und das
--- schliesst update auf jede Spalte ein. Das ist die letzte Stelle im Projekt,
--- an der ein Ergebnis nachtraeglich etwas anderes bedeuten kann, als die
--- Abstimmenden gesehen haben.
---
--- ----------------------------------------------------------------------------
--- Warum ein Trigger und keine Policy
---
--- Eine RLS-Policy sieht mit "using" die alte und mit "with check" die neue
--- Zeile, aber sie kann nicht sagen "diese Spalte darf sich nicht aendern, die
--- daneben schon". Genau das ist hier verlangt: closed und closes_at MUESSEN
--- weiter aenderbar bleiben – eine laufende Abstimmung zu schliessen ist der
--- Normalfall, nicht die Ausnahme. Ein Trigger vergleicht old und new pro
--- Spalte und ist die einzige Stelle, an der das genau geht.
---
--- security definer, weil die Funktion zaehlen muss, wie viele Stimmen es
--- WIRKLICH gibt. Ohne sie zaehlt sie nur die, die der Aufrufer laut RLS sehen
--- darf – und eine Sperre, die man dadurch aushebelt, dass man weniger sehen
--- darf, ist keine.
+-- Up to now this was allowed. polls_admin_write grants Ansem "for all",
+-- and that includes update on every column. This is the last spot in the
+-- project where a result could later mean something different from what
+-- the voters actually saw.
 --
 -- ----------------------------------------------------------------------------
--- Was gesperrt wird und was nicht
+-- Why a trigger and not a policy
 --
---   gesperrt      Frage umschreiben, sobald eine Stimme da ist
---   gesperrt      Antwortmoeglichkeit umbenennen
---   gesperrt      Antwortmoeglichkeit loeschen (nimmt die Stimmen mit)
---   gesperrt      Antwortmoeglichkeit hinzufuegen (die frueher Abstimmenden
---                 haben sie nie gesehen)
---   erlaubt       schliessen, Frist setzen oder verschieben
---   erlaubt       alles davon, solange NIEMAND abgestimmt hat
---   erlaubt       die ganze Abstimmung loeschen und neu anlegen
+-- An RLS policy sees the old row via "using" and the new row via "with
+-- check", but it can't say "this column may not change, the one next to
+-- it may". That's exactly what's needed here: closed and closes_at MUST
+-- stay changeable - closing a running poll is the normal case, not the
+-- exception. A trigger compares old and new column by column and is the
+-- only place that gets this exactly right.
 --
--- Der letzte Punkt ist Absicht und kein Loch: Loeschen nimmt die Stimmen
--- sichtbar mit. Es ist ein neuer Anfang, keine stille Umdeutung, und genau das
--- ist der Unterschied, um den es hier geht.
+-- security definer, because the function needs to count how many votes
+-- REALLY exist. Without it, it would only count what the caller is
+-- allowed to see under RLS - and a lock that gets defeated by seeing less
+-- isn't a lock.
+--
+-- ----------------------------------------------------------------------------
+-- What gets locked and what doesn't
+--
+--   locked        rewriting the question once a vote exists
+--   locked        renaming an answer option
+--   locked        deleting an answer option (takes its votes with it)
+--   locked        adding an answer option (earlier voters never saw it)
+--   allowed       closing, setting or moving the deadline
+--   allowed       all of the above as long as NOBODY has voted yet
+--   allowed       deleting the whole poll and creating it anew
+--
+-- That last point is deliberate and not a hole: deleting visibly takes the
+-- votes with it. It's a fresh start, not a silent reinterpretation, and
+-- that's exactly the distinction this migration is about.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Hat diese Abstimmung schon Stimmen?
+-- Does this poll already have votes?
 -- ----------------------------------------------------------------------------
--- exists statt count(*): Bei der ersten gefundenen Zeile ist die Frage
--- beantwortet, und die Antwort haengt nicht daran, wie viele es sind.
+-- exists instead of count(*): the question is answered at the first row
+-- found, and the answer doesn't depend on how many there are.
 create or replace function app.abstimmung_laeuft(p_poll_id bigint)
 returns boolean
 language sql
@@ -64,7 +63,7 @@ comment on function app.abstimmung_laeuft(bigint) is
 
 
 -- ----------------------------------------------------------------------------
--- Die Frage selbst
+-- The question itself
 -- ----------------------------------------------------------------------------
 create or replace function app.frage_nach_erster_stimme_fest()
 returns trigger
@@ -73,9 +72,9 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  -- Nur wenn sich der Wortlaut tatsaechlich aendert. Ein update, das die Frage
-  -- mitschreibt ohne sie zu aendern (der Normalfall bei "closed = true" aus
-  -- einem Formular heraus), soll durchgehen.
+  -- Only when the wording actually changes. An update that writes the
+  -- question back unchanged (the normal case for "closed = true" coming
+  -- from a form) is meant to go through.
   if new.question is distinct from old.question
      and app.abstimmung_laeuft(old.id) then
     raise exception
@@ -93,11 +92,11 @@ create trigger trg_polls_frage_fest
 
 
 -- ----------------------------------------------------------------------------
--- Die Antwortmoeglichkeiten
+-- The answer options
 -- ----------------------------------------------------------------------------
--- Drei Wege, eine laufende Abstimmung ueber die Optionen umzudeuten, und alle
--- drei brauchen ihren eigenen Trigger, weil update, delete und insert
--- verschiedene Zeilen sehen (old, old, new).
+-- Three ways to reinterpret a running poll through its options, and all
+-- three need their own trigger, because update, delete and insert see
+-- different rows (old, old, new).
 
 create or replace function app.option_nach_erster_stimme_fest()
 returns trigger
@@ -129,9 +128,9 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  -- Wenn die ganze Abstimmung geloescht wird, raeumt der Fremdschluessel die
-  -- Optionen mit ab, und dieser Trigger feuert dabei auch. Das soll er nicht
-  -- verhindern: Die Abstimmung als Ganzes zu verwerfen ist erlaubt.
+  -- When the whole poll is deleted, the foreign key clears out the options
+  -- along with it, and this trigger fires too in that case. It shouldn't
+  -- block that: discarding the poll as a whole is allowed.
   if exists (select 1 from public.polls where id = old.poll_id)
      and app.abstimmung_laeuft(old.poll_id) then
     raise exception

@@ -1,47 +1,47 @@
 // ============================================================================
-// Vorschaubild: Wie soll der Chat aussehen?
+// Preview image: what should the chat look like?
 //
-// Ausgangspunkt: Polls und Ansems Posteingang liegen in umrandeten, gerundeten
-// Flächen auf dem Seitengrund. Der Chat ist als einziger Bereich randlos – die
-// Filterleiste ist ein fensterbreites Band, die Nachrichten laufen bis an den
-// Rand, die Eingabe hängt unten an einer durchgehenden Linie. Genau das ist der
-// Unterschied, der ihn unfertig wirken lässt.
+// Starting point: polls and Ansem's inbox sit in bordered, rounded panels
+// on the page background. Chat is the only area without one - the filter
+// bar is a window-wide strip, messages run to the edge, the composer hangs
+// at the bottom off a plain line. That's exactly the difference that makes
+// it look unfinished.
 //
-// Erzeugt preview/chat-look.png: derselbe Chat viermal untereinander.
+// Produces preview/chat-look.png: the same chat, stacked four times.
 //
-// Die Vorlage ist das echte Markup aus msgHtml() – Klassennamen, Reihenfolge
-// und Verschachtelung stimmen mit app.js überein. Nur so zeigt das Bild, was
-// das echte Stylesheet daraus macht, statt eine hübsche Attrappe zu sein.
+// The template is the real markup from msgHtml() - class names, order and
+// nesting match app.js. Only that way does the image show what the real
+// stylesheet actually does with it, instead of being a pretty mockup.
 // ============================================================================
 
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 
-// --- Der gemeinsame Grundstock: Chat in einer Fläche -------------------------
-// Die Werte sind aus .thread-view und .poll übernommen, nicht neu erfunden.
+// --- The shared baseline: chat in a panel -----------------------------------
+// The values are taken from .thread-view and .poll, not invented anew.
 const PANEL = `
   .chat-panel {
     flex: 1; min-height: 0; display: flex; flex-direction: column;
     border: 1px solid var(--line); border-radius: var(--radius);
     background: var(--bg-1); overflow: hidden;
   }
-  /* Die Filterleiste wird zur Kopfzeile der Fläche: Ihre Linie endet jetzt am
-     Rand der Fläche statt am Fensterrand. */
+  /* The filter bar becomes the panel's header: its line now ends at the
+     panel's edge instead of the window edge. */
   .chat-panel .filters { padding: .7rem .9rem; }
   .chat-panel .chat-list { padding: .9rem; }
   .chat-panel .composer { padding: .7rem .9rem; border-top: 1px solid var(--line); }
-  /* Eingabefelder in einer Fläche liegen tiefer als die Fläche – dieselbe
-     Regel, nach der .poll-admin input schon var(--bg) benutzt. Auf var(--bg-1)
-     wären sie randlos unsichtbar. */
+  /* Input fields inside a panel sit a shade darker than the panel - the
+     same rule .poll-admin input already follows with var(--bg). On
+     var(--bg-1) they'd be invisible without a border. */
   .chat-panel .composer input,
   .chat-panel .filter-group { background: var(--bg); }
-  /* Der Zeigerhinweis muss eine Stufe höher, sonst deckt er sich mit der
-     Fläche und die Zeile reagiert scheinbar nicht. */
+  /* The hover fill needs to be one step brighter, or it matches the panel
+     and the row looks like it isn't reacting at all. */
   .chat-panel .msg:hover { background: var(--bg-2); }
 `;
 
-// --- Nachrichten als Blasen, wie in den DMs ---------------------------------
-const BLASEN = `
+// --- Messages as bubbles, like in the DMs -----------------------------------
+const BUBBLES = `
   @ .chat-list { gap: .35rem; }
   @ .msg {
     width: fit-content; max-width: 86%;
@@ -53,26 +53,27 @@ const BLASEN = `
   @ .msg .meta { align-self: end; }
 `;
 
-// --- Zweiter Durchgang: die Spalte vor dem Text ----------------------------
-// Blasen legen sich um ihren Inhalt, also fängt jede Zeile woanders an – und
-// weil der Betrag mal "$3" und mal "$781.42K" breit ist, rutscht der Text bei
-// jeder Nachricht an eine andere Stelle. Dagegen hilft nur eines: Kürzel und
-// Betrag stehen in einer Spalte fester Breite, und der Text beginnt dahinter
-// immer am selben Punkt.
+// --- Second pass: the column in front of the text ---------------------------
+// Bubbles wrap around their content, so every line starts in a different
+// place - and because the amount is sometimes "$3" and sometimes
+// "$781.42K" wide, the text shifts to a different spot with every message.
+// Only one thing fixes that: handle and amount sit in a fixed-width
+// column, and the text behind them always starts at the same point.
 //
-// Die Breite ist nicht geraten. fmtUsd() kürzt ab 10.000 auf "$31.5K", der
-// längste Fall ist damit achtstellig ("$781.42K"). Acht Zeichen Schreibmaschine
-// plus Innenabstand der Pille plus drei Zeichen Kürzel plus Zwischenraum – das
-// ergibt die 7,1rem unten, mit etwas Luft für ein längeres Tokenkürzel als
-// "ANSEM".
-const SPALTE = (extra = '') => `
-  ${BLASEN}
+// The width isn't a guess. fmtUsd() abbreviates from 10,000 up to
+// "$31.5K", so the longest case is eight characters ("$781.42K"). Eight
+// monospace characters plus the pill's padding plus three characters for
+// the handle plus the gap - that adds up to the 7.1rem below, with a bit
+// of slack for a token handle longer than "ANSEM".
+const COLUMN = (extra = '') => `
+  ${BUBBLES}
   @ .msg .who {
     display: inline-grid; grid-template-columns: 3ch minmax(0, 1fr);
     align-items: center; gap: .35rem; width: 7.1rem;
   }
-  /* Der Betrag liegt jetzt auf der helleren Blase statt auf dem Seitengrund.
-     Damit die Pille dort nicht verschwindet, wird sie eine Spur deutlicher. */
+  /* The amount now sits on the brighter bubble instead of the page
+     background. To keep the pill from disappearing there, it gets a
+     touch more distinct. */
   @ .worth {
     background: rgba(255, 255, 255, .05);
     border-color: var(--bg-3);
@@ -80,23 +81,23 @@ const SPALTE = (extra = '') => `
   ${extra}
 `;
 
-// --- Dritter Durchgang: der Betrag ohne eigene Blase ------------------------
-// Die Pille war ein Kasten in einem Kasten – sobald die Nachricht selbst eine
-// Blase ist, ist das eine Umrandung zu viel. Der Betrag steht jetzt als blosse
-// Zahl da.
+// --- Third pass: the amount without its own bubble --------------------------
+// The pill was a box inside a box - once the message itself is a bubble,
+// that's one border too many. The amount now stands as a plain number.
 //
-// Und er ist kurz: kurzUsd() kuerzt ab tausend mit K, sodass nie mehr als drei
-// Ziffernstellen dastehen ($1.4K statt $1,412). Damit ist der laengste Fall
-// fuenf Zeichen breit ($781K, $1.2M) – die Spalte kann eng sein, ohne je
-// ueberzulaufen.
+// And it's short: shortUsd() abbreviates from a thousand up with K, so
+// never more than three digits show ($1.4K instead of $1,412). That makes
+// the longest case five characters wide ($781K, $1.2M) - the column can
+// stay narrow without ever overflowing.
 const NACKT = (extra = '') => `
-  ${BLASEN}
+  ${BUBBLES}
   @ .msg .who {
     display: inline-grid; grid-template-columns: 3ch 5ch;
     align-items: baseline; gap: .55rem; width: auto;
   }
-  /* Keine Blase mehr um den Betrag: kein Rahmen, kein Grund, kein Innenabstand.
-     Die feste Breite kommt jetzt aus der Rasterspalte, nicht aus der Pille. */
+  /* No more bubble around the amount: no border, no background, no
+     padding. The fixed width now comes from the grid column, not the
+     pill. */
   @ .worth {
     display: block; height: auto; padding: 0;
     background: none; border: 0; border-radius: 0;
@@ -105,11 +106,11 @@ const NACKT = (extra = '') => `
   ${extra}
 `;
 
-const ZAHL_SATZ = [
+const NUMBER_SET = [
   {
     nr: 1,
     name: 'Rechtsbündig, hell',
-    hinweis: 'Die Zahl steht rechtsbündig in ihrer Spalte, in voller Helligkeit. Tausender stehen unter Tausendern.',
+    hinweis: 'Die Zahl steht rechtsbündig in ihrer Spalte, in voller Helligkeit. Tausender stehen under Tausendern.',
     css: NACKT(),
   },
   {
@@ -132,24 +133,24 @@ const ZAHL_SATZ = [
   },
 ];
 
-const SPALTEN_SATZ = [
+const COLUMN_SET = [
   {
     nr: 1,
-    name: 'Pille links',
-    hinweis: 'Kürzel und Pille beginnen beide an fester Stelle, der Text ebenfalls. Drei linke Kanten, die untereinander stehen – die Pille selbst ist mal breiter, mal schmaler.',
-    css: SPALTE('@ .worth { justify-self: start; }'),
+    name: 'Pille left',
+    hinweis: 'Kürzel und Pille beginnen beide an fester Stelle, der Text ebenfalls. Drei linke Kanten, die untereinander stehen – die Pille selbst ist mal breiter, mal narrower.',
+    css: COLUMN('@ .worth { justify-self: start; }'),
   },
   {
     nr: 2,
-    name: 'Pille rechts',
+    name: 'Pille right',
     hinweis: 'Die Pille rückt an den Text heran und schließt bündig an ihn an. Dafür wandert der Zwischenraum hinter das Kürzel und wird bei kleinen Beträgen groß.',
-    css: SPALTE('@ .worth { justify-self: end; }'),
+    css: COLUMN('@ .worth { justify-self: end; }'),
   },
   {
     nr: 3,
     name: 'Pille fest, Zahl rechtsbündig',
-    hinweis: 'Die Pille hat immer dieselbe Breite, die Zahl steht rechts darin. Damit stehen auch Tausender unter Tausendern – Beträge lassen sich untereinander vergleichen, ohne sie zu lesen.',
-    css: SPALTE(`
+    hinweis: 'Die Pille hat immer dieselbe Breite, die Zahl steht right darin. Damit stehen auch Tausender under Tausendern – Beträge lassen sich untereinander vergleichen, ohne sie zu lesen.',
+    css: COLUMN(`
       @ .worth { justify-self: stretch; justify-content: flex-end; }
     `),
   },
@@ -157,11 +158,11 @@ const SPALTEN_SATZ = [
     nr: 4,
     name: 'Pille fest, Zahl mittig',
     hinweis: 'Wie 3, die Zahl steht aber mittig in der Pille – so wie bisher im Chat.',
-    css: SPALTE('@ .worth { justify-self: stretch; }'),
+    css: COLUMN('@ .worth { justify-self: stretch; }'),
   },
 ];
 
-const FLAECHEN_SATZ = [
+const AREA_SET = [
   {
     nr: 1,
     name: 'Jetzt',
@@ -185,14 +186,14 @@ const FLAECHEN_SATZ = [
     nr: 3,
     name: 'Fläche + Blasen',
     hinweis: 'Zusätzlich bekommt jede Nachricht eine Blase, die sich um ihren Inhalt legt – wie in den DMs. Einzeilig bleibt einzeilig.',
-    css: BLASEN,
+    css: BUBBLES,
   },
   {
     nr: 4,
-    name: 'Fläche + Blasen, eigene rechts',
-    hinweis: 'Wie 3, dazu stehen die eigenen Nachrichten rechts und grün – genau wie im DM-Verlauf.',
+    name: 'Fläche + Blasen, eigene right',
+    hinweis: 'Wie 3, dazu stehen die eigenen Nachrichten right und grün – genau wie im DM-Verlauf.',
     css: `
-      ${BLASEN}
+      ${BUBBLES}
       @ .msg.mine {
         margin-left: auto;
         background: rgba(20, 241, 149, .14); border-color: rgba(20, 241, 149, .3);
@@ -202,22 +203,22 @@ const FLAECHEN_SATZ = [
   },
 ];
 
-// --- Vierter Durchgang: andere Wege -----------------------------------------
-// Blasen sind gescheitert, und zwar an einer Sache, die vorher nicht sichtbar
-// war: Im Chat steht vor jedem Text noch etwas – Kuerzel und Betrag. Eine
-// Blase legt sich um ihren Inhalt, also fangen alle drei Dinge bei jeder
-// Nachricht woanders an, und jeder Versuch, das zu ordnen, hat den Betrag
-// weiter eingezwaengt.
+// --- Fourth pass: other directions ------------------------------------------
+// Bubbles failed, and specifically on something that wasn't visible
+// before: in chat, something else sits in front of every text - handle
+// and amount. A bubble wraps around its contents, so all three things
+// start in a different place with every message, and every attempt to
+// tidy that up kept squeezing the amount further.
 //
-// Der Ausweg kommt aus dem Posteingang, dem Teil, der am besten funktioniert:
-// Dort steht der Betrag NICHT neben dem Namen, sondern ganz rechts am
-// Zeilenende. Damit ist die Reihenfolge Name – Text – Betrag, und alle drei
-// haben ihre eigene Spalte, die ueber die ganze Liste haelt.
+// The way out comes from the inbox, the part that works best: there the
+// amount does NOT sit next to the name, it's all the way at the end of
+// the row. That gives the order name - text - amount, and all three get
+// their own column that holds across the whole list.
 //
-// Voraussetzung dafuer ist eine kleine Aenderung am Markup: .worth muss ein
-// Geschwister von .who sein statt darin zu stecken, sonst laesst es sich nicht
-// ans andere Ende der Zeile setzen. Genau das machen diese vier Varianten.
-const ZEILE = `
+// This requires one small markup change: .worth has to become a sibling
+// of .who instead of nesting inside it, otherwise it can't be moved to
+// the other end of the row. That's exactly what these four variants do.
+const LINE = `
   @ .msg {
     grid-template-columns: 3.2rem minmax(0, 1fr) auto auto;
     grid-template-areas: "who body worth meta";
@@ -225,9 +226,9 @@ const ZEILE = `
   }
   @ .msg.has-quote { grid-template-areas: "quote quote quote quote" "who body worth meta"; }
   @ .msg .worth { grid-area: worth; }
-  /* Der Betrag steht am Zeilenende, direkt vor der Uhrzeit – dieselbe
-     Reihenfolge wie in Ansems Posteingang. Keine Umrandung: In einer Spalte,
-     die ohnehin haelt, braucht die Zahl keinen eigenen Kasten. */
+  /* The amount sits at the end of the row, right before the time - the
+     same order as in Ansem's inbox. No border: in a column that already
+     holds its width, the number doesn't need its own box. */
   @ .worth {
     display: block; height: auto; padding: 0;
     background: none; border: 0; border-radius: 0;
@@ -240,16 +241,16 @@ const WEGE_SATZ = [
     nr: 1,
     name: 'Betrag ans Zeilenende',
     markup: 'geschwister',
-    hinweis: 'Name links, Text daneben, Betrag und Uhrzeit rechts – die Reihenfolge aus dem Posteingang. Der Text beginnt immer an derselben Stelle, weil vor ihm nur noch das dreistellige Kürzel steht.',
-    css: ZEILE,
+    hinweis: 'Name left, Text daneben, Betrag und Uhrzeit right – die Reihenfolge aus dem Posteingang. Der Text beginnt immer an derselben Stelle, weil vor ihm nur noch das dreistellige Kürzel steht.',
+    css: LINE,
   },
   {
     nr: 2,
-    name: 'Betrag rechts, Zeilen getrennt',
+    name: 'Betrag right, Zeilen getrennt',
     markup: 'geschwister',
     hinweis: 'Wie 1, dazu eine Haarlinie zwischen den Zeilen und mehr Luft – der Verlauf liest sich dann wie die Liste im Posteingang.',
     css: `
-      ${ZEILE}
+      ${LINE}
       @ .chat-list { gap: 0; padding: 0; }
       @ .msg { padding: .5rem .9rem; border-bottom: 1px solid var(--line); border-radius: 0; }
       @ .msg:last-child { border-bottom: 0; }
@@ -300,12 +301,12 @@ const WEGE_SATZ = [
   },
 ];
 
-// --- Fuenfter Durchgang: die Liste feinjustieren ----------------------------
-// Der Weg steht fest: eine Liste gleichfoermiger Zeilen in der Flaeche, Betrag
-// rechtsbuendig in einer eigenen Spalte. Was hier noch variiert, ist nur die
-// Dichte, die Staerke der Trennlinie und das Gewicht des Betrags.
+// --- Fifth pass: fine-tuning the list ----------------------------------
+// The direction is settled: a list of uniform rows in a panel, amount
+// right-aligned in its own column. What's still varying here is only the
+// density, the strength of the divider, and the weight of the amount.
 const LISTE = `
-  ${ZEILE}
+  ${LINE}
   @ .chat-list { gap: 0; padding: 0; }
   @ .msg { padding: .5rem .9rem; border-bottom: 1px solid var(--line); border-radius: 0; }
   @ .msg:last-child { border-bottom: 0; }
@@ -332,7 +333,7 @@ const LISTE_SATZ = [
     nr: 3,
     name: 'Betrag ganz außen',
     markup: 'geschwister',
-    hinweis: 'Uhrzeit und Betrag tauschen den Platz: Der Betrag steht als letztes am Rand – genau wie in Ansems Posteingang, wo er die äußerste Spalte ist.',
+    hinweis: 'Uhrzeit und Betrag tauschen den Platz: Der Betrag steht als lastChar am Rand – genau wie in Ansems Posteingang, wo er die äußfirst Spalte ist.',
     css: `${LISTE}
       @ .msg { grid-template-areas: "who body meta worth"; }
       @ .msg.has-quote { grid-template-areas: "quote quote quote quote" "who body meta worth"; }
@@ -367,70 +368,70 @@ const LISTE_SATZ = [
   },
 ];
 
-// node scripts/vorschau-chat-look.mjs           -> die vier Stufen
-// node scripts/vorschau-chat-look.mjs spalten   -> die Spalte vor dem Text
-const SAETZE = {
+// node scripts/vorschau-chat-look.mjs           -> the four stages
+// node scripts/vorschau-chat-look.mjs spalten   -> the column before the text
+const SENTENCES = {
   liste: {
-    datei: 'preview/chat-liste.png',
+    file: 'preview/chat-liste.png',
     titel: 'Der Chat – die Liste feinjustiert',
     lead: 'Alle sechs sind Variante 2: Liste in der Fläche, Betrag rechtsbündig in eigener Spalte. Unterschiedlich sind Dichte, Trennlinie und das Gewicht des Betrags.',
     varianten: LISTE_SATZ,
     nurListe: true,
-    hoehe: 'auto',
+    height: 'auto',
   },
   wege: {
-    datei: 'preview/chat-wege.png',
+    file: 'preview/chat-wege.png',
     titel: 'Der Chat – vier andere Wege',
     lead: 'Ohne Blasen. Alle vier liegen in der Fläche und kürzen den Betrag auf höchstens drei Ziffernstellen; unterschiedlich ist, wo Name, Betrag und Uhrzeit stehen.',
     varianten: WEGE_SATZ,
   },
-  flaechen: {
-    datei: 'preview/chat-look.png',
+  areas: {
+    file: 'preview/chat-look.png',
     titel: 'Der Chat',
     lead: 'Polls und Ansems Posteingang liegen in umrandeten Flächen. Der Chat ist der einzige Bereich ohne – hier vier Stufen, ihn anzugleichen.',
-    varianten: FLAECHEN_SATZ,
+    varianten: AREA_SET,
   },
-  zahl: {
-    datei: 'preview/chat-zahl.png',
+  number: {
+    file: 'preview/chat-zahl.png',
     titel: 'Der Chat – der Betrag ohne eigene Blase',
     lead: 'Alle vier haben Fläche und Blasen. Der Betrag hat keine Umrandung mehr und ist gekürzt: ab tausend mit K, nie mehr als drei Ziffernstellen. Der Text beginnt überall an derselben Stelle.',
-    varianten: ZAHL_SATZ,
+    varianten: NUMBER_SET,
   },
   spalten: {
-    datei: 'preview/chat-spalten.png',
+    file: 'preview/chat-spalten.png',
     titel: 'Der Chat – wo der Text anfängt',
     lead: 'Alle vier haben die Fläche und die Blasen aus Variante 3. Unterschiedlich ist nur, wie Kürzel und Betrag in der festen Spalte davor sitzen. Der Text beginnt überall an derselben Stelle.',
-    varianten: SPALTEN_SATZ,
+    varianten: COLUMN_SET,
   },
 };
 
-const SATZ = SAETZE[process.argv[2] || 'flaechen'];
+const SATZ = SENTENCES[process.argv[2] || 'areas'];
 if (!SATZ) throw new Error(`Unbekannter Satz: ${process.argv[2]}`);
 const VARIANTEN = SATZ.varianten;
 
-// --- Der kurze Betrag ------------------------------------------------------
-// Spiegelt kurzUsd() aus app.js. Die verbindliche Fassung steht dort und wird
-// von scripts/test-realtime-switching.mjs geprueft; hier liegt sie nur, damit
-// das Vorschaubild ohne app.js auskommt.
+// --- The short amount --------------------------------------------------
+// Mirrors shortUsd() from app.js. The authoritative version lives there and
+// is checked by scripts/test-realtime-switching.mjs; it's duplicated here
+// only so the preview image doesn't depend on app.js.
 //
-// Regel: nie mehr als drei Ziffernstellen. Unter 1000 die ganze Zahl, darueber
-// mit K/M/B abgekuerzt – eine Nachkommastelle nur, solange die Vorzahl
-// einstellig bleibt.
-const STUFEN = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
-function kurzUsd(n) {
+// Rule: never more than three digits. The full number under 1000, above
+// that abbreviated with K/M/B - one decimal place only while the leading
+// digit stays single.
+const TIERS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+function shortUsd(n) {
   if (!n || n <= 0) return '$0';
   if (n < 1) return '<$1';
   const gerundet = Number(n.toPrecision(3));
-  for (const [ab, kurz] of STUFEN) {
+  for (const [ab, short] of TIERS) {
     if (gerundet < ab) continue;
     const wert = gerundet / ab;
-    return '$' + (wert < 9.95 ? wert.toFixed(1) : String(Math.round(wert))) + kurz;
+    return '$' + (wert < 9.95 ? wert.toFixed(1) : String(Math.round(wert))) + short;
   }
   return '$' + Math.round(gerundet);
 }
 
-// --- Nachrichten, gebaut wie msgHtml() in app.js ----------------------------
-const NACHRICHTEN = [
+// --- Messages, built like msgHtml() in app.js -------------------------------
+const MESSAGES = [
   { h: '9Qm', ton: 0, usd: 3444, body: 'gm', zeit: '14:02' },
   { h: '4tP', ton: 4, usd: 50, body: 'wen moon', zeit: '14:02',
     zitat: { h: 'Km9', ton: 3, text: 'is this thing on' } },
@@ -438,8 +439,9 @@ const NACHRICHTEN = [
   { h: 'bH2', ton: 1, usd: 8820, zeit: '14:04',
     body: 'this is the longest single word i can think of right now: Donaudampfschifffahrtsgesellschaftskapitaenswitwe' },
   { h: 'Km9', ton: 3, usd: 1302, body: 'lfg', zeit: '14:05' },
-  // Ab 10.000 kuerzt fmtUsd() auf "$31.5K" – der laengste Fall, den die feste
-  // Spalte tragen muss, steht deshalb hier drin und nicht in einer Fussnote.
+  // From 10,000 up fmtUsd() abbreviates to "$31.5K" - so the longest case
+  // the fixed column has to carry is in here, not tucked away in a
+  // footnote.
   { h: 'zQ4', ton: 0, usd: 781420, zeit: '14:06',
     body: 'I sold half my bag last week and my vote weight dropped immediately, thats actually a nice touch' },
   { h: '7xK', ton: 2, usd: 5208, body: 'same, and the poll weight updated within the minute', zeit: '14:07', mine: true },
@@ -454,34 +456,35 @@ const zitatHtml = (z) => !z ? '' : `
     <span class="quote-body">${z.text}</span>
   </button>`;
 
-// Zwei Bauweisen. "verschachtelt" ist der heutige Stand aus app.js: Der Betrag
-// steckt im .who und kann die Zeile deshalb nie verlassen. "geschwister" zieht
-// ihn eine Ebene hoeher – erst damit laesst er sich ans Zeilenende oder in
-// eine eigene Spalte setzen. Fuer den Einbau hiesse das eine geaenderte Zeile
-// in msgHtml().
+// Two build styles. "verschachtelt" (nested) is today's state from
+// app.js: the amount sits inside .who and can therefore never leave the
+// row. "geschwister" (sibling) pulls it up one level - only that lets it
+// be placed at the end of the row or in its own column. Shipping this
+// would mean one changed line in msgHtml().
 const msgHtml = (m, bauweise) => {
   const klassen = `msg ${m.admin ? 'is-admin' : ''}${m.mine ? ' mine' : ''}${m.zitat ? ' has-quote' : ''}`;
   const name = m.admin
     ? '<span class="h admin-name">ANSEM</span>'
     : `<span class="h t${m.ton}">${m.h}</span>`;
-  const betrag = m.admin ? '' : `<span class="worth">${kurzUsd(m.usd)}</span>`;
+  const amount = m.admin ? '' : `<span class="worth">${shortUsd(m.usd)}</span>`;
 
-  const kopf = bauweise === 'geschwister'
-    ? `<span class="who">${name}</span>${betrag}`
-    : `<span class="who">${name}${betrag}</span>`;
+  const header = bauweise === 'geschwister'
+    ? `<span class="who">${name}</span>${amount}`
+    : `<span class="who">${name}${amount}</span>`;
 
   return `
   <div class="${klassen}">
-    ${kopf}
+    ${header}
     ${zitatHtml(m.zitat)}
     <span class="body">${m.body}</span>
     <span class="meta"><span class="time">${m.zeit}</span></span>
   </div>`;
 };
 
-// Das Gerüst des Chat-Bereichs, wie es in index.html steht – nur die Fläche
-// als zusätzliche Hülle. Sie ist in allen Varianten da; Variante 1 dreht ihr
-// bloß Rahmen und Grund wieder ab, damit alle vier dasselbe Markup zeigen.
+// The chat area's scaffold, as it is in index.html - just with the panel
+// as an extra wrapper. It's present in every variant; variant 1 just
+// strips its border and background again, so all four show the same
+// markup.
 const chatHtml = (bauweise, nurListe = false) => `
   <div class="chat-panel">
     ${nurListe ? '' : `<div class="filters">
@@ -499,19 +502,19 @@ const chatHtml = (bauweise, nurListe = false) => `
         <button class="chip">$100k+</button>
       </div>
     </div>`}
-    <div class="chat-list">${NACHRICHTEN.map((m) => msgHtml(m, bauweise)).join('')}</div>
+    <div class="chat-list">${MESSAGES.map((m) => msgHtml(m, bauweise)).join('')}</div>
     ${nurListe ? '' : `<form class="composer">
       <input type="text" placeholder="Message the room…">
       <button class="btn btn-primary" type="button">Send</button>
     </form>`}
   </div>`;
 
-// Jede Variante zeichnet nur ihren eigenen Ausschnitt um. Die Regeln stehen
-// deshalb mit einem @ vor jedem Selektor; hier wird daraus die Kennung des
-// Ausschnitts. Ein Ersetzen statt einer Zerlegung des Selektors – kurz, und
-// es kann an einem Komma oder einer Klammer nicht scheitern.
-const karte = (v) => `
-  <section class="karte">
+// Each variant only restyles its own slice. That's why the rules carry an
+// @ in front of every selector; here it gets turned into that slice's id.
+// A find-and-replace instead of parsing the selector - short, and it
+// can't trip over a comma or a bracket.
+const card = (v) => `
+  <section class="card">
     <style>${v.css.replaceAll('@', `#v${v.nr}`)}</style>
     <h2><span class="nr">${v.nr}</span>${v.name}</h2>
     <p class="hinweis">${v.hinweis}</p>
@@ -524,8 +527,8 @@ const html = `<!doctype html>
 <style>
   ${PANEL}
   body { padding: 26px; background: var(--bg); }
-  .karte { max-width: 1180px; margin: 0 0 34px; }
-  .karte h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .card { max-width: 1180px; margin: 0 0 34px; }
+  .card h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
   .nr {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; border-radius: 999px;
@@ -533,20 +536,20 @@ const html = `<!doctype html>
     font-family: var(--mono); font-size: .78rem;
   }
   .hinweis { margin: 0 0 .7rem; font-size: .8rem; color: var(--dimmer); max-width: 70ch; }
-  /* Der Ausschnitt steht für den Bereich unter der Kopfleiste. Feste Höhe,
-     damit alle vier gleich viel Platz haben und wirklich nur die Gestaltung
-     verglichen wird. */
-  .chat-rahmen { display: flex; flex-direction: column; height: ${SATZ.hoehe ?? '560px'}; }
-  /* Im Ausschnitt fehlt die Klasse .scroll, die im echten Chat am Verlauf
-     haengt. Ohne sie waechst die Liste ueber die feste Hoehe hinaus und schiebt
-     die Eingabe aus der Flaeche. */
+  /* This frame stands in for the area below the header. Fixed height, so
+     all four get the same amount of space and only the styling is really
+     being compared. */
+  .chat-rahmen { display: flex; flex-direction: column; height: ${SATZ.height ?? '560px'}; }
+  /* This frame is missing the .scroll class that hangs on the real chat's
+     history. Without it the list grows past the fixed height and pushes
+     the composer out of the panel. */
   .chat-rahmen .chat-list { overflow-y: auto; }
   h1 { font-size: 1.05rem; margin: 0 0 .2rem; }
   .lead { margin: 0 0 1.6rem; font-size: .82rem; color: var(--dim); max-width: 80ch; }
 </style>
 <h1>${SATZ.titel}</h1>
 <p class="lead">${SATZ.lead}</p>
-${VARIANTEN.map(karte).join('')}
+${VARIANTEN.map(card).join('')}
 `;
 
 mkdirSync('preview', { recursive: true });
@@ -555,12 +558,12 @@ writeFileSync('public/_vorschau-chat.html', html);
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(
   existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 1240, height: 900 }, deviceScaleFactor: 2 });
-await seite.goto(`file://${process.cwd()}/public/_vorschau-chat.html`);
-await seite.waitForTimeout(300);
-await seite.screenshot({ path: SATZ.datei, fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1240, height: 900 }, deviceScaleFactor: 2 });
+await page.goto(`file://${process.cwd()}/public/_vorschau-chat.html`);
+await page.waitForTimeout(300);
+await page.screenshot({ path: SATZ.file, fullPage: true });
 await browser.close();
 
-// public/ wird als Ganzes hochgeladen – das Arbeitsblatt darf nicht liegen bleiben.
+// public/ gets uploaded as a whole - the scratch sheet must not be left behind.
 rmSync('public/_vorschau-chat.html', { force: true });
-console.log(SATZ.datei);
+console.log(SATZ.file);

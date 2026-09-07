@@ -1,35 +1,34 @@
 -- ============================================================================
--- Lasttest-Reste entfernen
+-- Remove load-test leftovers
 --
--- In der Tabelle wallets stehen 27.477 Zeilen. Echt sind davon eine Handvoll –
--- der Rest stammt aus dem Lasttest, der zufällige Adressen erzeugt hat.
+-- The wallets table holds 27,477 rows. A handful of those are real - the
+-- rest come from the load test, which generated random addresses.
 --
--- Warum das nicht nur Speicherplatz kostet:
+-- Why this costs more than just storage:
 --
---   * Der Kurs-Takt schreibt jede Minute jede Wallet neu, deren usd_value sich
---     durch den neuen Kurs ändert. Bei 27.000 Zeilen und einem Kurs, der sich
---     dauernd bewegt, sind das grob 27.000 Schreibvorgänge pro Minute – rund
---     39 Millionen am Tag, für Adressen, die es nicht gibt.
+--   * The price tick rewrites every wallet each minute whose usd_value
+--     changes with the new price. With 27,000 rows and a price that keeps
+--     moving, that is roughly 27,000 writes per minute - around 39 million
+--     a day, for addresses that do not exist.
 --
---   * Job 3 (refresh-holdings) nimmt pro Lauf die 120 ältesten Wallets und
---     liest deren Menge von der Chain. Bei 27.000 Einträgen braucht ein voller
---     Durchlauf gut vier Stunden und beginnt sofort wieder von vorn. Das sind
---     172.800 RPC-Aufrufe am Tag, alle für erfundene Adressen.
+--   * Job 3 (refresh-holdings) takes the 120 oldest wallets per run and
+--     reads their balance from the chain. With 27,000 entries a full pass
+--     takes a good four hours and starts right over from the beginning.
+--     That is 172,800 RPC calls a day, all for invented addresses.
 --
--- Das ist mit hoher Wahrscheinlichkeit der Grund für den Warnhinweis im
--- Dashboard.
+-- This is very likely the reason for the warning in the dashboard.
 --
--- ANLEITUNG: Abschnitt 1 zuerst allein ausführen und die Zahlen ansehen.
--- Erst danach Abschnitt 2. Abschnitt 1 ändert nichts.
+-- INSTRUCTIONS: Run section 1 alone first and look at the numbers. Only
+-- then section 2. Section 1 changes nothing.
 -- ============================================================================
 
 
 -- ----------------------------------------------------------------------------
--- 1. VORSCHAU – was würde verschwinden, was bleibt?
+-- 1. PREVIEW - what would disappear, what stays?
 -- ----------------------------------------------------------------------------
--- Behalten wird jede Adresse, die irgendwo sonst vorkommt: als Absender einer
--- Nachricht, in einem DM-Faden, mit einer Stimme in einer Abstimmung, mit einer
--- offenen Zahlungsanforderung – und Ansem selbst.
+-- Kept is every address that shows up anywhere else: as the sender of a
+-- message, in a DM thread, with a vote in a poll, with an open payment
+-- request - and Ansem himself.
 with behalten as (
   select wallet from public.messages
   union select wallet from public.dms
@@ -43,8 +42,8 @@ select
   count(*)                                                            as gesamt
 from public.wallets w;
 
--- Und zur Sicherheit: Welche Adressen bleiben? Das sollten wenige sein und
--- welche, die du wiedererkennst.
+-- And for safety: which addresses stay? These should be few, and ones you
+-- recognize.
 with behalten as (
   select wallet from public.messages
   union select wallet from public.dms
@@ -59,16 +58,16 @@ order by w.usd_value desc nulls last;
 
 
 -- ----------------------------------------------------------------------------
--- 2. AUFRÄUMEN – erst ausführen, wenn Abschnitt 1 plausibel aussah
+-- 2. CLEANUP - run only once section 1 looked plausible
 -- ----------------------------------------------------------------------------
 
--- Nachrichten aus dem Lasttest. Sie tragen alle dieselbe Markierung.
+-- Messages from the load test. They all carry the same marker.
 delete from public.messages where body like '[loadtest]%';
 
--- Zahlungsanforderungen, die nie eingelöst wurden.
+-- Payment requests that were never redeemed.
 delete from public.challenges where status = 'pending';
 
--- Und die Wallets selbst.
+-- And the wallets themselves.
 delete from public.wallets w
 where w.address not in (
   select wallet from public.messages
@@ -78,20 +77,19 @@ where w.address not in (
   union select admin_wallet from public.app_config where admin_wallet is not null
 );
 
--- Nach einem Löschen dieser Größe muss Postgres den Platz erst freigeben und
--- seine Statistiken neu bilden. Ohne das plant es weiter mit 27.000 Zeilen und
--- wählt schlechte Zugriffswege.
+-- After a delete of this size Postgres first needs to release the space
+-- and rebuild its statistics. Without that it keeps planning for 27,000
+-- rows and picks poor access paths.
 vacuum full analyze public.wallets;
 vacuum full analyze public.messages;
 
--- Antworten von net.http_post sammeln sich hier an – pg_net räumt sie auf,
--- aber mit Verzögerung. Alles, was älter als eine Stunde ist, wird nicht mehr
--- gebraucht.
+-- Responses from net.http_post pile up here - pg_net cleans them up, but
+-- with a delay. Anything older than an hour is no longer needed.
 delete from net._http_response where created < now() - interval '1 hour';
 
 
 -- ----------------------------------------------------------------------------
--- 3. NACHHER – dieselbe Übersicht wie in der Diagnose
+-- 3. AFTER - the same overview as in the diagnosis
 -- ----------------------------------------------------------------------------
 select
   relname as tabelle,

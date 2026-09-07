@@ -1,42 +1,42 @@
 // ============================================================================
-// Die Seite selbst scrollt nicht. Gescrollt wird INNERHALB der Listen.
+// The page itself never scrolls. Scrolling happens INSIDE the lists.
 //
 // ----------------------------------------------------------------------------
-// Der Fehler, der diesen Test ausgelöst hat
+// The bug that triggered this test
 //
-// Es gibt auf der Seite Text, der nur für die Vorlesestimme da ist und für das
-// Auge versteckt wird – Ansems drei Zeichen unter seinem Profilbild, das
-// " — your vote" hinter einer Antwort. Alle liegen unter derselben Regel:
+// The page has text that exists only for screen readers and is hidden from
+// sight - Ansem's three characters under his profile picture, the
+// " — your vote" after an answer. All of them sit under the same rule:
 //
 //   position: absolute; width: 1px; height: 1px;
 //   overflow: hidden; clip-path: inset(50%);
 //
-// Das ist die übliche Fassung dafür, und sie hat eine Bedingung, die nirgends
-// dabeisteht: Das Elternelement muss positioniert sein. Sonst sucht sich
-// position: absolute das ganze Dokument als Bezug – und das Element steht dann
-// nicht "1 px in der Liste", sondern 1 px an der Stelle, an der es im
-// UNGESCROLLTEN Verlauf läge. Bei vierzig Einträgen sind das über tausend
-// Pixel unterhalb des Fensters, und das Dokument wächst genau so weit mit.
+// That's the usual pattern for this, and it has a condition that's written
+// nowhere: the parent element has to be positioned. Otherwise position:
+// absolute picks the whole document as its reference - and the element ends
+// up not "1 px inside the list" but 1 px at the spot it would occupy in the
+// UNSCROLLED flow. With forty entries that's over a thousand pixels below
+// the window, and the document grows to match exactly that.
 //
-// Sichtbar war das nicht als verschobenes Element – man sieht diese Spans ja
-// nie –, sondern als: "Wenn ich scrolle, scrollt die ganze Seite nach oben."
-// Das Rad rutschte am Ende der Liste auf das Dokument durch und schob die
-// ganze App aus dem Bild. Gemessen: 1493 px Dokument in einem 738 px hohen
-// Fenster. Aufgetreten ist es damals im Chat; der ist inzwischen raus, die
-// Regel und ihre Falle stehen weiter.
+// It wasn't visible as a shifted element - you never see these spans
+// anyway - it showed up as: "when I scroll, the whole page scrolls up."
+// The wheel slid past the end of the list onto the document and pushed the
+// whole app out of frame. Measured: a 1493 px document inside a 738 px
+// window. It happened back then in chat; chat is gone now, but the rule and
+// its trap are still here.
 //
 // ----------------------------------------------------------------------------
-// Warum dieser Test die DOKUMENTHÖHE misst und nicht die Regel
+// Why this test measures the DOCUMENT HEIGHT and not the rule
 //
-// Man könnte prüfen, dass .opt-label position: relative trägt. Das fängt
-// genau diesen einen Fall und keinen anderen. Die Aussage, um die es geht,
-// ist aber eine über die ganze Seite: Sie ist so hoch wie das Fenster, nie
-// höher. Alles, was sie höher macht – ein absolut gesetztes Element ohne
-// Bezug, ein zu breites Bild, ein Rand, der nach unten übersteht –, fällt
-// hier auf, egal wodurch es entstanden ist.
+// You could check that .opt-label carries position: relative. That catches
+// exactly this one case and no other. But the claim that actually matters
+// is about the whole page: it's as tall as the window, never taller.
+// Anything that makes it taller - an absolutely positioned element with no
+// reference, an image that's too wide, a margin that overhangs at the
+// bottom - shows up here, no matter what caused it.
 //
-// Geprüft wird mit der ECHTEN index.html und dem echten Blatt, in beiden Tabs,
-// mit vollen Listen und einmal auf Handybreite.
+// Checked against the REAL index.html and the real stylesheet, in both
+// tabs, with full lists and once at phone width.
 //
 //   node scripts/test-seite-hoehe.mjs
 // ============================================================================
@@ -48,22 +48,23 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const oeffentlich = path.join(root, 'public');
+const publicDir = path.join(root, 'public');
 
-// Ein echter kleiner Dateiserver statt einer zusammengebauten Seite: Die Frage
-// haengt an der Hoehe des ganzen Dokuments, und die bekommt man nur richtig,
-// wenn index.html, styles.css und die Bilder so geladen werden wie im Betrieb.
+// A real little file server instead of an assembled page: the question
+// hinges on the height of the whole document, and that only comes out
+// right when index.html, styles.css, and the images load the way they do
+// in production.
 const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
   '.jpg': 'image/jpeg', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const server = http.createServer((q, res) => {
   let pfad = decodeURIComponent(q.url.split('?')[0]);
   if (pfad === '/') pfad = '/index.html';
-  const datei = path.join(oeffentlich, pfad);
-  if (!datei.startsWith(oeffentlich) || !fs.existsSync(datei) || !fs.statSync(datei).isFile()) {
+  const file = path.join(publicDir, pfad);
+  if (!file.startsWith(publicDir) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
     return res.writeHead(404).end('');
   }
-  res.writeHead(200, { 'content-type': TYPEN[path.extname(datei)] ?? 'application/octet-stream' })
-     .end(fs.readFileSync(datei));
+  res.writeHead(200, { 'content-type': TYPEN[path.extname(file)] ?? 'application/octet-stream' })
+     .end(fs.readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
 
@@ -71,15 +72,15 @@ const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
 
 const befunde = [];
-const pruefe = (name, ok, zusatz = '') => {
+const check = (name, ok, zusatz = '') => {
   befunde.push({ name, ok });
   console.log(`  ${ok ? 'ok  ' : 'FEHL'}  ${name}${zusatz ? '  – ' + zusatz : ''}`);
 };
 
-// Die Listen werden mit Markup gefuellt, das der echten Form entspricht –
-// inklusive der versteckten Kuerzel, denn genau die waren das Problem. Wichtig
-// ist die MENGE: Mit fuenf Zeilen faellt nichts auf, weil der ungescrollte
-// Verlauf dann kaum laenger ist als das Fenster.
+// The lists get filled with markup that matches the real shape - including
+// the hidden handles, since those were exactly the problem. What matters is
+// the VOLUME: with five rows nothing stands out, because the unscrolled
+// flow is then barely longer than the window.
 const AUFBAU = {
   Polls: (n) => `document.querySelector('#pane-polls').hidden = false;
     document.querySelector('#poll-list').innerHTML = Array.from({ length: ${n} }, (_, i) =>
@@ -103,108 +104,109 @@ const AUFBAU = {
     document.querySelector('#dm-thread').scrollTop = 1e6;`,
 };
 
-const messen = async (tab, breite, hoehe, anzahl) => {
-  const seite = await browser.newPage({ viewport: { width: breite, height: hoehe } });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.waitForTimeout(300);
-  const r = await seite.evaluate((bau) => {
-    // Das Skript entscheidet im Betrieb, was gezeigt wird; hier wird es von
-    // Hand gesetzt, weil ohne Anmeldung nichts sichtbar waere.
+const measure = async (tab, width, height, anzahl) => {
+  const page = await browser.newPage({ viewport: { width: width, height: height } });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.waitForTimeout(300);
+  const r = await page.evaluate((build) => {
+    // In production the app script decides what's shown; here it's set by
+    // hand, because nothing would be visible without logging in.
     document.querySelector('#login').hidden = true;
     document.querySelector('.app').hidden = false;
     for (const p of document.querySelectorAll('.pane')) p.hidden = true;
     // eslint-disable-next-line no-eval
-    eval(bau);
+    eval(build);
     const d = document.documentElement;
-    // Und gleich mitliefern, WER zu weit unten steht – ohne das sucht man
-    // beim naechsten Mal wieder eine Stunde nach einem unsichtbaren Element.
-    const taeter = [...document.querySelectorAll('*')]
+    // And report right away WHO is sitting too far down - without this,
+    // next time means another hour spent hunting an invisible element.
+    const culprit = [...document.querySelectorAll('*')]
       .map((e) => ({ e, u: e.getBoundingClientRect().bottom }))
       .filter((x) => x.u > d.clientHeight + 2)
       .sort((a, b) => b.u - a.u).slice(0, 3)
       .map((x) => `${x.e.tagName.toLowerCase()}.${String(x.e.className).split(' ')[0]} bei ${Math.round(x.u)}`);
-    return { scrollH: d.scrollHeight, clientH: d.clientHeight, taeter };
+    return { scrollH: d.scrollHeight, clientH: d.clientHeight, culprit };
   }, AUFBAU[tab](anzahl));
-  await seite.close();
+  await page.close();
   return r;
 };
 
 console.log('\nDie Seite bleibt so hoch wie das Fenster\n');
 
 for (const tab of ['Polls', 'DMs']) {
-  const r = await messen(tab, 1300, 738, 40);
-  pruefe(`${tab} am Rechner, volle Liste`, r.scrollH <= r.clientH,
+  const r = await measure(tab, 1300, 738, 40);
+  check(`${tab} am Rechner, volle Liste`, r.scrollH <= r.clientH,
     `${r.scrollH} px Dokument in ${r.clientH} px Fenster`
-    + (r.taeter.length ? ` — zu weit unten: ${r.taeter.join(', ')}` : ''));
+    + (r.culprit.length ? ` — zu far bottom: ${r.culprit.join(', ')}` : ''));
 }
 
-// Auf dem Handy ist es schlimmer, nicht besser: Dort ist das Fenster kuerzer,
-// der ungescrollte Verlauf also im Verhaeltnis laenger – und ein Dokument, das
-// mitscrollt, kostet dort die Adressleiste, die beim Scrollen ein- und
-// ausfaehrt.
+// On a phone it's worse, not better: the window is shorter there, so the
+// unscrolled flow is proportionally longer - and a document that scrolls
+// along with it there costs you the address bar, which slides in and out
+// as you scroll.
 for (const tab of ['Polls', 'DMs']) {
-  const r = await messen(tab, 390, 720, 40);
-  pruefe(`${tab} auf 390 px`, r.scrollH <= r.clientH,
+  const r = await measure(tab, 390, 720, 40);
+  check(`${tab} auf 390 px`, r.scrollH <= r.clientH,
     `${r.scrollH} px Dokument in ${r.clientH} px Fenster`
-    + (r.taeter.length ? ` — zu weit unten: ${r.taeter.join(', ')}` : ''));
+    + (r.culprit.length ? ` — zu far bottom: ${r.culprit.join(', ')}` : ''));
 }
 
-// Die Gegenprobe: Der Test muss den Fehler auch WIRKLICH sehen. Ohne sie
-// koennte hier eine Regel stehen, die nie ausloest – und niemand wuesste es.
+// The counter-check: the test has to ACTUALLY see the bug too. Without it,
+// a rule could sit here that never fires - and nobody would know.
 //
-// Sie stellt den Mechanismus nach und dreht nicht die Seite zurueck, und das
-// hat einen Grund, der dazugehoert:
+// It re-creates the mechanism instead of reverting the page, and that's for
+// a reason worth spelling out:
 //
-// Der Fehler trat im Chat auf, an Ansems verstecktem Kuerzel. Der Chat ist
-// raus. Uebrig sind zwei Orte mit solchen Spans – das " — your vote" hinter
-// einer Antwort und Ansems Kuerzel in der Kopfzeile –, und an BEIDEN laesst er
-// sich nicht mehr ausloesen: .opt-bar ist positioniert (dort liegt der
-// Fuellbalken), .poll-list ebenfalls (dort liegt der mittige "No polls
-// yet"-Satz), und die Kopfzeile enthaelt genau ein solches Element statt
-// vierzig. Die Regeln fuer .opt-label und .me .handle.admin-name stehen
-// trotzdem weiter da: Sie sind das, was uebrig bleibt, wenn jemand einer der
-// beiden anderen Flaechen ihre position wieder nimmt.
+// The bug happened in chat, on Ansem's hidden handle. Chat is gone now.
+// What's left are two spots with such spans - the " — your vote" after an
+// answer, and Ansem's handle in the header - and at BOTH of them it can no
+// longer be triggered: .opt-bar is positioned (that's where the fill bar
+// lives), .poll-list is too (that's where the centered "No polls yet"
+// sentence lives), and the header contains exactly one such element instead
+// of forty. The rules for .opt-label and .me .handle.admin-name still sit
+// there anyway: they're what's left over once someone takes position away
+// from one of the other two containers again.
 //
-// Deshalb wird hier eine Liste ohne positionierten Vorfahren gebaut. Sie
-// beweist nicht, dass die Seite den Fehler HAT – sie beweist, dass die Messung
-// ihn saehe.
+// So a list without a positioned ancestor gets built here instead. It
+// doesn't prove the page HAS the bug - it proves the measurement would see
+// it.
 console.log('\nGegenprobe: Der Test sieht den Fehler auch\n');
 {
-  const seite = await browser.newPage({ viewport: { width: 1300, height: 738 } });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.waitForTimeout(300);
-  const r = await seite.evaluate(() => {
+  const page = await browser.newPage({ viewport: { width: 1300, height: 738 } });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.waitForTimeout(300);
+  const r = await page.evaluate(() => {
     document.querySelector('#login').hidden = true;
     document.querySelector('.app').hidden = false;
     for (const p of document.querySelectorAll('.pane')) p.hidden = true;
     const pane = document.querySelector('#pane-polls');
     pane.hidden = false;
-    // Bewusst ohne position am Kasten: genau der Zustand, den die Regeln im
-    // Blatt verhindern.
+    // Deliberately without position on the box: exactly the state the
+    // rules in the stylesheet prevent.
     //
-    // Und bewusst AUSSERHALB von .app, nicht darin.
+    // And deliberately OUTSIDE .app, not inside it.
     // -----------------------------------------------------------------------
-    // Seit .app ein transform traegt (der Ausgleich fuer die Tastatur, siehe
-    // --versatz), ist .app selbst ein Bezugspunkt fuer alles Absolute darin.
-    // Ein Kasten IN .app konnte das Dokument damit gar nicht mehr aufblaehen –
-    // die Gegenprobe war gruen, weil der Fehler sich nicht mehr herstellen
-    // liess, und nicht, weil die Messung ihn saehe. Genau der Unterschied, um
-    // den es hier geht.
+    // Since .app carries a transform (the compensation for the keyboard,
+    // see --versatz), .app itself has become a reference point for
+    // everything absolute inside it. A box INSIDE .app could therefore no
+    // longer inflate the document at all - the counter-check would come
+    // back green because the bug could no longer be reproduced, not because
+    // the measurement would catch it. That's exactly the distinction this
+    // is about.
     //
-    // Das ist nebenbei eine echte zusaetzliche Absicherung fuer die App. Nur
-    // darf eine Gegenprobe sich nicht darauf stuetzen: Sie soll zeigen, dass
-    // die MESSUNG anschlaegt.
-    const kasten = document.createElement('div');
-    kasten.style.cssText = 'height: 300px; overflow-y: auto;';
-    kasten.innerHTML = Array.from({ length: 40 }, (_, i) =>
+    // As a side note, this is a genuine extra safeguard for the app. But a
+    // counter-check must not rely on it: its job is to show that the
+    // MEASUREMENT triggers.
+    const panel = document.createElement('div');
+    panel.style.cssText = 'height: 300px; overflow-y: auto;';
+    panel.innerHTML = Array.from({ length: 40 }, (_, i) =>
       `<div style="padding: 12px">Zeile ${i}<span class="nur-vorlesen"> versteckt</span></div>`).join('');
-    document.body.appendChild(kasten);
-    kasten.scrollTop = 1e6;
+    document.body.appendChild(panel);
+    panel.scrollTop = 1e6;
     const d = document.documentElement;
     return { scrollH: d.scrollHeight, clientH: d.clientHeight };
   });
-  await seite.close();
-  pruefe('Versteckte Spans ohne Bezugspunkt blähen das Dokument auf – der Test würde anschlagen',
+  await page.close();
+  check('Versteckte Spans ohne Bezugspunkt blähen das Dokument auf – der Test würde anschlagen',
     r.scrollH > r.clientH, `${r.scrollH} px statt ${r.clientH} px`);
 }
 

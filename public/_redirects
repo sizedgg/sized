@@ -1,23 +1,24 @@
 # ===========================================================================
-# Netlify-Weiterleitungen
+# Netlify redirects
 #
-# /p/12 ist die Adresse, die in geteilten Links steht. Sie muss auf sized.gg
-# liegen und nicht auf supabase.co – sonst stünde unter der Karte auf X eine
-# fremde Domain, und der Link sähe aus wie ein Umweg.
+# /p/12 is the address that appears in shared links. It has to live on
+# sized.gg and not on supabase.co - otherwise the card on X would show a
+# foreign domain underneath it, and the link would look like a detour.
 #
-# Der Statuscode 200 ist der entscheidende Teil: Damit holt Netlify die
-# Antwort im Hintergrund und liefert sie unter der eigenen Adresse aus. Eine
-# echte Weiterleitung (301/302) würde die Adresse im Browser ändern, und Xs
-# Crawler bekäme am Ende supabase.co zu sehen.
+# The status code 200 is the part that matters: with it, Netlify fetches
+# the response in the background and serves it under its own address. A
+# real redirect (301/302) would change the address in the browser, and
+# X's crawler would end up seeing supabase.co.
 #
-# Die Projektadresse unten ist eingetragen. Wechselt das Supabase-Projekt
-# jemals, muss sie hier von Hand mitwandern – sie steht in public/config.js,
-# und diese Datei liest sie nicht, weil Netlify beim Ausliefern kein
-# JavaScript ausfuehrt.
+# The project address below is filled in. If the Supabase project ever
+# changes, it has to be updated here by hand too - it lives in
+# public/config.js, and this file does not read that, because Netlify
+# does not run any JavaScript when serving files.
 # ===========================================================================
 
 /p/*  https://wbkfjvpxxlwcivqcmmpo.supabase.co/functions/v1/og/p/:splat  200
 
-# Alles andere ist die App selbst. Ohne diese Zeile gäbe jeder direkte Aufruf
-# einer Unteradresse einen 404, weil auf dem Server nur index.html liegt.
+# Everything else is the app itself. Without this line, any direct request
+# to a sub-address would get a 404, because only index.html sits on the
+# server.
 /*    /index.html                                                200

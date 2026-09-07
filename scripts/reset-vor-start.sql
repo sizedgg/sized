@@ -1,41 +1,40 @@
 -- ============================================================================
--- Auf null vor dem Start
+-- Zeroing out before launch
 --
--- Entfernt alle Test- und Lasttestdaten. Behalten werden genau zwei
--- Wallet-Einträge: die Testadresse und die Adresse, die in app_config als
--- Administrator eingetragen ist. Beide bleiben, damit bestehende Sitzungen
--- weiterlaufen und niemand neu verifizieren (und zahlen) muss.
+-- Removes all test and load-test data. Kept back are exactly two wallet
+-- entries: the test address and the address entered in app_config as
+-- administrator. Both stay so existing sessions keep working and nobody
+-- has to verify (and pay) again.
 --
--- Was verschwindet:
---   * rund 27.400 Lasttest-Adressen aus wallets
---   * alle Nachrichten (105 aus dem Lasttest, 76 aus eigenen Tests)
---   * alle DMs (die 50 gesetzten Faeden aus dem Seed)
---   * die drei Test-Abstimmungen samt Optionen
---   * alle Zahlungsanforderungen
+-- What disappears:
+--   * around 27,400 load-test addresses from wallets
+--   * all messages (105 from the load test, 76 from manual testing)
+--   * all DMs (the 50 seeded threads)
+--   * the three test polls, options included
+--   * all payment requests
 --
--- Stimmen gibt es keine (geprueft: 0), es gehen also keine Abstimmungs-
--- ergebnisse verloren.
+-- There are no votes (checked: 0), so no poll results get lost.
 --
--- ANLEITUNG
---   Abschnitt 1 zuerst allein ausfuehren – er zeigt nur an.
---   Dann Abschnitt 2.
---   Abschnitt 3 EINZELN ausfuehren: VACUUM darf nicht in einer Transaktion
---   laufen, und der SQL-Editor packt mehrere Anweisungen in eine.
+-- INSTRUCTIONS
+--   Run section 1 alone first - it only displays.
+--   Then section 2.
+--   Run section 3 ONE STATEMENT AT A TIME: VACUUM can't run inside a
+--   transaction, and the SQL editor bundles multiple statements into one.
 -- ============================================================================
 
 
 -- ----------------------------------------------------------------------------
--- VOR DEM AUSFUEHREN: DEIN_TEST_WALLET ersetzen
+-- BEFORE RUNNING: replace DEIN_TEST_WALLET
 -- ----------------------------------------------------------------------------
--- Hier stand einmal eine echte Adresse. Sie ist raus, weil dieses Verzeichnis
--- oeffentlich ist: Eine Wallet, die im Quelltext des Projekts steht, ist der
--- Wallet des Betreibers – und damit ein Faden, an dem man ziehen kann.
+-- A real address used to sit here. It's gone because this repo is public:
+-- a wallet that sits in a project's source code is the operator's wallet -
+-- and therefore a thread someone can pull on.
 --
--- Wer keine Testwallet verschonen will, setzt stattdessen einen Wert ein, den
--- es nicht gibt. Die Abfrage bleibt dann richtig, sie behaelt nur nichts.
+-- Whoever doesn't want to spare a test wallet enters a value instead that
+-- doesn't exist. The query stays correct then, it just keeps nothing.
 
 -- ----------------------------------------------------------------------------
--- 1. VORSCHAU
+-- 1. PREVIEW
 -- ----------------------------------------------------------------------------
 select
   (select count(*) from public.wallets)    as wallets_jetzt,
@@ -52,14 +51,14 @@ select
 
 
 -- ----------------------------------------------------------------------------
--- 2. LEEREN
+-- 2. CLEARING
 -- ----------------------------------------------------------------------------
--- Reihenfolge ist nicht beliebig: polls raeumt ueber "on delete cascade" seine
--- Optionen und Stimmen gleich mit weg, deshalb muss es vor wallets stehen.
+-- Order isn't arbitrary: polls clears its options and votes along with it
+-- via "on delete cascade", so it has to come before wallets.
 
 delete from public.votes;
-delete from public.polls;          -- nimmt poll_options mit
-delete from public.messages;       -- reply_to ist "on delete set null"
+delete from public.polls;          -- takes poll_options with it
+delete from public.messages;       -- reply_to is "on delete set null"
 delete from public.dms;
 delete from public.challenges;
 delete from public.seen_txs;
@@ -68,15 +67,15 @@ delete from public.wallets
 where address <> 'DEIN_TEST_WALLET'
   and address is distinct from (select admin_wallet from public.app_config where id = 1);
 
--- Antworten von net.http_post – die sammeln sich durch die Cronjobs an.
+-- Responses from net.http_post - these pile up from the cron jobs.
 delete from net._http_response where created < now() - interval '1 hour';
 
 
 -- ----------------------------------------------------------------------------
--- 3. PLATZ FREIGEBEN – bitte EINZELN ausfuehren, eine Zeile nach der anderen
+-- 3. RECLAIMING SPACE - please run ONE AT A TIME, one line after the other
 -- ----------------------------------------------------------------------------
--- Ohne das behaelt Postgres die 11 MB belegt und plant weiter mit 27.000
--- Zeilen, waehlt also schlechte Zugriffswege fuer eine Tabelle mit zwei.
+-- Without this, Postgres keeps holding the 11 MB and keeps planning around
+-- 27,000 rows, so it picks bad access paths for a table that now has two.
 
 vacuum full analyze public.wallets;
 vacuum full analyze public.messages;
@@ -84,7 +83,7 @@ vacuum full analyze public.dms;
 
 
 -- ----------------------------------------------------------------------------
--- 4. NACHHER
+-- 4. AFTERWARD
 -- ----------------------------------------------------------------------------
 select
   relname as tabelle,

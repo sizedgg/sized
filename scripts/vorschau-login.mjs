@@ -1,21 +1,22 @@
 // ============================================================================
-// Der erste Bildschirm auf dem Handy – vier Anordnungen desselben Textes
+// The first screen on the phone - four arrangements of the same text
 //
-// Der Text steht fest:
+// The text is fixed:
 //
-//   "SIZED works best from your home screen."  + drei Schritte
+//   "SIZED works best from your home screen."  + three steps
 //
-// Offen ist nur die Ordnung. Unruhig wirkt die einfache Liste aus einem
-// messbaren Grund: Bei 375 px brechen Schritte um ("Add to Home / Screen"),
-// dadurch ist jede Zeile anders hoch und der rechte Rand fransig.
+// Only the ordering is open. The plain list looks restless for a
+// measurable reason: at 375px steps wrap ("Add to Home / Screen"), which
+// makes every line a different height and leaves the right edge ragged.
 //
-// Deshalb misst dieses Skript mit, WIE VIELE Zeilen umbrechen. Eine Anordnung,
-// die auf dem Bild ruhig aussieht, aber bei einer längeren Zeile wieder
-// zerfällt, ist keine Lösung – sie ist nur ein gut gewählter Beispieltext.
+// So this script measures HOW MANY lines wrap. An arrangement that looks
+// calm in the picture but falls apart again with a longer line isn't a
+// solution - it's just a well-chosen sample text.
 //
-// Gezeichnet mit der echten index.html und der echten styles.css. Der
-// Login-Bildschirm wird sonst per JavaScript eingeblendet; hier passiert das
-// von Hand, sonst bliebe das Bild schwarz (genau das war es bisher).
+// Drawn with the real index.html and the real styles.css. The login
+// screen is normally shown via JavaScript; here that happens by hand,
+// otherwise the image would stay black (which is exactly what it was
+// until now).
 //
 //   node scripts/vorschau-login.mjs
 // ============================================================================
@@ -28,8 +29,9 @@ import { chromium } from 'playwright';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-// Das Teilen-Symbol aus der echten index.html – wörtlich, damit die Varianten
-// nicht mit einem anderen Zeichen werben als die Seite später zeigt.
+// The share icon from the real index.html - taken literally, so the
+// variants don't advertise a different glyph than the page actually shows
+// later.
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const IOS_GLYPH = (() => {
   const a = html.indexOf('<span class="glyph">');
@@ -44,41 +46,41 @@ const HAUS = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none"
   <path d="M4 10.5 12 4l8 6.5"/><path d="M6.5 9.5V19h11V9.5"/>
   <path d="M10 19v-4.5h4V19"/></svg>`;
 
-const iosSchritte = (letzte) => `
+const iosSteps = (last) => `
   <ol id="ios-steps" class="steps">
     <li>Tap ${IOS_GLYPH} in the browser bar</li>
     <li>Scroll down and choose <strong>Add to Home Screen</strong></li>
-    <li>${letzte}</li>
+    <li>${last}</li>
   </ol>`;
 
 // ---------------------------------------------------------------------------
-// Die vier Fassungen
+// The four versions
 // ---------------------------------------------------------------------------
 
 const LEDE = 'SIZED works best from your home screen.';
 
-// Zwei Fassungen der Schritte: einmal vollständig, einmal gekürzt.
-// "Scroll down and" ist inhaltlich nicht überflüssig – im Teilen-Menü von iOS
-// liegt der Eintrag wirklich weit unten. Es ist aber auch das, was den Umbruch
-// verursacht. Beide zur Auswahl, statt die Entscheidung zu verstecken.
-const SCHRITTE_LANG = (g) => [
+// Two versions of the steps: one full, one shortened. "Scroll down and"
+// isn't content padding - in iOS's share menu the entry really does sit
+// far down. But it's also what causes the wrap. Both are offered rather
+// than hiding the decision.
+const STEPS_LONG = (g) => [
   `Tap ${g} in the browser bar`,
   'Scroll down and choose <strong>Add to Home Screen</strong>',
   'Open SIZED from there and verify',
 ];
-const SCHRITTE_KURZ = (g) => [
+const STEPS_SHORT = (g) => [
   `Tap ${g} in the browser bar`,
   'Choose <strong>Add to Home Screen</strong>',
   'Open SIZED from there',
 ];
 
-// Der Text jedes Schrittes steckt in EINEM span.
+// Each step's text sits inside ONE span.
 //
-// Ohne diesen Umweg zerfällt die Zeile: Sitzt flex oder grid direkt auf dem
-// <li>, wird jedes Textstück darin ein eigenes Element – "Scroll down and
-// choose" und "<strong>Add to Home Screen</strong>" werden dann
-// auseinandergezogen, und bei grid landet jedes Wort auf einer eigenen Zeile.
-// Genau so sahen die ersten beiden Bilder aus.
+// Without this detour the line falls apart: if flex or grid sits directly
+// on the <li>, every piece of text inside it becomes its own element -
+// "Scroll down and choose" and "<strong>Add to Home Screen</strong>" then
+// get pulled apart, and with grid every word lands on its own line. That's
+// exactly what the first two images looked like.
 const liste = (schritte) =>
   `<ol class="steps">${schritte.map((s) => `<li><span class="txt">${s}</span></li>`).join('')}</ol>`;
 
@@ -98,14 +100,14 @@ const FASSUNGEN = [
           .steps li::before { content: counter(s); color: var(--dim);
                       font-family: var(--mono); font-size: .8rem; flex: none; }
           .steps .txt { display: block; }`,
-    inhalt: (g) => `<p class="lede">${LEDE}</p>${liste(SCHRITTE_KURZ(g))}
+    content: (g) => `<p class="lede">${LEDE}</p>${liste(STEPS_SHORT(g))}
       <button class="btn btn-ghost">Continue in the browser</button>`,
   },
   {
     nr: 2,
     name: 'Schritte als Zeilen mit Trennlinien',
     was: 'Wie eine Einstellungsliste auf dem Telefon: gleiche Höhe, gleiche '
-       + 'Einrückung, eine Haarlinie dazwischen. Die Nummern stehen in einer '
+       + 'Einrückung, eine Haarlinie between. Die Nummern stehen in einer '
        + 'Spalte, dadurch ist der linke Rand ruhig – und ein Umbruch fällt '
        + 'nicht mehr auf, weil jede Zeile ohnehin ihren eigenen Streifen hat.',
     css: `.steps { list-style: none; padding: 0; margin: 0; counter-reset: s;
@@ -119,7 +121,7 @@ const FASSUNGEN = [
             font-family: var(--mono); font-size: .78rem; line-height: 1.55;
             flex: none; width: .9rem; }
           .steps .txt { display: block; }`,
-    inhalt: (g) => `<p class="lede">${LEDE}</p>${liste(SCHRITTE_LANG(g))}
+    content: (g) => `<p class="lede">${LEDE}</p>${liste(STEPS_LONG(g))}
       <button class="btn btn-ghost">Continue in the browser</button>`,
   },
   {
@@ -128,7 +130,7 @@ const FASSUNGEN = [
     was: 'Die Nummern sitzen in gleich grossen Kreisen, der Text beginnt bei '
        + 'allen dreien an derselben Kante. Auch wenn eine Zeile umbricht, '
        + 'bleibt die Spalte stehen – das ist der Unterschied zur heutigen '
-       + 'Liste, bei der die zweite Zeile nach links unter die Nummer rutscht.',
+       + 'Liste, bei der die zweite Zeile nach left under die Nummer rutscht.',
     css: `.steps { list-style: none; padding: 0; margin: 0; counter-reset: s;
             display: flex; flex-direction: column; gap: .75rem; }
           .steps li { counter-increment: s; display: grid;
@@ -140,7 +142,7 @@ const FASSUNGEN = [
             border: 1px solid var(--line); background: var(--bg-1);
             font-family: var(--mono); font-size: .74rem; color: var(--dim); }
           .steps .txt { display: block; }`,
-    inhalt: (g) => `<p class="lede">${LEDE}</p>${liste(SCHRITTE_LANG(g))}
+    content: (g) => `<p class="lede">${LEDE}</p>${liste(STEPS_LONG(g))}
       <button class="btn btn-ghost">Continue in the browser</button>`,
   },
   {
@@ -155,7 +157,7 @@ const FASSUNGEN = [
           .steps li { text-align: left; padding-left: .9rem; position: relative; }
           .steps li::before { content: ''; position: absolute; left: 0; top: .62em;
             width: 4px; height: 4px; border-radius: 50%; background: var(--dim); }`,
-    inhalt: (g) => `<p class="lede">${LEDE}</p>${liste(SCHRITTE_KURZ(g))}
+    content: (g) => `<p class="lede">${LEDE}</p>${liste(STEPS_SHORT(g))}
       <button class="btn btn-ghost">Continue in the browser</button>`,
   },
 ];
@@ -167,17 +169,18 @@ const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascrip
 const server = http.createServer((q, res) => {
   let pfad = decodeURIComponent(q.url.split('?')[0]);
   if (pfad === '/') pfad = '/index.html';
-  const datei = path.join(root, 'public', pfad);
-  if (!datei.startsWith(path.join(root, 'public')) || !fs.existsSync(datei)) {
+  const file = path.join(root, 'public', pfad);
+  if (!file.startsWith(path.join(root, 'public')) || !fs.existsSync(file)) {
     return res.writeHead(404).end('');
   }
-  // app.js bleibt leer: Die Vorschau setzt den Zustand selbst, sonst würde das
-  // Skript sofort den Login-Ablauf starten und alles wieder verstecken.
+  // app.js stays empty: the preview sets the state itself, otherwise the
+  // script would immediately start the login flow and hide everything
+  // again.
   if (pfad === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('');
   }
-  res.writeHead(200, { 'content-type': TYPEN[path.extname(datei)] ?? 'application/octet-stream' })
-     .end(fs.readFileSync(datei));
+  res.writeHead(200, { 'content-type': TYPEN[path.extname(file)] ?? 'application/octet-stream' })
+     .end(fs.readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -185,60 +188,60 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
 
-const GERAET = { width: 375, height: 667, dpr: 2 };   // iPhone SE – die engste Lage
+const DEVICE = { width: 375, height: 667, dpr: 2 };   // iPhone SE - the tightest fit
 
-async function schuss(f) {
-  const seite = await browser.newPage({
-    viewport: { width: GERAET.width, height: GERAET.height },
-    deviceScaleFactor: GERAET.dpr, isMobile: true, hasTouch: true,
+async function shoot(f) {
+  const page = await browser.newPage({
+    viewport: { width: DEVICE.width, height: DEVICE.height },
+    deviceScaleFactor: DEVICE.dpr, isMobile: true, hasTouch: true,
   });
-  await seite.goto(base);
-  if (f.css) await seite.addStyleTag({ content: f.css });
-  await seite.evaluate((inhalt) => {
+  await page.goto(base);
+  if (f.css) await page.addStyleTag({ content: f.css });
+  await page.evaluate((content) => {
     document.querySelector('#login').hidden = false;
     document.querySelector('#app').hidden = true;
-    const karte = document.querySelector('#login .login-card');
-    // Marke behalten, alles darunter durch die Fassung ersetzen.
-    const marke = karte.querySelector('.brand').outerHTML;
-    karte.innerHTML = marke + `<div class="step">${inhalt}</div>`;
-  }, f.inhalt(IOS_GLYPH));
-  await seite.waitForTimeout(180);
-  const puffer = await seite.screenshot();
+    const card = document.querySelector('#login .login-card');
+    // Keep the brand, replace everything below it with the version.
+    const marker = card.querySelector('.brand').outerHTML;
+    card.innerHTML = marker + `<div class="step">${content}</div>`;
+  }, f.content(IOS_GLYPH));
+  await page.waitForTimeout(180);
+  const puffer = await page.screenshot();
 
-  // Zwei Zahlen, die man auf dem Bild nicht sieht:
+  // Two numbers you can't see in the image:
   //
-  //   hoehe    Läuft die Karte über den Bildschirm hinaus? Ein Foto vom
-  //            sichtbaren Teil verrät das nicht.
-  //   umbrueche  Wie viele Schritte gehen über mehr als eine Zeile? Genau das
-  //            macht die heutige Liste unruhig, und genau das würde bei einer
-  //            längeren Übersetzung oder Zeile wiederkommen.
-  const mass = await seite.evaluate(() => {
-    const karte = document.querySelector('#login .login-card');
-    let umbrueche = 0;
+  //   height      Does the card run past the bottom of the screen? A
+  //              screenshot of the visible part won't tell you.
+  //   wraps  How many steps span more than one line? That's exactly
+  //              what makes today's list look restless, and exactly what
+  //              would come back with a longer translation or line.
+  const mass = await page.evaluate(() => {
+    const card = document.querySelector('#login .login-card');
+    let wraps = 0;
     for (const li of document.querySelectorAll('.steps li')) {
-      const zeile = parseFloat(getComputedStyle(li).lineHeight);
+      const line = parseFloat(getComputedStyle(li).lineHeight);
       const innen = li.getBoundingClientRect().height
         - parseFloat(getComputedStyle(li).paddingTop)
         - parseFloat(getComputedStyle(li).paddingBottom);
-      if (innen > zeile * 1.6) umbrueche++;
+      if (innen > line * 1.6) wraps++;
     }
-    return { hoehe: Math.round(karte.getBoundingClientRect().height), umbrueche };
+    return { height: Math.round(card.getBoundingClientRect().height), wraps };
   });
-  await seite.close();
+  await page.close();
   return { bild: `data:image/png;base64,${puffer.toString('base64')}`, ...mass };
 }
 
 fs.mkdirSync(path.join(root, 'preview'), { recursive: true });
 const bilder = [];
-for (const f of FASSUNGEN) bilder.push({ ...f, ...(await schuss(f)) });
+for (const f of FASSUNGEN) bilder.push({ ...f, ...(await shoot(f)) });
 
-const PLATZ = GERAET.height;
+const PLATZ = DEVICE.height;
 const blatt = await browser.newPage({ viewport: { width: 1180, height: 1200 }, deviceScaleFactor: 2 });
 await blatt.setContent(`
 <style>
   body { margin: 0; padding: 26px; background: #0d0d0f; color: #e6e6e6;
          font-family: system-ui, sans-serif; }
-  .reihe { display: flex; gap: 22px; align-items: flex-start; }
+  .row { display: flex; gap: 22px; align-items: flex-start; }
   .fall { width: 262px; }
   h2 { font-size: 13.5px; margin: 0 0 3px; line-height: 1.3; }
   p { font-size: 11px; line-height: 1.5; color: #8b8b93; margin: 0 0 8px; }
@@ -247,16 +250,16 @@ await blatt.setContent(`
           color: #6f6f7a; margin: 0 0 8px; }
   img { width: 262px; display: block; border-radius: 10px; border: 1px solid #23232a; }
 </style>
-<div class="reihe">
+<div class="row">
 ${bilder.map((b) => `
   <div class="fall">
     <h2>${b.nr}. ${b.name}</h2>
     <p>${b.was}</p>
-    <p class="mass">Karte ${b.hoehe} px · ${b.umbrueche === 0
+    <p class="mass">Karte ${b.height} px · ${b.wraps === 0
        ? 'kein Schritt bricht um'
-       : `${b.umbrueche} von 3 Schritten brechen um`}</p>
-    ${b.hoehe > PLATZ ? `<p class="warn">Passt nicht auf einen Bildschirm:
-       ${b.hoehe} px auf ${PLATZ} px – man muss scrollen.</p>` : ''}
+       : `${b.wraps} von 3 Schritten brechen um`}</p>
+    ${b.height > PLATZ ? `<p class="warn">Passt nicht auf einen Bildschirm:
+       ${b.height} px auf ${PLATZ} px – man muss scrollen.</p>` : ''}
     <img src="${b.bild}">
   </div>`).join('')}
 </div>
@@ -267,8 +270,8 @@ await blatt.screenshot({ path: path.join(root, 'preview', 'login-optionen.png'),
 console.log('');
 for (const b of bilder) {
   console.log(`  ${b.nr}. ${b.name}`);
-  console.log(`     Karte ${b.hoehe} px, ${b.umbrueche} Umbruch/Umbrueche`
-    + (b.hoehe > PLATZ ? `  – mehr als ${PLATZ} px, also Scrollen` : ''));
+  console.log(`     Karte ${b.height} px, ${b.wraps} Umbruch/Umbrueche`
+    + (b.height > PLATZ ? `  – mehr als ${PLATZ} px, also Scrollen` : ''));
 }
 console.log(`\n  ${FASSUNGEN.length} Fassungen in preview/login-optionen.png\n`);
 await browser.close();

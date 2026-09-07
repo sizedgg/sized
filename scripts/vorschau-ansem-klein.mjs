@@ -1,34 +1,34 @@
 // ============================================================================
-// Vorschaubild: "ANSEM" so klein, dass es genau so breit ist wie drei Zeichen
+// Preview image: "ANSEM" small enough to be exactly as wide as three characters
 //
-// Die Spalte ist 26 px breit – das sind drei Schreibmaschinenzeichen bei 15 px.
-// "ANSEM" sind fünf Buchstaben. Damit es in dieselbe Breite passt, muss es
-// deutlich kleiner gesetzt werden, und die Frage ist nur: wie kriegt man das
-// hin, ohne dass es unleserlich wird?
+// The column is 26 px wide - that's three monospace characters at 15 px.
+// "ANSEM" is five letters. To fit into the same width, it has to be set
+// noticeably smaller, and the only question is: how do you do that without
+// it becoming unreadable?
 //
-// Drei Wege:
-//   * kleiner setzen (ehrlich, aber winzig)
-//   * schmalere Schrift nehmen (die Sans ist schmaler als die Mono)
-//   * waagerecht stauchen (Höhe bleibt lesbar, Breite schrumpft)
+// Three approaches:
+//   * set it smaller (honest, but tiny)
+//   * use a narrower typeface (the sans is narrower than the mono)
+//   * compress it horizontally (height stays readable, width shrinks)
 //
-// Das Skript misst jede Variante im Browser nach und schreibt die tatsächliche
-// Breite daneben. Geraten wird hier nichts.
+// The script measures every variant in the browser and writes the actual
+// width next to it. Nothing here is guessed.
 //
-// Erzeugt preview/ansem-klein2.png
+// Generates preview/ansem-klein2.png
 // ============================================================================
 
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 
-// Zweiter Durchgang. Der erste hat gemessen: Nur die Mono bei 8,5 px und die
-// gestauchte Mono passen ueberhaupt in die 25,4 px. Die gestauchte war mit
-// 20,5 px sogar zu schmal – da ist Hoehe verschenkt.
+// Second pass. The first one measured: only the mono at 8.5 px and the
+// compressed mono fit into the 25.4 px at all. The compressed one was even
+// too narrow at 20.5 px - height going to waste there.
 //
-// Also hier dieselbe Idee in drei Groessen, jede so gestaucht, dass sie GENAU
-// auf die Kuerzelbreite kommt. Die Rechnung: natuerliche Breite bei 11 px sind
-// 33,1 px, also 25,4 / 33,1 = 0,768. Bei groesserer Schrift entsprechend mehr
-// Stauchung – und irgendwann sieht man ihr das an. Genau die Grenze soll das
-// Bild zeigen.
+// So here's the same idea at three sizes, each compressed just enough to
+// land EXACTLY on the handle width. The math: natural width at 11 px is
+// 33.1 px, so 25.4 / 33.1 = 0.768. At a larger size, correspondingly more
+// compression - and at some point you can see it. That's exactly the
+// limit this image is meant to show.
 const VARIANTEN = [
   {
     nr: 1,
@@ -60,7 +60,7 @@ const VARIANTEN = [
   {
     nr: 5,
     name: 'Mono 12px, gestaucht, normal fett',
-    hinweis: 'Wie 3, aber ohne Fettung. Beim Stauchen werden fette Buchstaben schnell klobig – duennere vertragen es besser.',
+    hinweis: 'Wie 3, aber ohne Fettung. Beim Stauchen werden fette Buchstaben fast klobig – duennere vertragen es besser.',
     css: `font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0;
           display: inline-block; transform: scaleX(.70); transform-origin: left center;`,
   },
@@ -73,7 +73,7 @@ const VARIANTEN = [
   },
 ];
 
-const NACHRICHTEN = [
+const MESSAGES = [
   { h: '9Qm', ton: 0, usd: '$3.4K', body: 'gm', zeit: '14:02' },
   { admin: true, body: 'New poll is up. Go vote.', zeit: '14:03' },
   { h: 'Km9', ton: 3, usd: '$1.3K', body: 'lfg', zeit: '14:04' },
@@ -81,7 +81,7 @@ const NACHRICHTEN = [
   { h: '7xK', ton: 2, usd: '$5.2K', body: 'ser', zeit: '14:07' },
 ];
 
-const zeile = (m, v) => `
+const line = (m, v) => `
   <div class="msg ${m.admin ? 'is-admin' : ''}">
     <span class="who">${m.admin
       ? `<span class="h ansem">${v.text ?? 'ANSEM'}</span>`
@@ -91,13 +91,13 @@ const zeile = (m, v) => `
     <span class="meta"><span class="time">${m.zeit}</span></span>
   </div>`;
 
-const karte = (v) => `
-  <section class="karte">
+const card = (v) => `
+  <section class="card">
     <style>#v${v.nr} .ansem { color: var(--accent); ${v.css} }</style>
     <h2><span class="nr">${v.nr}</span>${v.name}<span class="mass" id="m${v.nr}"></span></h2>
     <p class="hinweis">${v.hinweis}</p>
     <div class="chat-panel" id="v${v.nr}">
-      <div class="chat-list">${NACHRICHTEN.map((m) => zeile(m, v)).join('')}</div>
+      <div class="chat-list">${MESSAGES.map((m) => line(m, v)).join('')}</div>
     </div>
   </section>`;
 
@@ -107,7 +107,7 @@ const html = `<!doctype html>
 <style>
   body { padding: 26px; background: var(--bg); }
   .raster { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px 22px; max-width: 1240px; }
-  .karte h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .card h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
   .nr {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; border-radius: 999px;
@@ -121,23 +121,23 @@ const html = `<!doctype html>
   .lead { margin: 0 0 1.5rem; font-size: .82rem; color: var(--dim); max-width: 92ch; }
 </style>
 <h1>„ANSEM" – wie groß geht es?</h1>
-<p class="lead">Die Spalte ist 26 px breit. Hinter jeder Überschrift steht, wie breit der Schriftzug tatsächlich geworden ist – gemessen im Browser, nicht geschätzt.</p>
-<div class="raster">${VARIANTEN.map(karte).join('')}</div>
+<p class="lead">Die Spalte ist 26 px wide. Hinter jeder Überschrift steht, wie wide der Schriftzug tatsächlich geworden ist – measured im Browser, nicht geschätzt.</p>
+<div class="raster">${VARIANTEN.map(card).join('')}</div>
 <script>
   for (const v of [1,2,3,4,5,6]) {
     const el = document.querySelector('#v' + v + ' .ansem');
     if (!el) continue;
     const b = el.getBoundingClientRect();
     document.querySelector('#m' + v).textContent =
-      b.width.toFixed(1) + ' px breit, ' + b.height.toFixed(1) + ' px hoch';
-    // Der entscheidende Wert: Beginnt der Text bei Ansem an derselben Stelle
-    // wie bei den anderen? transform aendert nur die Darstellung, nicht die
-    // Layout-Breite – wenn die ueberlaeuft, verschiebt sich der Text doch.
-    const zeilen = document.querySelectorAll('#v' + v + ' .msg');
-    const links = [...zeilen].map((z) => Math.round(z.querySelector('.body').getBoundingClientRect().left));
-    const gleich = links.every((x) => x === links[0]);
+      b.width.toFixed(1) + ' px wide, ' + b.height.toFixed(1) + ' px hoch';
+    // The decisive value: does Ansem's text start at the same spot as the
+    // others'? transform only changes the rendering, not the layout
+    // width - if that overflows, the text shifts after all.
+    const lines = document.querySelectorAll('#v' + v + ' .msg');
+    const left = [...lines].map((z) => Math.round(z.querySelector('.body').getBoundingClientRect().left));
+    const gleich = left.every((x) => x === left[0]);
     document.querySelector('#m' + v).textContent +=
-      gleich ? '  ·  Text buendig' : '  ·  TEXT VERSCHOBEN (' + [...new Set(links)].join('/') + ')';
+      gleich ? '  ·  Text flush' : '  ·  TEXT VERSCHOBEN (' + [...new Set(left)].join('/') + ')';
   }
 </script>
 `;
@@ -147,10 +147,10 @@ writeFileSync('public/_vorschau-ansem-klein2.html', html);
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 1300, height: 900 }, deviceScaleFactor: 2 });
-await seite.goto(`file://${process.cwd()}/public/_vorschau-ansem-klein2.html`);
-await seite.waitForTimeout(300);
-await seite.screenshot({ path: 'preview/ansem-klein2.png', fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1300, height: 900 }, deviceScaleFactor: 2 });
+await page.goto(`file://${process.cwd()}/public/_vorschau-ansem-klein2.html`);
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'preview/ansem-klein2.png', fullPage: true });
 await browser.close();
 
 rmSync('public/_vorschau-ansem-klein2.html', { force: true });

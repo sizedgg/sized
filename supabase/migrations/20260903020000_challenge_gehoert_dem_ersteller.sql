@@ -1,93 +1,94 @@
 -- ============================================================================
--- Eine Challenge gehört dem, der sie geöffnet hat – und niemandem sonst
+-- A challenge belongs to whoever opened it - and to no one else
 --
 -- ----------------------------------------------------------------------------
--- Die Lücke: sich als Ansem anmelden, ohne seine Wallet zu besitzen
+-- The gap: logging in as Ansem without owning his wallet
 --
--- Die Anmeldung läuft in zwei Schritten über die Edge Function verify:
+-- Login runs in two steps through the edge function verify:
 --
---   POST { action: 'challenge', wallet }   -> challengeId + Betrag
---   POST { action: 'status', challengeId } -> irgendwann das JWT
+--   POST { action: 'challenge', wallet }   -> challengeId + amount
+--   POST { action: 'status', challengeId } -> the JWT, eventually
 --
--- Beim ersten Schritt wird NICHT geprüft, ob der Anfragende die Wallet
--- besitzt – das ist Absicht und richtig so: Die Zahlung selbst ist der
--- Nachweis, und genau deshalb muss niemand ein Wallet verbinden.
+-- The first step does NOT check whether the caller owns the wallet - that's
+-- deliberate and correct: the payment itself is the proof, and that's
+-- exactly why nobody has to connect a wallet.
 --
--- Der zweite Schritt verlangte aber nur die challengeId. Und die kennt der,
--- der die Challenge geöffnet hat.
+-- But the second step only required the challengeId. And that's known by
+-- whoever opened the challenge.
 --
--- Dazu kam createChallenge: Lag für eine Wallet schon eine offene Challenge
--- vor, wurde SIE zurückgegeben, statt eine neue anzulegen. Gedacht war das
--- gegen doppelte Kosten beim Neuladen. Es hiess aber auch: zwei verschiedene
--- Leute, die dieselbe Adresse eintippen, bekommen DIESELBE challengeId.
+-- On top of that came createChallenge: if an open challenge already existed
+-- for a wallet, IT was returned instead of creating a new one. The idea was
+-- to avoid double cost on reload. But it also meant: two different people
+-- typing the same address get the SAME challengeId.
 --
--- Damit stand der Weg offen:
+-- Which left the path wide open:
 --
---   1. Angreifer ruft challenge mit ANSEMS Adresse auf. Er bekommt eine
---      challengeId und einen Betrag. Kosten: nichts.
---   2. Ansem meldet sich irgendwann an. createChallenge findet die offene
---      Challenge und gibt ihm dieselbe zurück – mitsamt dem Betrag.
---   3. Ansem zahlt. scanTreasury bucht die Zahlung: Absender stimmt, Betrag
---      stimmt, Status wird 'paid'.
---   4. Der Angreifer fragt mit SEINER challengeId nach dem Status. Wer den
---      Statuswechsel auf 'used' gewinnt, bekommt das JWT.
+--   1. Attacker calls challenge with ANSEM'S address. He gets a challengeId
+--      and an amount. Cost: nothing.
+--   2. Ansem logs in at some point. createChallenge finds the open
+--      challenge and returns him the same one - amount included.
+--   3. Ansem pays. scanTreasury books the payment: sender matches, amount
+--      matches, status becomes 'paid'.
+--   4. The attacker polls status with HIS challengeId. Whoever wins the
+--      status change to 'used' gets the JWT.
 --
--- Das JWT trägt wallet = Ansems Adresse. app.is_admin() vergleicht diese
--- Adresse mit app_config.admin_wallet – und sagt ja. Posteingang, Abstimmungen
--- anlegen und löschen, die DM-Schwelle stellen: alles.
+-- The JWT carries wallet = Ansem's address. app.is_admin() compares this
+-- address against app_config.admin_wallet - and says yes. Inbox, creating
+-- and deleting polls, setting the DM threshold: all of it.
 --
--- Ansem müsste dafür keinen Fehler machen. Er meldet sich ganz normal an. Der
--- Angreifer muss nur vorher eine Challenge auf seine Adresse offen haben, und
--- er kann sie beliebig offen halten – sie kostet ihn nichts.
---
--- ----------------------------------------------------------------------------
--- Was die Lücke NICHT war
---
--- Das Drumherum hält, und das ist der Grund, warum es an genau dieser Stelle
--- hängt und nicht an fünf:
---
---   * app.is_admin() glaubt dem Claim is_admin im Token NICHT. Es vergleicht
---     die Wallet aus dem Token mit app_config.admin_wallet. Ein selbst
---     gebasteltes "is_admin: true" bringt also nichts.
---   * verifyWalletJwt() prüft die Signatur immer mit HS256, egal was im
---     Header des Tokens steht. Der alg-none-Trick greift nicht.
---   * challenges ist für Clients unlesbar (RLS ohne Regel, keine Rechte).
---     Der Angreifer musste die Kennung auch nicht lesen – er hatte sie.
---   * Die Zahlung muss VON der eingetragenen Wallet kommen (.eq('wallet',
---     p.sender)). Fremd bezahlen geht nicht.
---
--- Es fehlte genau eine Sache: dass der Nachweis am Ende dem gehört, der ihn
--- angefordert hat.
+-- Ansem wouldn't have to make any mistake for this. He logs in completely
+-- normally. The attacker only needs a challenge open on his address
+-- beforehand, and he can keep it open indefinitely - it costs him nothing.
 --
 -- ----------------------------------------------------------------------------
--- Die Sperre
+-- What the gap was NOT
 --
--- Beim Anlegen würfelt verify ein Geheimnis, gibt es genau einmal heraus und
--- legt hier nur seinen SHA-256-Abdruck ab. Status abfragen und mock-pay
--- verlangen es. Wer es nicht hat, bekommt keinen Nachweis – auch nicht, wenn
--- er die Kennung kennt.
+-- Everything around it holds up, and that's why it hinges on exactly this
+-- one spot and not five:
 --
--- Nur der Abdruck, nicht das Geheimnis: Die Tabelle ist zwar für Clients
--- unlesbar, aber ein Datenabzug, ein Backup oder ein Blick ins Dashboard soll
--- niemandem eine fremde Anmeldung in die Hand geben.
+--   * app.is_admin() does NOT trust the is_admin claim in the token. It
+--     compares the wallet from the token against app_config.admin_wallet.
+--     A self-crafted "is_admin: true" gets you nowhere.
+--   * verifyWalletJwt() always checks the signature with HS256, no matter
+--     what the token's header claims. The alg-none trick doesn't work.
+--   * challenges is unreadable for clients (RLS with no rule, no grants).
+--     The attacker didn't even need to read the id - he already had it.
+--   * The payment has to come FROM the registered wallet (.eq('wallet',
+--     p.sender)). Paying on someone else's behalf doesn't work.
 --
--- Und createChallenge gibt eine offene Challenge nur noch heraus, wenn der
--- Anfragende ihr Geheimnis mitschickt. Sonst legt es eine neue an – mit einem
--- neuen Betrag. Damit läuft der Angriff von oben ins Leere: Ansems Zahlung
--- trägt SEINEN Betrag, und scanTreasury bucht sie auf SEINE Challenge. Die
--- des Angreifers wird nie bezahlt und läuft ab.
+-- Exactly one thing was missing: that the proof ends up belonging to
+-- whoever requested it.
 --
 -- ----------------------------------------------------------------------------
--- Warum zusätzlich eine Obergrenze offener Challenges je Wallet
+-- The lock
 --
--- Der eindeutige Index auf offenen Beträgen (uq_challenges_open_amount) macht
--- jeden Betrag exklusiv, und es gibt nur NONCE_MAX = 100.000 davon. Ohne
--- Grenze könnte jemand für eine fremde Adresse tausende Challenges öffnen und
--- die Beträge besetzen; verify würfelt zwanzigmal und gibt dann auf. Das wäre
--- keine Übernahme mehr, aber eine verschlossene Tür für den Richtigen.
+-- On creation, verify now rolls a secret, hands it out exactly once, and
+-- stores only its SHA-256 fingerprint here. Polling status and mock-pay
+-- both require it. Whoever doesn't have it gets no proof - even knowing
+-- the id doesn't help.
 --
--- Drei offene je Wallet: genug für Handy, Rechner und einen hängengebliebenen
--- Versuch, und weit weg von 100.000. Abgelaufene zählen nicht mit.
+-- Only the fingerprint, not the secret: the table is already unreadable for
+-- clients, but a data dump, a backup, or a look in the dashboard shouldn't
+-- hand anyone a stranger's login either.
+--
+-- And createChallenge now only hands out an open challenge if the caller
+-- submits its secret. Otherwise it creates a new one - with a new amount.
+-- That leaves the attack from above running into nothing: Ansem's payment
+-- carries HIS amount, and scanTreasury books it against HIS challenge. The
+-- attacker's is never paid and simply expires.
+--
+-- ----------------------------------------------------------------------------
+-- Why an upper limit on open challenges per wallet on top of that
+--
+-- The unique index on open amounts (uq_challenges_open_amount) makes every
+-- amount exclusive, and there are only NONCE_MAX = 100,000 of them. Without
+-- a limit, someone could open thousands of challenges for a foreign address
+-- and occupy the amounts; verify rolls twenty times and then gives up. That
+-- wouldn't be a takeover anymore, but it would be a locked door for the
+-- rightful owner.
+--
+-- Three open per wallet: enough for phone, computer, and one stalled
+-- attempt, and nowhere near 100,000. Expired ones don't count.
 -- ============================================================================
 
 alter table public.challenges
@@ -99,10 +100,10 @@ comment on column public.challenges.secret_hash is
   'die challengeId, und die kennt auch, wer die Challenge fuer eine FREMDE '
   'Wallet geoeffnet hat.';
 
--- Nachschlagen geht ueber (id, secret_hash); der Primaerschluessel reicht.
+-- Lookup goes via (id, secret_hash); the primary key is enough.
 
 -- ----------------------------------------------------------------------------
--- Obergrenze offener Challenges je Wallet
+-- Upper limit on open challenges per wallet
 -- ----------------------------------------------------------------------------
 create or replace function app.limit_open_challenges()
 returns trigger
@@ -133,17 +134,17 @@ create trigger trg_challenges_limit
   for each row execute function app.limit_open_challenges();
 
 -- ----------------------------------------------------------------------------
--- Altbestand
+-- Existing rows
 -- ----------------------------------------------------------------------------
--- Offene Challenges ohne Abdruck stammen aus der Zeit davor. verify weist sie
--- nach dem Ausrollen ab, und das ist richtig so: Eine von ihnen KOENNTE die
--- eines Angreifers sein, und man sieht es ihr nicht an. Sie hier gleich auf
--- 'expired' zu setzen macht dasselbe sichtbar, statt es als stille Absage in
--- der Function zu lassen – wer gerade mitten in der Anmeldung war, faengt neu
--- an und zahlt nichts doppelt, weil er noch gar nicht gezahlt hat.
+-- Open challenges without a fingerprint are from before this. verify
+-- rejects them after rollout, and that's correct: any one of them COULD be
+-- an attacker's, and there's no way to tell by looking. Setting them to
+-- 'expired' right here makes that visible instead of leaving it as a
+-- silent rejection buried in the function - whoever was mid-login just
+-- starts over, and pays nothing twice because they hadn't paid yet.
 --
--- Bereits BEZAHLTE Challenges bleiben unangetastet: Dort ist Geld geflossen,
--- und der Weg zum Token muss offen bleiben.
+-- Challenges already PAID are left untouched: money has moved there, and
+-- the path to the token has to stay open.
 update public.challenges
    set status = 'expired'
  where status = 'pending'

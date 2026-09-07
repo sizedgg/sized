@@ -1,21 +1,20 @@
 /**
- * Service Worker – so klein wie möglich.
+ * Service worker - as small as possible.
  *
- * Er ist hier NICHT dafür da, die Seite offline nutzbar zu machen: Eine
- * Abstimmung ohne Netz hat keinen Zweck. Er ist da, damit sich die Seite überhaupt auf dem
- * Startbildschirm ablegen lässt – Chrome verlangt dafür einen Worker, der auf
- * Anfragen reagiert – und damit ein kurzer Funkloch-Moment nicht zur
- * Fehlerseite führt.
+ * It's NOT here to make the site usable offline: a poll without a network
+ * connection serves no purpose. It exists so the site can be added to the
+ * home screen at all - Chrome requires a worker that responds to requests
+ * for that - and so a brief dead-zone moment doesn't turn into an error page.
  *
- * Deshalb Netz zuerst, Zwischenspeicher nur als Auffangnetz. Andersherum wäre
- * gefährlich: Nach einer Aktualisierung liefe bei den Leuten sonst tagelang
- * eine alte Fassung weiter, ohne dass jemand merkt, warum.
+ * Hence network first, cache only as a safety net. The other way round
+ * would be dangerous: after an update, people would otherwise keep running
+ * an old version for days, with nobody noticing why.
  */
 
 const CACHE = 'sized-shell-v2';
 
-// Nur die Hülle. config.js steht bewusst NICHT hier: Wenn das Projekt einmal
-// umzieht, darf keine alte Adresse im Zwischenspeicher hängen bleiben.
+// Only the shell. config.js deliberately does NOT sit here: if the project
+// ever moves, no old address is allowed to get stuck in the cache.
 const SHELL = [
   '/',
   '/index.html',
@@ -23,15 +22,15 @@ const SHELL = [
   '/app.js',
   '/vendor/supabase.js',
   '/icons/icon-192.png',
-  // Ansems Profilbild. Es steht in der Huelle, weil es in der Kopfzeile
-  // sofort gebraucht wird und nicht erst nach einer Antwort vom Server: Ohne
-  // das steht dort in einem Funkloch ein leerer Kreis. 3,5 KB.
+  // Ansem's profile picture. It's part of the shell because it's needed
+  // immediately in the header, not only after a response from the server:
+  // without this, a dead zone would leave an empty circle there. 3.5 KB.
   '/ansem.jpg',
 ];
 
 self.addEventListener('install', (e) => {
-  // Nicht scheitern, wenn eine einzelne Datei fehlt – die Installation soll
-  // daran nicht hängen bleiben.
+  // Don't fail if a single file is missing - installation shouldn't get
+  // stuck on that.
   e.waitUntil(
     caches.open(CACHE)
       .then((c) => Promise.allSettled(SHELL.map((u) => c.add(u))))
@@ -50,20 +49,20 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // Alles, was nicht zu dieser Seite gehört, geht uns nichts an – vor allem
-  // nicht die Aufrufe an Supabase. Die dürfen niemals aus dem Speicher
-  // beantwortet werden.
+  // Anything that doesn't belong to this site is none of our business -
+  // above all not the calls to Supabase. Those must never be answered from
+  // the cache.
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  // /p/12 ist keine Seite dieser App, sondern die kleine Umleitungsseite für
-  // geteilte Links. Sie muss immer frisch kommen: Aus dem Speicher beantwortet
-  // wuerde sie eine alte Frage und alte Zahlen an X ausliefern.
+  // /p/12 isn't a page of this app, it's the small redirect page for shared
+  // left. It always has to come fresh: answered from the cache, it would
+  // hand X an old question and old numbers.
   if (url.pathname.startsWith('/p/')) return;
 
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        // Nur erfolgreiche Antworten ablegen.
+        // Only store successful responses.
         if (res && res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(e.request, copy));

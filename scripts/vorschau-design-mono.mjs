@@ -1,32 +1,33 @@
 // ============================================================================
-// Vorschaubilder: Richtung 1 (flacher Grund) in Schreibmaschinenschrift
+// Preview images: direction 1 (flat background) in a monospace typeface
 //
-// Entschieden ist der Grund: kein Farbverlauf mehr, kein Violett. Und die
-// Schrift: Mono. Offen ist, WIE WEIT die Mono geht – das ist die eigentliche
-// Frage, und es sind mehr Stufen, als man vermutet.
+// The background is decided: no more gradient, no more violet. And the
+// typeface: mono. What's open is HOW FAR the mono goes - that's the real
+// question, and there are more gradations than you'd expect.
 //
-// Drei Dinge, die man beim Umstellen auf Mono wissen muss:
+// Three things worth knowing when switching to mono:
 //
-//   1. Mono baut breiter. Jedes Zeichen bekommt dieselbe Breite, auch das i
-//      und das l. Derselbe Punktwert wirkt dadurch größer und die Zeile wird
-//      länger. Deshalb steht in den Fassungen hier eine kleinere Zahl als die
-//      .86rem der Grotesk – der gemessene Ausgleich liegt bei etwa 0,92.
+//   1. Mono builds wider. Every character gets the same width, including the
+//      i and the l. The same point size ends up looking bigger and the line
+//      grows longer. That's why the versions here use a smaller number than
+//      the .86rem of the grotesque - the measured compensation is about
+//      0.92.
 //
-//   2. Mono braucht mehr Luft zwischen den Zeilen. Gleichmäßige Zeichenbreiten
-//      erzeugen ein senkrechtes Raster; ohne Abstand wird eine Liste daraus
-//      ein Block. Das war die Schwäche der Terminal-Fassung im letzten Bild,
-//      und Nummer 4 hier ist der Versuch, sie zu beheben.
+//   2. Mono needs more air between lines. Even character widths create a
+//      vertical grid; without spacing, a list becomes a block. That was the
+//      weak point of the terminal version in the last set of images, and
+//      number 4 here is the attempt to fix it.
 //
-//   3. Mono ist auf dieser Seite schon besetzt: Kürzel und Beträge stehen seit
-//      jeher darin, und zwar mit Absicht – Ziffern stehen so untereinander.
-//      Wenn ALLES Mono wird, verliert die Unterscheidung ihre Bedeutung. Das
-//      ist kein Fehler, aber eine Entscheidung: Danach trennt nur noch Farbe
-//      und Gewicht, was vorher auch die Schrift getrennt hat.
+//   3. Mono is already spoken for on this page: handles and amounts have
+//      always used it, and on purpose - digits line up that way. If
+//      EVERYTHING becomes mono, that distinction loses its meaning. That's
+//      not a mistake, but a decision: afterward only color and weight still
+//      separate what the typeface used to separate too.
 //
-// Der Grund ist in allen sechs derselbe – flach, ohne Licht. Verglichen wird
-// ausschließlich die Schrift.
+// The background is the same across all six - flat, no light. Only the
+// typeface is being compared.
 //
-// Erzeugt preview/mono-0..5.png und preview/mono-uebersicht.png
+// Produces preview/mono-0..5.png and preview/mono-uebersicht.png
 // ============================================================================
 
 import { chromium } from 'playwright';
@@ -38,16 +39,16 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = html.indexOf(von);
   const b = html.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in index.html: ${von}`);
   return html.slice(a, b + bis.length);
 };
-const kopf = schneide('<header class="topbar">', '</header>');
-const chat = schneide('<main id="pane-chat" class="pane">', '</main>');
+const header = cut('<header class="topbar">', '</header>');
+const chat = cut('<main id="pane-chat" class="pane">', '</main>');
 
-const NACHRICHTEN = [
+const MESSAGES = [
   { h: '9Qm', ton: 0, usd: '$3.4K', body: 'gm', zeit: '14:02' },
   { h: 'bH2', ton: 1, usd: '$8.8K', body: 'when is the next poll going up', zeit: '14:03' },
   { admin: true, h: '4bo', usd: '$12M', body: 'New poll is up. Go vote.', zeit: '14:03' },
@@ -62,7 +63,7 @@ const NACHRICHTEN = [
   { h: '9Qm', ton: 0, usd: '$3.4K', body: 'hit the arrow next to your balance', zeit: '14:11' },
 ];
 
-const zeile = (m) => `
+const line = (m) => `
   <div class="msg ${m.admin ? 'is-admin' : ''}">
     <span class="who">${m.admin
       ? `<span class="h admin-name">${m.h}</span>`
@@ -72,38 +73,38 @@ const zeile = (m) => `
     <span class="meta"><span class="time">${m.zeit}</span></span>
   </div>`;
 
-// Gilt für alle sechs: der flache Grund aus Richtung 1.
+// Applies to all six: the flat background from direction 1.
 const FLACH = `body { background-image: none; }`;
 
-// Die Bedienelemente rundherum – Reiter, Knöpfe, Marke, Filterleiste.
+// The surrounding controls - tabs, buttons, brand mark, filter bar.
 const CHROM = `
   .tab, .btn, .chip, .filters-label, .brand, .thread-head,
   .chat-panel .composer input { font-family: var(--mono); }`;
 
 const RICHTUNGEN = [
   {
-    datei: 'mono-0', name: 'Nur der Nachrichtentext',
-    kurz: 'Der kleinste Schritt',
+    file: 'mono-0', name: 'Nur der Nachrichtentext',
+    short: 'Der minSize Schritt',
     text: 'Nur das, was die Leute schreiben, wird Mono. Kürzel und Beträge waren es schon – damit ist die ganze Zeile Mono, alles andere auf der Seite bleibt wie es ist. .8rem statt .86rem, weil Mono breiter baut und sonst größer wirkte als vorher.',
     css: `.chat-panel .msg .body { font-family: var(--mono); font-size: .8rem; }`,
   },
   {
-    datei: 'mono-1', name: 'Der ganze Chat',
-    kurz: 'Bis zur Filterleiste und Eingabe',
+    file: 'mono-1', name: 'Der ganze Chat',
+    short: 'Bis zur Filterleiste und Eingabe',
     text: 'Dazu die Beschriftung der Filterleiste, die Voreinstellungsknöpfe und das Eingabefeld. Die Fläche des Chats ist damit vollständig Mono, die Kopfzeile darüber nicht – man sieht die Grenze, und das ist genau die Frage an dieser Fassung.',
     css: `
       .chat-panel .msg .body { font-family: var(--mono); font-size: .8rem; }
       .filters-label, .chip, .chat-panel .composer input { font-family: var(--mono); }`,
   },
   {
-    datei: 'mono-2', name: 'Alles',
-    kurz: 'Auch Reiter, Knöpfe und Marke',
+    file: 'mono-2', name: 'Alles',
+    short: 'Auch Reiter, Knöpfe und Marke',
     text: 'Keine Grenze mehr: Die ganze Seite ist eine Schrift. Am konsequentesten und am ruhigsten, weil nichts mehr aus der Reihe fällt. Der Preis ist, dass Mono nichts Besonderes mehr bedeutet – bisher hieß Mono auf dieser Seite "das ist eine Zahl".',
     css: `.chat-panel .msg .body { font-family: var(--mono); font-size: .8rem; } ${CHROM}`,
   },
   {
-    datei: 'mono-3', name: 'Alles, ohne Kasten',
-    kurz: 'Keine Umrandung, keine Rundungen',
+    file: 'mono-3', name: 'Alles, ohne Kasten',
+    short: 'Keine Umrandung, keine Rundungen',
     text: 'Wie 2, aber der Chat liegt nicht mehr in einer gerundeten Fläche, sondern zwischen Haarlinien. Am nächsten an einem Terminal. Zu bedenken: Die Fläche ist bewusst eingeführt worden, weil der Chat neben Abstimmungen und Posteingang sonst unfertig aussah – die beiden müssten mitziehen.',
     css: `
       .chat-panel .msg .body { font-family: var(--mono); font-size: .8rem; } ${CHROM}
@@ -115,8 +116,8 @@ const RICHTUNGEN = [
       .chat-panel .composer input { border-radius: 4px; }`,
   },
   {
-    datei: 'mono-4', name: 'Alles, mit Luft',
-    kurz: 'Mehr Zeilenabstand – die Antwort auf den Blockeffekt',
+    file: 'mono-4', name: 'Alles, mit Luft',
+    short: 'Mehr Zeilenabstand – die Antwort auf den Blockeffekt',
     text: 'Wie 2, aber mit dem, was Mono eigentlich braucht: höhere Zeilen und mehr Abstand zwischen den Buchstaben. Gleichmäßige Zeichenbreiten erzeugen ein Raster, und ohne Luft wird die Liste eine Wand. Kostet Zeilen im Fenster – hier zum ersten Mal wirklich, weil die Zeile über das Kürzel hinauswächst.',
     css: `
       .chat-panel .msg .body { font-family: var(--mono); font-size: .82rem; letter-spacing: .01em; }
@@ -125,8 +126,8 @@ const RICHTUNGEN = [
       .chat-panel .msg .body, .msg .worth { line-height: 1.65; }`,
   },
   {
-    datei: 'mono-5', name: 'Alles, dicht',
-    kurz: 'Kleiner und enger – Handelsbildschirm',
+    file: 'mono-5', name: 'Alles, dicht',
+    short: 'Kleiner und enger – Handelsbildschirm',
     text: 'Die Gegenrichtung zu 4: kleinere Schrift, engere Zeilen, mehr Nachrichten im Fenster. Liest sich wie ein laufender Feed statt wie ein Gespräch. Passt zu einem Raum, in dem der Betrag neben jedem Namen steht – ist aber die anstrengendste Fassung von allen.',
     css: `
       .chat-panel .msg .body { font-family: var(--mono); font-size: .76rem; letter-spacing: -.01em; }
@@ -137,12 +138,12 @@ const RICHTUNGEN = [
   },
 ];
 
-const seiteHtml = (extra) => `<!doctype html>
+const pageHtml = (extra) => `<!doctype html>
 <meta charset="utf-8">
 <style>${css}</style>
 <style>${FLACH}${extra}</style>
 <div class="app">
-  ${kopf}
+  ${header}
   ${chat}
 </div>
 <script>
@@ -150,7 +151,7 @@ const seiteHtml = (extra) => `<!doctype html>
   document.querySelector('#me-handle').className = 'handle h admin-name';
   document.querySelector('#me-holdings').textContent = '$12M';
   document.querySelector('#filter-unit').textContent = 'of $ANSEM';
-  document.querySelector('#chat-list').innerHTML = ${JSON.stringify(NACHRICHTEN.map(zeile).join(''))};
+  document.querySelector('#chat-list').innerHTML = ${JSON.stringify(MESSAGES.map(line).join(''))};
   document.querySelector('.chip[data-usd="0"]').classList.add('is-active');
 <\/script>`;
 
@@ -161,29 +162,29 @@ const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
 
 const bilder = [];
-const gemessen = [];
+const measured = [];
 for (const r of RICHTUNGEN) {
-  const seite = await browser.newPage({ viewport: { width: 1180, height: 760 }, deviceScaleFactor: 2 });
-  await seite.setContent(seiteHtml(r.css));
-  await seite.waitForTimeout(350);
+  const page = await browser.newPage({ viewport: { width: 1180, height: 760 }, deviceScaleFactor: 2 });
+  await page.setContent(pageHtml(r.css));
+  await page.waitForTimeout(350);
 
-  // Gemessen statt behauptet: Wie hoch ist eine Zeile, und passen dadurch
-  // mehr oder weniger Nachrichten ins Fenster als heute?
-  gemessen.push(await seite.evaluate(() => {
-    const zeilen = [...document.querySelectorAll('.chat-panel .msg')];
-    const hoehe = Math.min(...zeilen.map((el) => el.getBoundingClientRect().height));
+  // Measured, not asserted: how tall is a row, and does that fit more or
+  // fewer messages into the window than today?
+  measured.push(await page.evaluate(() => {
+    const lines = [...document.querySelectorAll('.chat-panel .msg')];
+    const height = Math.min(...lines.map((el) => el.getBoundingClientRect().height));
     const liste = document.querySelector('#chat-list').getBoundingClientRect().height;
-    return { hoehe: Math.round(hoehe * 10) / 10, passen: Math.floor(liste / hoehe) };
+    return { height: Math.round(height * 10) / 10, passen: Math.floor(liste / height) };
   }));
 
-  const ziel = path.join(ausgabe, `${r.datei}.png`);
-  await seite.screenshot({ path: ziel });
+  const ziel = path.join(ausgabe, `${r.file}.png`);
+  await page.screenshot({ path: ziel });
   bilder.push(fs.readFileSync(ziel).toString('base64'));
-  await seite.close();
+  await page.close();
   console.log(`  ${ziel}`);
 }
 
-const uebersicht = `<!doctype html>
+const overview = `<!doctype html>
 <meta charset="utf-8">
 <style>${css}</style>
 <style>
@@ -195,30 +196,30 @@ const uebersicht = `<!doctype html>
   .nr { display: inline-flex; align-items: center; justify-content: center;
         width: 1.6rem; height: 1.6rem; border-radius: 999px; background: var(--bg-3);
         color: var(--dim); font-family: var(--mono); font-size: .8rem; }
-  .kurz { color: var(--dim); font-weight: 400; font-size: .86rem; }
+  .short { color: var(--dim); font-weight: 400; font-size: .86rem; }
   .werte { font-family: var(--mono); font-size: .7rem; color: var(--dimmer); font-weight: 400; }
   p.t { margin: .35rem 0 .7rem; font-size: .84rem; color: #8b93a7; min-height: 7em; line-height: 1.55; }
   img { width: 100%; display: block; border-radius: 12px; border: 1px solid #232734; }
 </style>
 <h1>Flacher Grund, Schreibmaschinenschrift – sechs Fassungen</h1>
-<p class="lead">Der Grund ist überall derselbe: flach, kein Licht, kein Violett. Unterschiedlich ist nur, wie weit die Mono geht. Hinter jedem Titel steht die gemessene Zeilenhöhe und wie viele Nachrichten damit ins Fenster passen – heute sind es 37,5 px.</p>
+<p class="lead">Der Grund ist überall derselbe: flach, kein Licht, kein Violett. Unterschiedlich ist nur, wie far die Mono geht. Hinter jedem Titel steht die gemessene Zeilenhöhe und wie viele Nachrichten damit ins Fenster passen – heute sind es 37,5 px.</p>
 <div class="raster">
 ${RICHTUNGEN.map((r, i) => `
   <section>
-    <h2><span class="nr">${i}</span>${r.name}<span class="kurz">${r.kurz}</span>
-      <span class="werte">Zeile ${gemessen[i].hoehe}px · ${gemessen[i].passen} sichtbar</span></h2>
+    <h2><span class="nr">${i}</span>${r.name}<span class="short">${r.short}</span>
+      <span class="werte">Zeile ${measured[i].height}px · ${measured[i].passen} sichtbar</span></h2>
     <p class="t">${r.text}</p>
     <img src="data:image/png;base64,${bilder[i]}" alt="${r.name}">
   </section>`).join('')}
 </div>`;
 
 const blatt = await browser.newPage({ viewport: { width: 1780, height: 1200 }, deviceScaleFactor: 1.5 });
-await blatt.setContent(uebersicht);
+await blatt.setContent(overview);
 await blatt.waitForTimeout(500);
 await blatt.screenshot({ path: path.join(ausgabe, 'mono-uebersicht.png'), fullPage: true });
 await browser.close();
 
 console.log('');
 RICHTUNGEN.forEach((r, i) =>
-  console.log(`  ${i}  ${r.name.padEnd(26)} Zeile ${String(gemessen[i].hoehe).padStart(5)}px  ${gemessen[i].passen} sichtbar`));
+  console.log(`  ${i}  ${r.name.padEnd(26)} Zeile ${String(measured[i].height).padStart(5)}px  ${measured[i].passen} sichtbar`));
 console.log(`\n  ${path.join(ausgabe, 'mono-uebersicht.png')}\n`);

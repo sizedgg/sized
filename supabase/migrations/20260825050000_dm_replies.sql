@@ -1,13 +1,13 @@
 -- ============================================================================
--- Antworten auf einzelne Nachrichten in DMs
+-- Replies to individual messages in DMs
 --
--- Im Chat gibt es das schon. In den DMs fehlt es an der Stelle, an der es am
--- meisten hilft: Ansems Posteingang. Dort stehen in einem Faden zwanzig
--- Fragen, und eine Antwort ohne Bezug lässt offen, auf welche davon.
+-- This already exists in chat. In DMs it's missing at the spot where it
+-- helps most: Ansem's inbox. There, a thread can hold twenty questions, and
+-- a reply with no reference leaves open which one it's answering.
 --
--- Wie im Chat wird nur die Kennung gespeichert, nie eine Kopie des zitierten
--- Textes. Eine gelöschte Nachricht verschwindet damit auch aus den Zitaten –
--- sonst überlebte sie in jeder Antwort darauf.
+-- As in chat, only the id gets stored, never a copy of the quoted text. A
+-- deleted message disappears from the quotes too, then - otherwise it would
+-- survive in every reply to it.
 -- ============================================================================
 
 alter table public.dms
@@ -21,17 +21,17 @@ create index if not exists dms_reply_to_idx
   on public.dms (reply_to) where reply_to is not null;
 
 -- ----------------------------------------------------------------------------
--- Ein Zitat darf den Faden nicht verlassen
+-- A quote may not leave its thread
 -- ----------------------------------------------------------------------------
--- Der Fremdschlüssel sichert nur, dass die zitierte Nachricht existiert – nicht,
--- dass sie zum selben Gespräch gehört. Ohne diese Prüfung könnte jemand eine
--- Kennung aus einem fremden Faden eintragen.
+-- The foreign key only ensures the quoted message exists - not that it
+-- belongs to the same conversation. Without this check, someone could enter
+-- an id from a thread that isn't theirs.
 --
--- Auslesen ließe sich damit nichts: Die RLS-Regel dms_read gibt jedem nur den
--- eigenen Faden, ein fremdes Zitat käme also leer zurück. Aber es entstünden
--- Zeilen, die auf etwas zeigen, das der Betrachter nie sehen darf, und darauf
--- will man sich nicht verlassen müssen. Sauberer ist, dass sie gar nicht erst
--- entstehen.
+-- Nothing could actually be read out this way: the dms_read RLS rule only
+-- ever gives anyone their own thread, so a foreign quote would just come
+-- back empty. But it would create rows pointing at something the viewer is
+-- never allowed to see, and that's not something to rely on staying safe.
+-- Cleaner is for such rows to never exist in the first place.
 
 create or replace function app.guard_dm_reply()
 returns trigger
@@ -60,12 +60,12 @@ begin
 end;
 $$;
 
--- Der Name entscheidet die Reihenfolge: BEFORE-Trigger auf derselben Tabelle
--- feuern alphabetisch. "trg_dms_reply" liegt nach "trg_dms_guard" und vor
--- "trg_dms_stamp" – für diese Prüfung ist die Reihenfolge egal, weil sie nur
--- new.wallet gegen die zitierte Zeile hält und beide vom selben Einfügen
--- stammen. Falls hier je eine Prüfung dazukommt, die von einem anderen
--- Trigger gesetzte Felder liest: Reihenfolge zuerst nachsehen.
+-- The name decides the order: BEFORE triggers on the same table fire
+-- alphabetically. "trg_dms_reply" sits after "trg_dms_guard" and before
+-- "trg_dms_stamp" - for this check the order doesn't matter, since it only
+-- compares new.wallet against the quoted row, and both come from the same
+-- insert. If a check is ever added here that reads a field set by another
+-- trigger: check the order first.
 drop trigger if exists trg_dms_reply on public.dms;
 create trigger trg_dms_reply
   before insert or update on public.dms

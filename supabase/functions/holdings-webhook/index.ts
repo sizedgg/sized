@@ -1,38 +1,40 @@
 /**
- * Webhook für Token-Transfers (Helius).
+ * Webhook for token transfers (Helius).
  *
- * Solana meldet von sich aus nichts. Damit eine Stimme zeitnah verschwindet,
- * wenn jemand seine Token wegschickt, braucht es eine Push-Quelle: Helius
- * ruft diese Function bei jedem Transfer des $ANSEM-Mints auf, wir lesen die
- * betroffenen Wallets neu ein, und der Datenbank-Trigger zieht die Stimmen in
- * offenen Abstimmungen nach.
+ * Solana doesn't report anything on its own. For a vote to disappear
+ * promptly when someone sends their tokens away, a push source is needed:
+ * Helius calls this function on every transfer of the $ANSEM mint, we
+ * refresh the affected wallets, and the database trigger pulls the votes
+ * in open polls along with it.
  *
- * Einrichtung im Helius-Dashboard:
+ * Setup in the Helius dashboard:
  *   Webhook Type   : Enhanced
- *   Transaction Type: TRANSFER, SWAP  (oder "Any")
- *   Account Address: die Mint-Adresse von $ANSEM
- *   Webhook URL    : https://<projekt>.supabase.co/functions/v1/holdings-webhook
- *   Auth Header    : derselbe Wert wie das Secret WEBHOOK_SECRET
+ *   Transaction Type: TRANSFER, SWAP  (or "Any")
+ *   Account Address: the mint address of $ANSEM
+ *   Webhook URL    : https://<project>.supabase.co/functions/v1/holdings-webhook
+ *   Auth Header    : the same value as the WEBHOOK_SECRET secret
  *
- * Der Cron-Lauf von `refresh-holdings` bleibt trotzdem nötig: Er ist das Netz
- * für alles, was der Webhook verpasst (Ausfall, Kursänderung ohne Transfer).
+ * The `refresh-holdings` cron run is still needed regardless: it's the
+ * safety net for anything the webhook misses (an outage, a price change
+ * with no transfer).
  *
- * WICHTIG: Der Webhook legt keine neuen Wallets an, er frischt nur bekannte
- * auf. Helius meldet jede Bewegung des Mints, also auch die von Tausenden
- * Adressen, die diese Seite nie besuchen werden. Wer hier eine Zeile bekommt,
- * hat sich verifiziert – niemand sonst. Siehe die Begründung unten am Filter.
+ * IMPORTANT: the webhook never creates new wallets, it only refreshes
+ * known ones. Helius reports every movement of the mint, including that of
+ * thousands of addresses that will never visit this site. Whoever gets a
+ * row here has verified - nobody else. See the reasoning below at the
+ * filter.
  */
 import { serviceClient, loadConfig, json, fail, CORS } from '../_shared/common.ts';
 import { isSolanaAddress } from '../_shared/base58.ts';
 import { refreshWallet } from '../_shared/holdings.ts';
 
 /**
- * Zeichenweiser Vergleich in fester Zeit.
+ * Character-by-character comparison in constant time.
  *
- * Ein gewoehnliches !== bricht beim ersten Unterschied ab. Ueber das Netz ist
- * das kaum auszunutzen, aber verify/index.ts macht es an derselben Stelle
- * richtig – und zwei Massstaebe fuer dieselbe Sache in einem Projekt sind
- * schlechter als der strengere ueberall.
+ * An ordinary !== bails out at the first difference. Over the network
+ * that's barely exploitable, but verify/index.ts does it right at the same
+ * spot - and having two different standards for the same thing in one
+ * project is worse than applying the stricter one everywhere.
  */
 function gleich(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -68,25 +70,25 @@ Deno.serve(async (req) => {
     const wallets = extractWallets(payload, cfg.ansem_mint);
     if (!wallets.length) return json({ updated: 0, note: 'no token transfer in payload' });
 
-    // Nur Adressen anfassen, die die Tabelle schon kennt.
+    // Only touch addresses the table already knows about.
     //
-    // Das ist die wichtigste Zeile dieser Function. refreshWallet() schreibt
-    // per Upsert – ohne diesen Filter legt der Webhook für JEDE Adresse, die
-    // den Token je bewegt hat, eine Zeile an. Damit war `wallets` kein
-    // Verzeichnis der Mitglieder mehr, sondern eines des gesamten Tokens:
-    // 27.477 Zeilen, von denen zwei jemandem gehoerten, der die Seite
-    // benutzt.
+    // This is the most important line in this function. refreshWallet()
+    // writes via upsert - without this filter, the webhook would create a
+    // row for EVERY address that has ever moved the token. That would turn
+    // `wallets` from a directory of members into one of the entire token:
+    // 27,477 rows, two of which belonged to someone who actually uses the
+    // site.
     //
-    // Das kostet nicht nur Platz. Der Kurs-Takt schreibt jede Minute jede
-    // dieser Zeilen neu, und der Nachlese-Job arbeitet sich in
-    // Hunderterschritten ewig durch dieselbe Liste. Beides waechst dann mit
-    // der Beliebtheit des Tokens statt mit der Zahl der Nutzer – die
-    // Datenbank kann also unter Last geraten, ohne dass ein einziger Mensch
-    // die Seite besucht hat.
+    // That costs more than just space. The price tick rewrites every one
+    // of these rows every minute, and the catch-up job works its way
+    // through the same list forever, a hundred at a time. Both then grow
+    // with the token's popularity instead of the number of users - the
+    // database can end up under load without a single human having
+    // visited the site.
     //
-    // Neue Adressen kommen weiterhin herein, nur an der richtigen Stelle:
-    // beim Verifizieren. Wer bezahlt hat, steht in der Tabelle, und ab dann
-    // meldet der Webhook seine Bewegungen.
+    // New addresses still get in, just at the right point: on
+    // verification. Whoever has paid is in the table, and from then on
+    // the webhook reports their movements.
     const { data: bekannt, error: leseFehler } = await db
       .from('wallets').select('address').in('address', wallets);
     if (leseFehler) throw new Error(`known wallets lookup failed: ${leseFehler.message}`);
@@ -110,8 +112,8 @@ Deno.serve(async (req) => {
 });
 
 /**
- * Sammelt alle Wallet-Adressen, deren $ANSEM-Bestand sich geändert haben
- * könnte – Sender und Empfänger, plus Konten aus der Bilanzänderung.
+ * Collects every wallet address whose $ANSEM balance might have changed -
+ * sender and recipient, plus accounts from the balance change data.
  */
 function extractWallets(payload: unknown, mint: string): string[] {
   const events = Array.isArray(payload) ? payload : [payload];

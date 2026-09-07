@@ -1,27 +1,27 @@
 // ============================================================================
-// Nimmt die Rohclips fuer das Produktvideo auf
+// Records the raw clips for the product video
 //
-// Drei getrennte Aufnahmen statt einer langen: Anmeldung, Abstimmung,
-// Posteingang. Ein einziger Durchlauf waere zwar "echter", aber jeder Patzer
-// – ein Klick daneben, eine Antwort, die eine Sekunde laenger braucht –
-// zwaenge zur Wiederholung des Ganzen. Drei Clips lassen sich einzeln neu
-// aufnehmen, und der Schnitt braucht die Grenzen ohnehin.
+// Three separate recordings instead of one long one: login, poll, inbox. A
+// single take would be "more genuine", but every slip - a misclick, a
+// reply that takes a second longer - would force the whole thing to be
+// redone. Three clips can be re-recorded individually, and the cut needs
+// the boundaries anyway.
 //
-// Aufgenommen wird gegen den lokalen Stack (scripts/dev-stack.mjs), nicht
-// gegen sized.gg: Die echte Seite hat weder Abstimmungen noch Gespraeche, und
-// eine Zahlung auf der Kette dauert im Video zu lange. Der Posteingang kommt
-// aus dem Demo-Modus – erfundene Gespraeche, im fertigen Video sichtbar so
-// beschriftet.
+// Recorded against the local stack (scripts/dev-stack.mjs), not against
+// sized.gg: the real site has neither polls nor conversations, and an
+// on-chain payment takes too long for the video. The inbox comes from demo
+// mode - invented conversations, labeled as such in the finished video.
 //
 // ----------------------------------------------------------------------------
-// VORHER: die eigene Stimme loeschen
+// BEFORE: delete the own vote
 //
 //   psql "$PGURL_DEV" -c "delete from public.votes where wallet =
 //     '7xKXtg2CW3xY4mDqRhBnPk9vLcJ5uEaZs6TfWnQhMr2j'"
 //
-// Sonst steht der Haken schon vor dem Klick. Beim ersten Durchlauf faellt das
-// nicht auf, ab dem zweiten zeigt der Abstimmungsclip eine Auswahl, die sich
-// beim Klicken nicht aendert – eine Aufnahme davon, wie nichts passiert.
+// Otherwise the checkmark is already there before the click. On the first
+// take this goes unnoticed, but from the second one on the poll clip
+// shows a selection that doesn't change on click - a recording of nothing
+// happening.
 //
 //   node scripts/produktvideo-aufnahme.mjs
 // ============================================================================
@@ -34,44 +34,44 @@ import { chromium } from 'playwright';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const AUS = path.join(root, 'video-roh');
 const BASIS = process.env.BASIS || 'http://localhost:4000';
-// Aufgenommen wird in voller Auflaesung, vergroessert wird die SEITE.
+// Recorded at full resolution, what gets scaled up is the PAGE.
 //
-// Der erste Anlauf nahm bei 960x540 auf und wollte auf 1920x1080 ausgeben.
-// Playwright skaliert dabei aber nicht, es legt das kleine Bild grau gerahmt
-// in die Ecke – nachgesehen, nachdem der erste Schnitt seltsam aussah.
+// The first attempt recorded at 960x540 and tried to output at 1920x1080.
+// Playwright does not scale for that though, it places the small image
+// gray-framed in the corner - discovered after the first cut looked odd.
 //
-// Der Grund fuer den Umweg bleibt richtig: Die Seite hat eine feste
-// Hoechstbreite und waechst nicht mit dem Fenster, bei echten 1920 Pixeln
-// klebt sie im oberen Drittel. Nur ist der Hebel die Vergroesserung der
-// Seite (zoom), nicht ein kleineres Fenster – so entsteht das Bild von
-// vornherein in 1920x1080 und muss nirgends hochgerechnet werden.
-const BREITE = 1920;
-const HOEHE = 1080;
-const ZOOM_ENG = 2;      // Anmeldung und Abstimmung: eine Spalte
-// Der Posteingang bleibt bei 1. Vergroessert man ihn, passt die zweispaltige
-// Ansicht nicht mehr in die Hoehe: Die Liste laeuft unten aus dem Bild und das
-// Eingabefeld des Gespraechs verschwindet. Er fuellt den Rahmen ohnehin, weil
-// er im Gegensatz zu den anderen beiden die ganze Breite nutzt.
-const ZOOM_BREIT = 1;
+// The reason for the detour remains valid: the page has a fixed max width
+// and does not grow with the window, at real 1920 pixels it sticks to the
+// top third. The lever is just enlarging the PAGE (zoom), not a smaller
+// window - that way the image is born at 1920x1080 from the start and
+// never needs to be scaled up anywhere.
+const WIDTH = 1920;
+const HEIGHT = 1080;
+const ZOOM_TIGHT = 2;      // login and voting: one column
+// The inbox stays at 1. Zooming it in would make the two-column view no
+// longer fit the height: the list would run out of frame at the bottom
+// and the conversation's input field would disappear. It fills the frame
+// anyway, since unlike the other two it uses the full width.
+const ZOOM_WIDE = 1;
 
-// Zwei Dinge, die es nur im lokalen Stack gibt und die im Video eine
-// Unwahrheit waeren:
+// Two things that only exist in the local stack and would be a lie in the
+// video:
 //
-//   #btn-mock-pay  "Simulate payment (mock mode)" – auf sized.gg gibt es
-//                  keinen Knopf, der eine Zahlung vortaeuscht.
-//   der Hinweis    "Live updates unavailable" – der lokale Stack kann kein
-//                  Realtime, die echte Seite schon.
+//   #btn-mock-pay  "Simulate payment (mock mode)" - on sized.gg there is
+//                  no button that fakes a payment.
+//   the notice     "Live updates unavailable" - the local stack has no
+//                  realtime, the real site does.
 //
-// Beide werden ausgeblendet statt umgangen: Wer das Video sieht, soll die
-// Seite sehen, die es wirklich gibt.
-const nurLokalVerstecken = (zoom) => `
+// Both are hidden rather than worked around: whoever watches the video
+// should see the site as it really exists.
+const onlyLocalConceal = (zoom) => `
   :root { zoom: ${zoom}; }
   #btn-mock-pay { display: none !important; }
   #toast { display: none !important; }
 `;
 
-// Die Adresse, die im Video eingetippt wird. Echt aussehend, aber niemandem
-// gehoerend – base58, 44 Zeichen.
+// The address typed in the video. Looks real but belongs to nobody -
+// base58, 44 characters.
 const NUTZER = '7xKXtg2CW3xY4mDqRhBnPk9vLcJ5uEaZs6TfWnQhMr2j';
 const ANSEM  = 'GV6UUmNxz2RpKxmNAPadYKb7uQpszwqQAu3qLJxVdC52';
 
@@ -84,28 +84,28 @@ const browser = await chromium.launch({
   args: ['--force-device-scale-factor=1', '--hide-scrollbars'],
 });
 
-const schlaf = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Der Posteingang braucht mehr Breite als die anderen beiden: Er ist
-// zweispaltig, Liste links, Gespraech rechts. Bei 960 Pixeln quetschen sich
-// die Betraege an den Rand.
-async function clip(name, fn, zoom = ZOOM_ENG) {
+// The inbox needs more width than the other two: it is two-column, list
+// on the left, conversation on the right. At 960 pixels the amounts get
+// squeezed against the edge.
+async function clip(name, fn, zoom = ZOOM_TIGHT) {
   const ctx = await browser.newContext({
-    viewport: { width: BREITE, height: HOEHE },
+    viewport: { width: WIDTH, height: HEIGHT },
     deviceScaleFactor: 1,
-    recordVideo: { dir: AUS, size: { width: BREITE, height: HOEHE } },
+    recordVideo: { dir: AUS, size: { width: WIDTH, height: HEIGHT } },
   });
   const page = await ctx.newPage();
-  const stil = nurLokalVerstecken(zoom);
-  // Bei jedem Seitenaufbau neu: addStyleTag haengt am Dokument, und das ist
-  // nach einem goto ein anderes.
+  const stil = onlyLocalConceal(zoom);
+  // Fresh on every page load: addStyleTag hangs off the document, and
+  // that is a different one after a goto.
   page.on('load', () => page.addStyleTag({ content: stil }).catch(() => {}));
   await page.addStyleTag({ content: stil }).catch(() => {});
   try {
     await fn(page, ctx);
   } finally {
     const video = page.video();
-    await ctx.close();                       // erst danach ist die Datei fertig
+    await ctx.close();                       // only after this is the file finished
     const roh = await video.path();
     const ziel = path.join(AUS, `${name}.webm`);
     fs.renameSync(roh, ziel);
@@ -114,13 +114,13 @@ async function clip(name, fn, zoom = ZOOM_ENG) {
   }
 }
 
-/** Tippt Zeichen fuer Zeichen, damit es im Video nach Tippen aussieht. */
-const tippe = async (page, sel, text, ms = 45) => {
+/** Types character by character, so it looks like typing in the video. */
+const type = async (page, sel, text, ms = 45) => {
   await page.click(sel);
   await page.type(sel, text, { delay: ms });
 };
 
-/** Holt den JWT aus einer abgeschlossenen Anmeldung, fuer die naechsten Clips. */
+/** Gets the JWT from a completed login, for the following clips. */
 async function meldeAn(page, wallet) {
   await page.goto(BASIS, { waitUntil: 'networkidle' });
   await page.fill('#wallet-input', wallet);
@@ -142,7 +142,7 @@ async function meldeAn(page, wallet) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Anmelden ohne Wallet
+// 1. Logging in without a wallet
 // ---------------------------------------------------------------------------
 console.log('\nAufnahme:');
 
@@ -150,22 +150,22 @@ let jwt = null;
 
 await clip('1-anmelden', async (page) => {
   await page.goto(BASIS, { waitUntil: 'networkidle' });
-  await schlaf(1200);
+  await sleep(1200);
 
-  await tippe(page, '#wallet-input', NUTZER, 38);
-  await schlaf(700);
+  await type(page, '#wallet-input', NUTZER, 38);
+  await sleep(700);
   await page.click('#btn-challenge');
 
-  // Der Betrag erscheint. Hier stehenbleiben – das ist das Bild, um das es
-  // geht: eine Zahl und eine Adresse, kein Wallet-Fenster, keine Signatur.
+  // The amount appears. Hold here - this is the shot it's all about: a
+  // number and an address, no wallet popup, no signature.
   await page.waitForSelector('#step-pay:not([hidden])', { timeout: 15_000 });
-  await schlaf(2600);
+  await sleep(2600);
 
   const id = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('ansem_challenge') || 'null')?.challengeId ?? null);
 
-  // Die Uhr laufen lassen – im Schnitt wird dieser Teil beschleunigt.
-  await schlaf(3000);
+  // Let the clock run - this part gets sped up in the cut.
+  await sleep(3000);
 
   await page.evaluate(async (challengeId) => {
     await fetch('/functions/v1/verify', {
@@ -174,18 +174,18 @@ await clip('1-anmelden', async (page) => {
     });
   }, id);
 
-  // Drin ist man, wenn #app sichtbar wird – nicht, wenn #step-pay verschwindet.
-  // Das war der erste Anlauf, und er lief in einen Zeitfehler: Beim Anmelden
-  // wird der ganze Anmeldeschirm ausgeblendet, #step-pay bleibt darunter
-  // stehen wie es war. Die Bedingung wurde also nie wahr, obwohl die Anmeldung
-  // laengst durch war (die Challenge stand in der Datenbank auf "used").
+  // You're in once #app becomes visible - not once #step-pay disappears.
+  // That was the first attempt, and it ran into a timing bug: on login the
+  // whole login screen gets hidden, #step-pay stays underneath exactly as
+  // it was. So the condition never became true, even though login had
+  // long since gone through (the challenge sat in the database as "used").
   await page.waitForSelector('#app:not([hidden])', { timeout: 25_000 });
-  await schlaf(2200);
+  await sleep(2200);
   jwt = await page.evaluate(() => localStorage.getItem('ansem_jwt'));
 });
 
 // ---------------------------------------------------------------------------
-// 2. Abstimmen
+// 2. Voting
 // ---------------------------------------------------------------------------
 await clip('2-abstimmen', async (page, ctx) => {
   await ctx.addInitScript((t) => {
@@ -193,48 +193,48 @@ await clip('2-abstimmen', async (page, ctx) => {
   }, jwt);
   await page.goto(BASIS, { waitUntil: 'networkidle' });
   await page.waitForSelector('.opt', { timeout: 20_000 });
-  await schlaf(1800);
+  await sleep(1800);
 
-  // Auf die Antwort zeigen, kurz warten, dann waehlen. Der Zeiger macht
-  // sichtbar, dass hier jemand handelt und nicht die Seite von selbst laeuft.
+  // Point at the option, wait briefly, then select. The cursor makes it
+  // visible that someone is acting here and the page isn't just running by itself.
   const ziel = page.locator('.opt').nth(2);
   await ziel.hover();
-  await schlaf(800);
+  await sleep(800);
   await ziel.click();
-  await schlaf(3000);
+  await sleep(3000);
 
-  // Einmal ueber die Balken fahren: zwei Zahlen pro Antwort, Stimmen und $.
+  // Hover over the bars once: two numbers per option, votes and $.
   await page.locator('.opt').nth(0).hover();
-  await schlaf(900);
+  await sleep(900);
   await page.locator('.opt').nth(3).hover();
-  await schlaf(1400);
+  await sleep(1400);
 });
 
 // ---------------------------------------------------------------------------
-// 3. Ansems Posteingang (Demo-Daten)
+// 3. Ansem's inbox (demo data)
 // ---------------------------------------------------------------------------
 await clip('3-posteingang', async (page) => {
   await meldeAn(page, ANSEM);
   await page.goto(`${BASIS}/?demo=60`, { waitUntil: 'networkidle' });
   await page.click('.tab[data-tab="dms"]');
-  await schlaf(2000);
+  await sleep(2000);
 
-  // Der Posteingang ist nach Bestand sortiert, groesster zuerst. Langsam
-  // scrollen, damit man die Reihenfolge sieht.
-  await page.mouse.move(BREITE * 0.25, HOEHE * 0.6);
-  for (let i = 0; i < 5; i += 1) { await page.mouse.wheel(0, 120); await schlaf(260); }
-  await schlaf(700);
-  for (let i = 0; i < 5; i += 1) { await page.mouse.wheel(0, -120); await schlaf(200); }
-  await schlaf(600);
+  // The inbox is sorted by holdings, largest first. Scroll slowly so the
+  // order can be seen.
+  await page.mouse.move(WIDTH * 0.25, HEIGHT * 0.6);
+  for (let i = 0; i < 5; i += 1) { await page.mouse.wheel(0, 120); await sleep(260); }
+  await sleep(700);
+  for (let i = 0; i < 5; i += 1) { await page.mouse.wheel(0, -120); await sleep(200); }
+  await sleep(600);
 
-  const faden = page.locator('.thread').first();
-  if (await faden.count()) {
-    await faden.hover();
-    await schlaf(600);
-    await faden.click();
-    await schlaf(2600);
+  const thread = page.locator('.thread').first();
+  if (await thread.count()) {
+    await thread.hover();
+    await sleep(600);
+    await thread.click();
+    await sleep(2600);
   }
-}, ZOOM_BREIT);
+}, ZOOM_WIDE);
 
 await browser.close();
 console.log(`\nRohclips in ${path.relative(root, AUS)}/\n`);

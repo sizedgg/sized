@@ -1,7 +1,7 @@
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const MAP = new Map([...ALPHABET].map((c, i) => [c, i]));
 
-/** Dekodiert Base58 zu Bytes. Wirft bei ungültigen Zeichen. */
+/** Decodes Base58 to bytes. Throws on invalid characters. */
 export function decodeBase58(input: string): Uint8Array {
   if (input.length === 0) return new Uint8Array(0);
   const bytes: number[] = [0];
@@ -19,20 +19,20 @@ export function decodeBase58(input: string): Uint8Array {
       carry >>= 8;
     }
   }
-  // Der Akkumulator startet mit einer 0; überzählige Nullbytes am oberen Ende
-  // gehören nicht zum Wert und müssen weg, bevor die echten führenden
-  // Nullbytes (jedes '1' im Input) ergänzt werden.
+  // The accumulator starts with a 0; extra zero bytes at the high end
+  // are not part of the value and must go before the real leading
+  // zero bytes (one per '1' in the input) are appended.
   while (bytes.length > 0 && bytes[bytes.length - 1] === 0) bytes.pop();
   for (let k = 0; k < input.length && input[k] === '1'; k++) bytes.push(0);
   return new Uint8Array(bytes.reverse());
 }
 
-/** Kodiert Bytes als Base58. */
+/** Encodes bytes as Base58. */
 export function encodeBase58(bytes: Uint8Array): string {
   if (bytes.length === 0) return '';
 
-  // Führende Nullbytes zählen und aus der Umrechnung heraushalten – sie werden
-  // am Ende als '1' ergänzt und würden sonst eine überzählige Stelle erzeugen.
+  // Count leading zero bytes and keep them out of the conversion - they get
+  // appended as '1' at the end and would otherwise produce an extra digit.
   let zeros = 0;
   while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
 
@@ -56,8 +56,8 @@ export function encodeBase58(bytes: Uint8Array): string {
 }
 
 /**
- * Prüft, ob ein String eine gültige Solana-Adresse ist: Base58 und exakt
- * 32 Byte. Das schließt Tippfehler und injizierte Werte zuverlässig aus.
+ * Checks whether a string is a valid Solana address: Base58 and exactly
+ * 32 bytes. This reliably rules out typos and injected values.
  */
 export function isSolanaAddress(value: unknown): value is string {
   if (typeof value !== 'string' || value.length < 32 || value.length > 44) return false;

@@ -1,22 +1,23 @@
 // ============================================================================
-// Ideen fuer Ansems Posteingang.
+// Ideas for Ansem's inbox.
 //
-// Ausloeser ist eine Messung und keine Laune: Bei vierzig Gespraechen wird die
-// Vorschau in 22 Zeilen abgeschnitten – in mehr als der Haelfte. Die Spalte ist
-// 290 px breit, davon gehen Kuerzel und Betrag ab; fuer den Text bleiben oft
-// zwanzig Zeichen.
+// The trigger is a measurement, not a whim: at forty conversations, the
+// preview gets cut off in 22 rows - more than half of them. The column is
+// 290 px wide, minus what the handle and amount take up; often only twenty
+// characters are left for the text.
 //
-// Jede Fassung hier beantwortet deshalb eine FRAGE und ist kein Anstrich:
+// Every version here therefore answers a QUESTION and isn't a coat of paint:
 //
-//   2  Was kostet es, die Vorschau vollstaendig zu zeigen?
-//   3  Reicht dafuer schon eine breitere Spalte?
-//   4  Muss der Betrag rechts stehen – oder wird die Spalte links zur Leiter?
-//   5  Verdient die Vorschau ihren Platz ueberhaupt?
-//   6  Hilft eine Gliederung nach Groessenordnung beim Suchen?
+//   2  What does it cost to show the preview in full?
+//   3  Would a wider column already be enough for that?
+//   4  Does the amount have to sit on the right - or does the left column
+//      turn into a ladder?
+//   5  Does the preview even earn its place?
+//   6  Does grouping by order of magnitude help with searching?
 //
-// Alle sechs benutzen dieselbe Zeile aus dem echten renderThreads() – geaendert
-// wird nur das Blatt. Das ist keine Bequemlichkeit, sondern der Punkt: Was hier
-// nur mit CSS geht, geht spaeter auch ohne neues Markup.
+// All six use the same row from the real renderThreads() - only the
+// stylesheet changes. That's not a convenience, it's the point: whatever
+// works here with just CSS also works later without new markup.
 //
 //   node scripts/vorschau-posteingang-ideen.mjs
 // ============================================================================
@@ -31,49 +32,49 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const outDir = path.join(root, 'preview', 'posteingang');
 fs.mkdirSync(outDir, { recursive: true });
 
-// Die Bausteine woertlich aus dem Vorschauskript nebenan – dieselben Daten und
-// derselbe Aufbau, damit sich die Bilder wirklich vergleichen lassen.
+// The building blocks verbatim from the preview script next door - the same
+// data and the same setup, so the images can really be compared.
 const nachbar = fs.readFileSync(
   path.join(root, 'scripts', 'vorschau-posteingang.mjs'), 'utf8');
-// Von der Zufallsadresse bis kurz vor den Browserstart: Daten, Betraege und
-// Texte in einem Stueck. Woertlich und nicht nachgebaut, denn nur so sind die
-// Bilder mit denen aus vorschau-posteingang.mjs wirklich vergleichbar – bis auf
-// dieselbe Adresse in derselben Zeile.
-const datenQuelle = nachbar.slice(
+// From the random address up to right before the browser launches: data,
+// amounts and text in one piece. Verbatim and not rebuilt, since only that
+// way are the images really comparable with those from
+// vorschau-posteingang.mjs - down to the same address in the same row.
+const dataSource = nachbar.slice(
   nachbar.indexOf('const B58 ='), nachbar.indexOf('const CHROME'));
 
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-const teile = [
-  schneide('const HANDLE_TONES', '\n'),
-  schneide('const handleOf =', '\n'),
-  schneide('function toneOf(wallet) {', '\n}') + '\n}',
-  schneide('const esc =', '\n\n'),
-  schneide('const STUFEN =', '\n'),
-  schneide('function kurzUsd(', '\n}') + '\n}',
-  schneide('function renderThreads() {', '\n}\n') + '\n}',
+const parts = [
+  cut('const HANDLE_TONES', '\n'),
+  cut('const handleOf =', '\n'),
+  cut('function toneOf(wallet) {', '\n}') + '\n}',
+  cut('const esc =', '\n\n'),
+  cut('const TIERS =', '\n'),
+  cut('function shortUsd(', '\n}') + '\n}',
+  cut('function renderThreads() {', '\n}\n') + '\n}',
 ].join('\n');
 
 // eslint-disable-next-line no-new-func
-const { THREADS } = new Function(`${datenQuelle}\nreturn { THREADS };`)();
+const { THREADS } = new Function(`${dataSource}\nreturn { THREADS };`)();
 
 // ---------------------------------------------------------------------------
-// Die Ideen
+// The ideas
 // ---------------------------------------------------------------------------
 const IDEEN = [
   {
     nr: 1, name: 'jetzt', titel: 'Jetzt',
-    frage: 'Der Vergleichspunkt: Kuerzel, Vorschau, Betrag – eine Zeile, 290 px Spalte.',
+    pollQuestion: 'Der Vergleichspunkt: Kuerzel, Vorschau, Betrag – eine Zeile, 290 px Spalte.',
     css: '',
   },
   {
     nr: 2, name: 'zweizeilig', titel: 'Zweizeilig',
-    frage: 'Kuerzel und Betrag oben, die Vorschau darunter ueber die volle Breite. '
+    pollQuestion: 'Kuerzel und Betrag peek, die Vorschau darunter ueber die volle Breite. '
          + 'Nichts wird mehr abgeschnitten – dafuer passen halb so viele Gespraeche ins Bild.',
     css: `
       .thread {
@@ -87,14 +88,14 @@ const IDEEN = [
   },
   {
     nr: 3, name: 'breiter', titel: 'Breitere Spalte',
-    frage: 'Dieselbe Zeile, aber die Spalte von 290 auf 390 px. Der billigste Eingriff – '
+    pollQuestion: 'Dieselbe Zeile, aber die Spalte von 290 auf 390 px. Der billigste Eingriff – '
          + 'kostet 100 px vom Gespraech daneben.',
     css: '.dm-admin { grid-template-columns: 390px 1fr; }',
   },
   {
-    nr: 4, name: 'betrag-links', titel: 'Betrag links',
-    frage: 'Der Betrag zuerst, in fester Breite. Die Liste ist nach Bestand sortiert – '
-         + 'links untereinander wird daraus eine Leiter, die man von oben nach unten liest. '
+    nr: 4, name: 'betrag-links', titel: 'Betrag left',
+    pollQuestion: 'Der Betrag zuerst, in fester Breite. Die Liste ist nach Bestand sortiert – '
+         + 'left untereinander wird daraus eine Leiter, die man von peek nach bottom liest. '
          + 'Die Vorschau bekommt den ganzen Rest.',
     css: `
       .thread { display: grid; grid-template-columns: 4.2rem auto 1fr; gap: .5rem; }
@@ -103,7 +104,7 @@ const IDEEN = [
   },
   {
     nr: 5, name: 'ohne-vorschau', titel: 'Ohne Vorschau',
-    frage: 'Nur Kuerzel und Betrag. Wenn der Text in ueber der Haelfte der Zeilen ohnehin '
+    pollQuestion: 'Nur Kuerzel und Betrag. Wenn der Text in ueber der Haelfte der Zeilen ohnehin '
          + 'abgeschnitten wird – verdient er dann seinen Platz? Dafuer stehen doppelt so '
          + 'viele Gespraeche im Bild.',
     css: `
@@ -113,7 +114,7 @@ const IDEEN = [
   },
   {
     nr: 6, name: 'gruppiert', titel: 'Nach Groessenordnung',
-    frage: 'Dieselbe Reihenfolge, aber mit Trennlinien zwischen den Groessenordnungen. '
+    pollQuestion: 'Dieselbe Reihenfolge, aber mit Trennlinien zwischen den Groessenordnungen. '
          + 'Beim Bauen war "keine Abschnitte" entschieden – bei vier Zeilen war das auch '
          + 'richtig. Bei vierzig ist die Frage neu.',
     css: `
@@ -127,17 +128,18 @@ const IDEEN = [
       }
       .thread[data-stufe] { display: grid; grid-template-columns: auto 1fr auto;
         align-items: baseline; column-gap: .45rem; }`,
-    // Die Marken setzt kein Blatt – das muss jemand ins Markup schreiben. Hier
-    // steht deshalb ausdruecklich JavaScript und nicht CSS: Diese Idee waere
-    // die einzige, die renderThreads() wirklich aendern muesste.
+    // No stylesheet sets these markers - somebody has to write them into the
+    // markup. That's why this is deliberately JavaScript and not CSS: this
+    // idea would be the only one that would actually require changing
+    // renderThreads().
     nachher: `
       const grenzen = [[1e6, '$1M and up'], [1e5, '$100K – $1M'], [1e4, '$10K – $100K'],
                        [1e3, '$1K – $10K'], [0, 'under $1K']];
-      let letzte = null;
+      let last = null;
       document.querySelectorAll('.thread').forEach((z, i) => {
         const usd = window.__usd[i];
-        const stufe = grenzen.find(([ab]) => usd >= ab)[1];
-        if (stufe !== letzte) { z.dataset.stufe = stufe; letzte = stufe; }
+        const tier = grenzen.find(([ab]) => usd >= ab)[1];
+        if (tier !== last) { z.dataset.tier = tier; last = tier; }
       });`,
   },
 ];
@@ -148,15 +150,15 @@ const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascrip
 const server = http.createServer((q, res) => {
   let pfad = decodeURIComponent(q.url.split('?')[0]);
   if (pfad === '/') pfad = '/index.html';
-  const datei = path.join(root, 'public', pfad);
-  if (!datei.startsWith(path.join(root, 'public')) || !fs.existsSync(datei)) {
+  const file = path.join(root, 'public', pfad);
+  if (!file.startsWith(path.join(root, 'public')) || !fs.existsSync(file)) {
     return res.writeHead(404).end('');
   }
   if (pfad === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('/* Vorschau */');
   }
-  res.writeHead(200, { 'content-type': TYPEN[path.extname(datei)] ?? 'application/octet-stream' })
-     .end(fs.readFileSync(datei));
+  res.writeHead(200, { 'content-type': TYPEN[path.extname(file)] ?? 'application/octet-stream' })
+     .end(fs.readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
 
@@ -166,10 +168,10 @@ const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: 
 console.log('\nIdeen fuer den Posteingang – 40 Gespraeche, 1280×860\n');
 
 for (const idee of IDEEN) {
-  const seite = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.waitForTimeout(200);
-  await seite.addScriptTag({
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.waitForTimeout(200);
+  await page.addScriptTag({
     content: `
       const $ = (s, r = document) => r.querySelector(s);
       const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -182,13 +184,13 @@ for (const idee of IDEEN) {
         activeThread: ${JSON.stringify(THREADS[4].wallet)},
       };
       window.__usd = ${JSON.stringify(THREADS.map((t) => t.usd))};
-      ${teile}
+      ${parts}
       window.renderThreads = renderThreads;
     `,
   });
-  if (idee.css) await seite.addStyleTag({ content: idee.css });
+  if (idee.css) await page.addStyleTag({ content: idee.css });
 
-  const m = await seite.evaluate((nachher) => {
+  const m = await page.evaluate((nachher) => {
     document.querySelector('#login').hidden = true;
     document.querySelector('.app').hidden = false;
     for (const p of document.querySelectorAll('.pane')) p.hidden = true;
@@ -210,16 +212,16 @@ for (const idee of IDEEN) {
     if (nachher) eval(nachher);
 
     const liste = document.querySelector('.thread-list');
-    const zeilen = [...document.querySelectorAll('.thread')];
+    const lines = [...document.querySelectorAll('.thread')];
     const k = liste.getBoundingClientRect();
     return {
-      // Wie viele Gespraeche stehen ohne Rollen im Bild? Das ist die Zahl, die
-      // jede dieser Ideen bezahlt oder verdient.
-      imBild: zeilen.filter((z) => {
+      // How many conversations fit in the frame without scrolling? That's
+      // the number every one of these ideas either pays or earns.
+      imBild: lines.filter((z) => {
         const r = z.getBoundingClientRect();
         return r.top >= k.top - 1 && r.bottom <= k.bottom + 1;
       }).length,
-      gekuerzt: zeilen.filter((z) => {
+      gekuerzt: lines.filter((z) => {
         const p = z.querySelector('.thread-prev');
         return p && p.offsetParent !== null && p.scrollWidth > p.clientWidth + 1;
       }).length,
@@ -228,11 +230,11 @@ for (const idee of IDEEN) {
     };
   }, idee.nachher ?? null);
 
-  await seite.screenshot({ path: path.join(outDir, `${idee.nr}-${idee.name}.png`) });
-  await seite.close();
+  await page.screenshot({ path: path.join(outDir, `${idee.nr}-${idee.name}.png`) });
+  await page.close();
 
   console.log(`${idee.nr}. ${idee.titel}`);
-  console.log(`   ${idee.frage.replace(/\s+/g, ' ')}`);
+  console.log(`   ${idee.pollQuestion.replace(/\s+/g, ' ')}`);
   console.log(`   ${m.imBild} von 40 Gespraechen ohne Rollen im Bild`
     + `  ·  Vorschau gekuerzt in ${m.gekuerzt}`
     + `  ·  Gespraech daneben ${m.gespraechBreite} px`);

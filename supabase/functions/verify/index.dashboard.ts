@@ -1,28 +1,28 @@
 // ============================================================================
-// verify – EIGENSTÄNDIGE FASSUNG FÜR DEN DASHBOARD-EDITOR
+// verify - STANDALONE VERSION FOR THE DASHBOARD EDITOR
 //
-// ACHTUNG: Diese Datei wird NICHT von Hand bearbeitet. Sie entsteht aus
-// supabase/functions/verify/index.ts und den Dateien unter _shared/ durch
+// WARNING: This file is NOT edited by hand. It is generated from
+// supabase/functions/verify/index.ts and the files under _shared/ by
 //
 //     node scripts/verify-eigenstaendig.mjs
 //
-// Wer hier etwas ändert, verliert es beim nächsten Lauf – und schlimmer: Die
-// Fassung im Dashboard und die im Projekt sagen dann Verschiedenes, ohne dass
-// man es einer von beiden ansieht.
+// Change something here and it's lost on the next run - and worse: the
+// version in the dashboard and the one in the project then say different
+// things, without either one showing it.
 //
-// Erzeugt am 2026-09-04
+// Generated on 2026-09-04
 // ============================================================================
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 
 // ---------------------------------------------------------------------------
-// aus _shared/base58.ts
+// from _shared/base58.ts
 // ---------------------------------------------------------------------------
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const MAP = new Map([...ALPHABET].map((c, i) => [c, i]));
 
-/** Dekodiert Base58 zu Bytes. Wirft bei ungültigen Zeichen. */
+/** Decodes base58 to bytes. Throws on invalid characters. */
 function decodeBase58(input: string): Uint8Array {
   if (input.length === 0) return new Uint8Array(0);
   const bytes: number[] = [0];
@@ -40,20 +40,20 @@ function decodeBase58(input: string): Uint8Array {
       carry >>= 8;
     }
   }
-  // Der Akkumulator startet mit einer 0; überzählige Nullbytes am oberen Ende
-  // gehören nicht zum Wert und müssen weg, bevor die echten führenden
-  // Nullbytes (jedes '1' im Input) ergänzt werden.
+  // The accumulator starts with a 0; the extra zero bytes at the top end
+  // don't belong to the value and must go before the real leading zero
+  // bytes (each '1' in the input) are appended.
   while (bytes.length > 0 && bytes[bytes.length - 1] === 0) bytes.pop();
   for (let k = 0; k < input.length && input[k] === '1'; k++) bytes.push(0);
   return new Uint8Array(bytes.reverse());
 }
 
-/** Kodiert Bytes als Base58. */
+/** Encodes bytes as base58. */
 function encodeBase58(bytes: Uint8Array): string {
   if (bytes.length === 0) return '';
 
-  // Führende Nullbytes zählen und aus der Umrechnung heraushalten – sie werden
-  // am Ende als '1' ergänzt und würden sonst eine überzählige Stelle erzeugen.
+  // Count leading zero bytes and keep them out of the conversion - they get
+  // appended as '1' at the end and would otherwise produce an extra digit.
   let zeros = 0;
   while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
 
@@ -77,8 +77,8 @@ function encodeBase58(bytes: Uint8Array): string {
 }
 
 /**
- * Prüft, ob ein String eine gültige Solana-Adresse ist: Base58 und exakt
- * 32 Byte. Das schließt Tippfehler und injizierte Werte zuverlässig aus.
+ * Checks whether a string is a valid Solana address: base58 and exactly
+ * 32 bytes. That reliably rules out typos and injected values.
  */
 function isSolanaAddress(value: unknown): value is string {
   if (typeof value !== 'string' || value.length < 32 || value.length > 44) return false;
@@ -90,68 +90,66 @@ function isSolanaAddress(value: unknown): value is string {
 }
 
 // ---------------------------------------------------------------------------
-// aus _shared/freischaltung.ts
+// from _shared/freischaltung.ts
 // ---------------------------------------------------------------------------
 /**
- * Das Tor vor der Freischaltung.
+ * The gate in front of launch.
  *
- * Eine eigene Datei ohne Importe, und das mit Absicht: common.ts zieht den
- * Supabase-Client aus jsr: nach und laesst sich deshalb aus Node heraus gar
- * nicht laden. Eine Regel, die nur im Betrieb existiert, kann kein Test
- * anfassen – und diese hier ist die eine, die zwischen "niemand kommt herein"
- * und "alle kommen herein" steht.
+ * A standalone file with no imports, deliberately: common.ts pulls in the
+ * Supabase client from jsr: and so can't be loaded from Node at all. A rule
+ * that only exists in production can't be touched by a test - and this is
+ * the one rule standing between "nobody gets in" and "everybody gets in".
  */
 
 interface TorConfig {
   admin_wallet: string | null;
   test_wallet?: string | null;
   /**
-   * Fehlt die Spalte, steht hier undefined – und das ist ein eigener Fall,
-   * siehe mayEnter(). Deshalb optional und nicht einfach boolean.
+   * If the column is missing, this is undefined - and that's its own case,
+   * see mayEnter(). Optional, not a plain boolean, for that reason.
    */
   open_to_public?: boolean | null;
 }
 
 /**
- * Darf diese Wallet ueberhaupt herein?
+ * Is this wallet even allowed in?
  *
- * Vor der Freischaltung nur Ansems eigene – der Rest bekommt eine Absage,
- * BEVOR ein Betrag genannt wird. Das ist hier keine Feinheit, sondern der
- * ganze Punkt: Die Anmeldung besteht aus einer Ueberweisung. Wer erst zahlt
- * und dann abgewiesen wird, hat Geld fuer nichts geschickt. Die Absage muss
- * also am Anfang stehen, nicht am Ende.
+ * Before launch, only Ansem's own - everyone else gets refused BEFORE an
+ * amount is named. That's not a nicety here, it's the whole point: logging
+ * in consists of a transfer. Anyone who pays first and then gets rejected
+ * has sent money for nothing. So the refusal has to come at the start, not
+ * the end.
  *
- * Als eigene Funktion und nicht als zwei Zeilen an zwei Stellen: Sie wird an
- * beiden Toren gebraucht (neue Anmeldung und Verlaengerung einer alten
- * Sitzung), und eine Regel, die an einem der beiden fehlt, faellt niemandem
- * auf – sie sieht ja aus wie geschlossen.
+ * As its own function rather than two lines in two places: it's needed at
+ * both gates (a new login and renewing an old session), and a rule missing
+ * from one of the two goes unnoticed by anyone - it still looks closed.
  *
- * Zwei Adressen kommen durch, nicht eine: admin_wallet und test_wallet. Der
- * Grund ist keine Bequemlichkeit, sondern dass sich die Seite von den beiden
- * Seiten VERSCHIEDEN verhaelt – Ansem sieht einen Posteingang, ein Nutzer
- * eine Schwelle. Nur mit Ansems Wallet zu pruefen hiesse, die Haelfte nie zu
- * sehen, die alle anderen sehen.
+ * Two addresses get through, not one: admin_wallet and test_wallet. The
+ * reason isn't convenience, it's that the site behaves DIFFERENTLY for the
+ * two sides - Ansem sees an inbox, a user sees a paywall. Checking only
+ * against Ansem's wallet would mean never seeing the half that everyone
+ * else sees.
  *
- * Genau EINE Testadresse, kein Feld mit mehreren. Eine Liste waere die
- * Stelle, an der am Ende jemand steht, den man vergessen hat auszutragen; ein
- * einzelnes Feld sieht man beim Draufschauen.
+ * Exactly ONE test address, not a field with several. A list would be the
+ * spot where eventually someone is left in that nobody remembered to
+ * remove; a single field is visible at a glance.
  */
 function mayEnter(cfg: TorConfig, wallet: string | null): boolean {
-  // Zu ist die Seite nur, wenn es AUSDRUECKLICH dort steht. Fehlt die Spalte,
-  // ist offen.
+  // The site is only closed if it EXPLICITLY says so. If the column is
+  // missing, it's open.
   //
-  // Hier stand die andere Richtung, mit dem Argument: Im Zweifel lieber
-  // niemanden hereinlassen. Das war richtig, solange die Seite vor dem Start
-  // dichtgehalten werden sollte – ein Deployment ohne die Migration hat dann
-  // eben zugesperrt statt aufgemacht.
+  // This used to run the other way, with the argument: when in doubt, keep
+  // people out. That was right as long as the site needed to stay locked
+  // before launch - a deployment without the migration then simply stayed
+  // shut instead of opening.
   //
-  // Nach dem Start dreht sich der schlimmere Fall um. Dann ist die Function
-  // seit Monaten im Einsatz, jemand rollt sie aus einem ganz anderen Grund neu
-  // aus, die Spalte fehlt in dieser Datenbank – und die Seite ist zu, ohne
-  // dass jemand das wollte oder gleich merkt.
+  // After launch, the worse failure mode flips. By then the function has
+  // been running for months, someone redeploys it for a completely
+  // unrelated reason, the column is missing from that database - and the
+  // site is closed without anyone wanting that or noticing right away.
   //
-  // Ein Fallstrick, der auf ein VERGESSEN reagiert, ist schlechter als einer,
-  // der auf eine ENTSCHEIDUNG reagiert. Zusperren ist jetzt eine Handlung:
+  // A trap that fires on FORGETTING is worse than one that fires on a
+  // DECISION. Closing the site is now an action:
   //   update public.app_config set open_to_public = false where id = 1;
   if (cfg.open_to_public !== false) return true;
 
@@ -160,7 +158,7 @@ function mayEnter(cfg: TorConfig, wallet: string | null): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// aus _shared/common.ts
+// from _shared/common.ts
 // ---------------------------------------------------------------------------
 const CORS = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -176,7 +174,7 @@ const json = (body: unknown, status = 200) =>
 
 const fail = (message: string, status = 400) => json({ error: message }, status);
 
-/** Client mit Service-Role – umgeht RLS, darf also nur serverseitig laufen. */
+/** Client with the service role - bypasses RLS, so it may only run server-side. */
 function serviceClient(): SupabaseClient {
   return createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -204,14 +202,14 @@ async function loadConfig(db: SupabaseClient): Promise<AppConfig> {
 const MOCK = (Deno.env.get('MOCK_CHAIN') ?? '') === '1';
 
 // ---------------------------------------------------------------------------
-// aus _shared/jwt.ts
+// from _shared/jwt.ts
 // ---------------------------------------------------------------------------
 /**
- * Minimales HS256-JWT, signiert mit dem Supabase-JWT-Secret.
+ * A minimal HS256 JWT, signed with the Supabase JWT secret.
  *
- * Damit akzeptieren PostgREST und Realtime das Token wie ein reguläres
- * Supabase-Auth-Token – nur dass die Identität hier nicht E-Mail oder OAuth
- * ist, sondern die per Zahlung nachgewiesene Wallet im Claim "wallet".
+ * That makes PostgREST and Realtime accept the token like a regular
+ * Supabase auth token - except the identity here isn't email or OAuth, it's
+ * the wallet proven by payment, in the "wallet" claim.
  */
 
 const enc = new TextEncoder();
@@ -226,9 +224,9 @@ interface WalletClaims {
   isAdmin: boolean;
   ttlSeconds: number;
   /**
-   * Zeitpunkt der ersten Anmeldung (Unix-Sekunden). Bleibt über alle
-   * Verlängerungen hinweg gleich und begrenzt so, wie lange eine Wallet ohne
-   * neue Zahlung im Umlauf bleiben kann.
+   * Time of the first login (Unix seconds). Stays the same across all
+   * renewals, and so limits how long a wallet can stay valid without a new
+   * payment.
    */
   origIat?: number;
 }
@@ -237,13 +235,13 @@ async function signWalletJwt(secret: string, claims: WalletClaims): Promise<stri
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'HS256', typ: 'JWT' };
   const payload = {
-    // Von Supabase erwartete Felder
+    // Fields Supabase expects
     aud: 'authenticated',
     role: 'authenticated',
     sub: claims.wallet,
     iat: now,
     exp: now + claims.ttlSeconds,
-    // Eigene Felder – `wallet` wird in den RLS-Policies ausgewertet
+    // Our own fields - `wallet` is evaluated in the RLS policies
     wallet: claims.wallet,
     is_admin: claims.isAdmin,
     oiat: claims.origIat ?? now,
@@ -264,9 +262,9 @@ const fromB64url = (s: string): Uint8Array => {
 };
 
 /**
- * Prüft Signatur und Ablauf und gibt die Wallet zurück – oder null.
- * Nie den Payload ohne diese Prüfung verwenden: er ist nur Base64, nicht
- * verschlüsselt, und lässt sich sonst beliebig fälschen.
+ * Checks signature and expiry and returns the wallet - or null.
+ * Never use the payload without this check: it's only base64, not
+ * encrypted, and can otherwise be forged at will.
  */
 async function verifyWalletJwt(
   secret: string,
@@ -298,14 +296,14 @@ async function verifyWalletJwt(
 }
 
 // ---------------------------------------------------------------------------
-// aus _shared/solana.ts
+// from _shared/solana.ts
 // ---------------------------------------------------------------------------
 /**
- * Solana-Zugriff per reinem JSON-RPC über fetch – bewusst ohne @solana/web3.js,
- * damit die Edge Function klein und kaltstartschnell bleibt.
+ * Solana access via plain JSON-RPC over fetch - deliberately without
+ * @solana/web3.js, so the edge function stays small and starts up fast.
  *
- * Gebraucht wird dreierlei: Zahlungen an die Treasury, der Token-Bestand einer
- * Wallet und der Kurs.
+ * Three things are needed: payments to the treasury, a wallet's token
+ * balance, and the price.
  */
 
 const RPC_URL = Deno.env.get('SOLANA_RPC_URL') ?? 'https://api.mainnet-beta.solana.com';
@@ -325,7 +323,7 @@ async function rpc<T>(method: string, params: unknown[]): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Zahlungen an die Treasury
+// Payments to the treasury
 // ---------------------------------------------------------------------------
 
 interface TreasuryPayment {
@@ -338,30 +336,32 @@ interface TreasuryPayment {
 interface SignatureInfo { signature: string; slot: number; err: unknown }
 
 /**
- * Wie viele Detailabfragen ein einzelner Scan höchstens macht – und wie viele
- * davon gleichzeitig laufen.
+ * How many detail lookups a single scan makes at most - and how many of
+ * those run at the same time.
  *
- * Die Signaturliste ist EIN billiger Aufruf, egal ob für 40 oder 200 Einträge.
- * Teuer ist danach `getTransaction`, einmal pro Signatur. Deshalb darf das
- * Fenster breit sein, solange bekannte Signaturen vorher wegfallen – aber ein
- * Kaltstart (noch nichts bekannt) hätte sonst 200 Abfragen am Stück, seriell
- * über 20 Sekunden, und die Funktion läuft vorher in ihr Zeitlimit.
+ * The signature list is ONE cheap call, whether for 40 or 200 entries. What
+ * gets expensive after that is `getTransaction`, once per signature. So the
+ * window can be wide as long as known signatures get filtered out first -
+ * but a cold start (nothing known yet) would otherwise mean 200 lookups
+ * back to back, serially over 20 seconds, and the function would hit its
+ * time limit before finishing.
  *
- * Also: höchstens DETAILS_PRO_SCAN pro Lauf, neueste zuerst, GLEICHZEITIG
- * parallel. Was nicht mehr hineinpasst, kommt beim nächsten Lauf 5 Sekunden
- * später dran – die Challenge lebt 25 Minuten, das reicht vielfach.
+ * So: at most DETAILS_PRO_SCAN per run, newest first, run GLEICHZEITIG
+ * (concurrently) in parallel. Whatever doesn't fit gets picked up on the
+ * next run 5 seconds later - the challenge lives 25 minutes, which is
+ * plenty of margin.
  */
 const DETAILS_PRO_SCAN = 60;
 const GLEICHZEITIG = 4;
 
 /**
- * Liest die letzten Transaktionen der Treasury-Adresse und gibt alle einfachen
- * SOL-Transfers *an* diese Adresse zurück.
+ * Reads the treasury address's latest transactions and returns all plain
+ * SOL transfers *to* that address.
  *
- * `aussieben` bekommt die komplette Signaturliste und gibt zurück, welche davon
- * noch unbekannt sind – VOR der teuren Detailabfrage. Ohne diesen Schritt holt
- * jeder Lauf dieselben `limit` Transaktionen wieder vom RPC, obwohl längst
- * verbucht.
+ * `aussieben` gets the complete signature list and returns which of them
+ * are still unknown - BEFORE the expensive detail lookup. Without this
+ * step, every run would fetch the same `limit` transactions from the RPC
+ * again, even though they're long since recorded.
  */
 async function recentTreasuryPayments(
   treasury: string,
@@ -371,8 +371,8 @@ async function recentTreasuryPayments(
   const sigs = await rpc<SignatureInfo[]>('getSignaturesForAddress', [treasury, { limit }]);
   const brauchbar = sigs.filter((s) => !s.err);
 
-  // Neueste zuerst – so kommt eine Zahlung von gerade eben auch dann dran,
-  // wenn davor ein Berg alter Signaturen liegt.
+  // Newest first - so a payment from just now still gets processed even
+  // when there's a pile of old signatures ahead of it.
   const offen = new Set(await aussieben(brauchbar.map((s) => s.signature)));
   const wanted = brauchbar.filter((s) => offen.has(s.signature)).slice(0, DETAILS_PRO_SCAN);
 
@@ -384,8 +384,8 @@ async function recentTreasuryPayments(
         { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' },
       ]);
     } catch {
-      // Nicht verbuchen heisst nicht verloren: die Signatur bleibt unbekannt
-      // und der nächste Lauf versucht es erneut.
+      // Not recording it doesn't mean losing it: the signature stays
+      // unknown and the next run tries again.
       return null;
     }
     if (!tx || tx.meta?.err) return null;
@@ -405,7 +405,7 @@ async function recentTreasuryPayments(
         slot: tx.slot ?? s.slot,
         sender: info.source,
         lamports: Number(info.lamports),
-      }; // ein Transfer pro Transaktion genügt
+      }; // one transfer per transaction is enough
     }
     return null;
   };
@@ -419,31 +419,31 @@ async function recentTreasuryPayments(
 }
 
 // ---------------------------------------------------------------------------
-// Token-Bestand
+// Token balance
 // ---------------------------------------------------------------------------
 
 /**
- * Summiert alle Token-Accounts einer Wallet für einen Mint.
+ * Sums all of a wallet's token accounts for a mint.
  *
- * Nur nach `mint` filtern. Die RPC akzeptiert genau eines von `mint` ODER
- * `programId` – beides zusammen wird abgelehnt. Der Mint-Filter gilt
- * unabhängig davon, ob der Token unter dem klassischen Token-Programm oder
- * unter Token-2022 läuft, deckt also beides ab.
+ * Filter only by `mint`. The RPC accepts exactly one of `mint` OR
+ * `programId` - both together get rejected. The mint filter applies
+ * regardless of whether the token runs under the classic token program or
+ * under Token-2022, so it covers both.
  *
- * Fehler werden bewusst NICHT verschluckt: Ein abgefangener RPC-Fehler sähe
- * hier aus wie ein Bestand von null und würde still jedes Stimmgewicht, jeden
- * Chat-Filter und die DM-Sortierung auf null setzen. Lieber laut scheitern.
+ * Errors are deliberately NOT swallowed: a caught RPC error would look like
+ * a balance of zero here and would silently zero out every vote weight,
+ * every chat filter, and the DM sort order. Better to fail loudly.
  */
 async function tokenBalance(owner: string, mint: string): Promise<number> {
-  // commitment: 'confirmed' ist hier wichtig. Ohne Angabe antwortet die RPC
-  // mit 'finalized', und das hinkt gut ein Dutzend Sekunden hinterher. Wer
-  // gerade Token gekauft hat, sieht sie in seiner Wallet und im Explorer
-  // längst, hier aber noch nicht – das sieht nach einem Fehler aus.
+  // commitment: 'confirmed' matters here. Without it the RPC answers with
+  // 'finalized', which lags a good dozen seconds behind. Someone who just
+  // bought tokens already sees them in their wallet and in the explorer,
+  // but not here yet - which looks like a bug.
   //
-  // Für Zahlungen an die Treasury wäre das die falsche Wahl: Dort geht es um
-  // Geld, und eine bestätigte, aber noch nicht endgültige Transaktion kann in
-  // seltenen Fällen wieder verschwinden. Ein Bestand ist unkritisch – er wird
-  // ohnehin laufend neu gelesen und beim nächsten Mal korrigiert.
+  // For payments to the treasury that would be the wrong choice: that's
+  // about money, and a confirmed but not yet finalized transaction can, in
+  // rare cases, still disappear. A balance is not critical - it gets
+  // re-read continuously anyway and corrects itself next time.
   const res = await rpc<{ value?: any[] }>('getTokenAccountsByOwner', [
     owner, { mint }, { encoding: 'jsonParsed', commitment: 'confirmed' },
   ]);
@@ -456,7 +456,7 @@ async function tokenBalance(owner: string, mint: string): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
-// Preis
+// Price
 // ---------------------------------------------------------------------------
 
 async function fetchJson(url: string, timeoutMs = 6000): Promise<any> {
@@ -471,13 +471,13 @@ async function fetchJson(url: string, timeoutMs = 6000): Promise<any> {
   }
 }
 
-/** USD-Preis eines Tokens, Jupiter zuerst, DexScreener als Rückfall. */
+/** USD price of a token, Jupiter first, DexScreener as fallback. */
 async function tokenPrice(mint: string): Promise<number> {
   try {
     const data = await fetchJson(`https://lite-api.jup.ag/price/v3?ids=${mint}`);
     const p = Number(data?.[mint]?.usdPrice);
     if (p > 0) return p;
-  } catch { /* weiter zum Fallback */ }
+  } catch { /* fall through to the fallback */ }
 
   try {
     const data = await fetchJson(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
@@ -485,15 +485,15 @@ async function tokenPrice(mint: string): Promise<number> {
     pairs.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
     const p = Number(pairs[0]?.priceUsd);
     if (p > 0) return p;
-  } catch { /* Preis unbekannt */ }
+  } catch { /* price unknown */ }
 
   return 0;
 }
 
 // ---------------------------------------------------------------------------
-// aus _shared/holdings.ts
+// from _shared/holdings.ts
 // ---------------------------------------------------------------------------
-/** Deterministischer Fake-Bestand für den Mock-Modus. */
+/** Deterministic fake balance for mock mode. */
 async function mockAmount(wallet: string): Promise<number> {
   const hash = new Uint8Array(
     await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wallet)),
@@ -503,29 +503,29 @@ async function mockAmount(wallet: string): Promise<number> {
 }
 
 /**
- * Holt Bestand und Preis frisch von der Chain und schreibt sie nach `wallets`.
- * Nur diese Funktion (Service-Role) darf die Tabelle schreiben – deshalb kann
- * kein Client sein eigenes Gewicht manipulieren.
+ * Fetches balance and price fresh from the chain and writes them to
+ * `wallets`. Only this function (service role) may write the table - so no
+ * client can manipulate its own weight.
  */
 async function refreshWallet(
   db: SupabaseClient,
   wallet: string,
   mint: string,
   /**
-   * Bereits bekannter Kurs. Ohne diesen Parameter holt jede einzelne Wallet
-   * ihren eigenen – bei einem Stapellauf über 200 Wallets wären das 200
-   * Abfragen desselben Werts an dieselbe Preisquelle, die einen im Zweifel
-   * dafür aussperrt. Der Kurs ist für alle gleich, also holt der Aufrufer ihn
-   * einmal und reicht ihn durch.
+   * An already-known price. Without this parameter, every single wallet
+   * would fetch its own - in a batch run over 200 wallets that would be 200
+   * queries for the same value against the same price source, which could
+   * well lock you out for it. The price is the same for everyone, so the
+   * caller fetches it once and passes it through.
    */
   knownPrice?: number,
 ): Promise<{ uiAmount: number; usdValue: number; price: number }> {
-  const holePreis = async () =>
+  const getPrice = async () =>
     knownPrice !== undefined && knownPrice > 0 ? knownPrice : await tokenPrice(mint);
 
   const [uiAmount, price] = MOCK
     ? [await mockAmount(wallet), knownPrice ?? 0.0042]
-    : await Promise.all([tokenBalance(wallet, mint), holePreis()]);
+    : await Promise.all([tokenBalance(wallet, mint), getPrice()]);
 
   const usdValue = uiAmount * price;
 
@@ -542,33 +542,33 @@ async function refreshWallet(
 }
 
 // ---------------------------------------------------------------------------
-// aus verify/index.ts
+// from verify/index.ts
 // ---------------------------------------------------------------------------
 /**
- * Wallet-Verifikation per Zahlung.
+ * Wallet verification by payment.
  *
- *   POST { action: "challenge", wallet }      -> eindeutiger Betrag + Empfänger
+ *   POST { action: "challenge", wallet }      -> unique amount + recipient
  *   POST { action: "status", challengeId }    -> "pending" | "expired" | JWT
- *   POST { action: "mock-pay", challengeId }  -> nur wenn MOCK_CHAIN=1
+ *   POST { action: "mock-pay", challengeId }  -> only when MOCK_CHAIN=1
  *
- * Warum ein Betrag mit Zufallsnachkommastellen und kein fester Preis:
- * Bei festem Betrag könnte jemand eine fremde Adresse eintragen, warten, bis
- * diese Person zufällig bezahlt, und deren Zahlung als eigenen Nachweis
- * einlösen. Der Nonce-Betrag ist dem Angreifer unbekannt, und jede Signatur
- * wird nur genau einmal akzeptiert.
+ * Why a random-fraction amount and not a fixed price:
+ * With a fixed amount, someone could enter a stranger's address, wait until
+ * that person happens to pay, and redeem their payment as their own proof.
+ * The nonce amount is unknown to the attacker, and every signature is
+ * accepted exactly once.
  *
- * Warum jede Challenge ein Geheimnis trägt:
- * Der Nonce-Betrag allein reichte nicht. Wer eine Challenge für eine FREMDE
- * Adresse öffnete, bekam die Kennung – und createChallenge gab dieselbe
- * Challenge später dem echten Eigentümer weiter, damit ein Neuladen nicht
- * doppelt kostet. Der Eigentümer zahlte, und der Angreifer konnte mit
- * derselben Kennung das JWT abholen. Bei Ansems Adresse wäre das ein
- * Adminzugang gewesen, ohne dass Ansem etwas falsch gemacht hätte.
+ * Why every challenge carries a secret:
+ * The nonce amount alone was not enough. Anyone who opened a challenge for
+ * SOMEONE ELSE'S address got the id back - and createChallenge later handed
+ * that same challenge to the real owner, so a reload wouldn't cost twice.
+ * The owner paid, and the attacker could fetch the JWT with the same id. For
+ * Ansem's address that would have been admin access, without Ansem doing
+ * anything wrong.
  *
- * Deshalb gehört eine Challenge jetzt dem, der sie geöffnet hat: Das
- * Geheimnis geht genau einmal heraus, in der Datenbank steht nur sein
- * SHA-256-Abdruck, und Status wie mock-pay verlangen es. Die ganze Kette
- * steht in 20260903020000_challenge_gehoert_dem_ersteller.sql.
+ * So a challenge now belongs to whoever opened it: the secret goes out
+ * exactly once, only its SHA-256 fingerprint sits in the database, and
+ * status and mock-pay both require it. The full story is in
+ * 20260903020000_challenge_gehoert_dem_ersteller.sql.
  */
 
 
@@ -577,48 +577,48 @@ async function refreshWallet(
 
 const CHALLENGE_TTL_MIN = Number(Deno.env.get('CHALLENGE_TTL_MIN') ?? 25);
 
-// 90 Tage. Eine kurze Sitzung würde bedeuten, dass jemand für den Wiedereintritt
-// erneut bezahlen muss – bei einem Chat, den man alle paar Tage öffnet, wäre das
-// eine Zumutung.
+// 90 days. A short session would mean someone has to pay again just to
+// re-enter - for a chat people open every few days, that would be an
+// imposition.
 const SESSION_TTL_HOURS = Number(Deno.env.get('SESSION_TTL_HOURS') ?? 24 * 90);
 
-// Verlängern geht beliebig oft, aber nicht ewig: Ein Jahr nach der ersten
-// Anmeldung ist Schluss, dann wird erneut verifiziert. Das begrenzt, wie lange
-// ein abhandengekommenes Token nutzbar bleibt.
+// Renewal can happen any number of times, but not forever: a year after the
+// first login it stops, and verification runs again. That caps how long a
+// leaked token stays usable.
 const MAX_SESSION_AGE_SEC = Number(Deno.env.get('MAX_SESSION_DAYS') ?? 365) * 86_400;
-// Der Aufschlag, der eine Zahlung ihrer Anmeldung zuordnet.
+// The surcharge that ties a payment to its login.
 //
-// Er war einmal 1 bis 99.999 Lamports, also lamportgenau. Der Betrag sah dann
-// so aus: 0.002043217 SOL – NEUN Nachkommastellen. In Phantom auf dem Handy
-// lässt sich das nicht eintippen; das Feld nimmt weniger Stellen an und die
-// letzte fällt weg. Der Betrag passt danach auf keine Challenge, das Geld ist
-// überwiesen, und die Anmeldung scheitert ohne sichtbaren Grund.
+// It used to be 1 to 99,999 lamports, i.e. lamport-exact. The amount then
+// looked like this: 0.002043217 SOL - NINE decimal places. On Phantom on a
+// phone that can't be typed in; the field accepts fewer digits and the last
+// one gets dropped. The amount then matches no challenge, the money has been
+// sent, and the login fails for no visible reason.
 //
-// Jetzt in Schritten von 1.000 Lamports:
+// Now in steps of 1,000 lamports:
 //
-//   0.002001 … 0.002999 SOL   ->  SECHS Nachkommastellen
+//   0.002001 ... 0.002999 SOL   ->  SIX decimal places
 //
-// Sechs Stellen nimmt jede Wallet-App an, und die Zahl ist von Hand
-// abzutippen, ohne sich zu verzählen.
+// Every wallet app accepts six digits, and the number can be typed by hand
+// without losing count.
 //
-// Dass tausend Beträge genügen, liegt am Abgleich: scanTreasury vergleicht
-// Betrag UND Absenderadresse. Eindeutig sein muss der Betrag deshalb nur
-// innerhalb einer Wallet, und dort sind höchstens drei Challenges gleichzeitig
-// offen. Die ausführliche Begründung steht in
+// That a thousand amounts are enough comes down to the matching: scanTreasury
+// compares amount AND sender address. So the amount only needs to be unique
+// within a single wallet, and there are at most three challenges open there
+// at once. The full reasoning is in
 // 20260904020000_betrag_weniger_stellen.sql.
-const NONCE_SCHRITT = 1_000;   // Lamports je Schritt -> 6 Nachkommastellen
-const NONCE_STUFEN = 999;      // 0.000001 bis 0.000999 SOL Aufschlag
+const NONCE_STEP = 1_000;   // lamports per step -> 6 decimal places
+const NONCE_TIERS = 999;      // 0.000001 to 0.000999 SOL surcharge
 
 const db = serviceClient();
 
 let lastScan = 0;
 
 // ---------------------------------------------------------------------------
-// Das Geheimnis einer Challenge
+// The secret of a challenge
 // ---------------------------------------------------------------------------
 
-/** 32 zufällige Bytes als Hex – die einzige Ausgabe, danach nur der Abdruck. */
-function neuesGeheimnis(): string {
+/** 32 random bytes as hex - the only output, then just the fingerprint. */
+function newSecret(): string {
   const b = new Uint8Array(32);
   crypto.getRandomValues(b);
   return [...b].map((n) => n.toString(16).padStart(2, '0')).join('');
@@ -630,12 +630,11 @@ async function abdruck(geheimnis: string): Promise<string> {
 }
 
 /**
- * Vergleicht zwei Hex-Abdrücke in fester Zeit.
+ * Compares two hex fingerprints in constant time.
  *
- * Bei einem Abdruck ist ein früher Abbruch kaum auszunutzen – aber der
- * Unterschied kostet hier nichts, und ein Vergleich mit === an genau der
- * Stelle, an der über eine Anmeldung entschieden wird, ist die Sorte Detail,
- * die man später nicht mehr nachträgt.
+ * With a fingerprint an early exit is barely exploitable - but the
+ * difference costs nothing here, and using === at the exact spot that
+ * decides a login is the kind of detail nobody adds back in later.
  */
 function gleich(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -645,23 +644,22 @@ function gleich(a: string, b: string): boolean {
 }
 
 /**
- * Holt eine Challenge, aber nur mit dem passenden Geheimnis.
+ * Fetches a challenge, but only with the matching secret.
  *
- * Gibt null zurück, wenn es die Challenge nicht gibt, das Geheimnis nicht
- * stimmt – oder wenn sie noch aus der Zeit ohne Geheimnis stammt und offen
- * ist. Beides beantwortet dieselbe Absage, damit die Antwort nicht verrät,
- * welche Kennungen es gibt.
+ * Returns null when the challenge doesn't exist, the secret is wrong - or
+ * when it's still open and dates from before secrets existed. Both cases get
+ * the same refusal, so the response doesn't reveal which ids exist.
  */
-async function challengeMitGeheimnis(id: unknown, geheimnis: unknown) {
+async function challengeWithSecret(id: unknown, geheimnis: unknown) {
   if (typeof id !== 'string' || id.length < 10) return null;
   if (typeof geheimnis !== 'string' || geheimnis.length < 32) return null;
 
   const { data: c } = await db.from('challenges').select('*').eq('id', id).maybeSingle();
   if (!c) return null;
 
-  // Altbestand: Die Migration hat offene Challenges ohne Abdruck auf
-  // 'expired' gesetzt. Eine BEZAHLTE ohne Abdruck darf noch einmal
-  // eingelöst werden – dort ist Geld geflossen, bevor es das Geheimnis gab.
+  // Legacy rows: the migration set open challenges without a fingerprint
+  // to 'expired'. A PAID one without a fingerprint may still be redeemed -
+  // that's money that moved before the secret existed.
   if (!c.secret_hash) return c.status === 'paid' ? c : null;
 
   return gleich(await abdruck(geheimnis), c.secret_hash) ? c : null;
@@ -703,47 +701,47 @@ async function createChallenge(
 ) {
   if (!isSolanaAddress(wallet)) return fail('Not a valid Solana address');
 
-  // Vor der Freischaltung wird hier abgebrochen – und zwar VOR der Zeile
-  // darunter, die einen Betrag nennt. Wer die Absage bekommt, hat nichts
-  // geschickt und kann auch nichts schicken: Ohne Challenge gibt es keinen
-  // Betrag, auf den die Treasury horcht.
+  // Before launch this bails out here - and specifically BEFORE the line
+  // below that names an amount. Whoever gets refused has sent nothing and
+  // can't send anything either: without a challenge there's no amount for
+  // the treasury to listen for.
   if (!mayEnter(cfg, wallet)) {
     return fail('Not open yet - check back at launch.', 403);
   }
 
   if (!cfg.treasury) return fail('Verification address is not configured', 503);
 
-  // Eine offene Challenge fortsetzen, damit ein Neuladen nicht doppelt kostet.
+  // Resume an open challenge so a reload doesn't cost twice.
   //
-  // Hier wurde früher NUR nach der Wallet gesucht: "gibt es für diese Adresse
-  // etwas Offenes, dann nimm das". Genau das gab die Challenge eines Fremden an
-  // den echten Eigentümer weiter – siehe den Kopf dieser Datei. Fortgesetzt
-  // wird jetzt nur, wer sein eigenes Geheimnis vorlegt.
+  // This used to search ONLY by wallet: "if there's something open for this
+  // address, use it." That's exactly what handed a stranger's challenge on
+  // to the real owner - see the top of this file. Now it only resumes for
+  // whoever presents their own secret.
   if (weiterId) {
-    const c = await challengeMitGeheimnis(weiterId, weiterGeheimnis);
+    const c = await challengeWithSecret(weiterId, weiterGeheimnis);
     if (c && c.wallet === wallet && c.status === 'pending'
         && new Date(c.expires_at).getTime() > Date.now()) {
       return challengeResponse(cfg, c, String(weiterGeheimnis));
     }
-    // Passt es nicht, wird eine neue angelegt. Keine Absage: Der häufigste
-    // Grund ist eine abgelaufene Challenge im localStorage, und dafür soll
-    // niemand eine Fehlermeldung sehen.
+    // If it doesn't match, a new one gets created. No error message: the
+    // most common cause is an expired challenge in localStorage, and nobody
+    // should see a failure for that.
   }
 
   const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MIN * 60_000).toISOString();
-  const geheimnis = neuesGeheimnis();
+  const geheimnis = newSecret();
   const secret_hash = await abdruck(geheimnis);
 
-  // Der Unique-Index auf offenen Beträgen lehnt Kollisionen ab – neu würfeln.
+  // The unique index on open amounts rejects collisions - reroll.
   for (let attempt = 0; attempt < 20; attempt++) {
     const lamports = Number(cfg.base_lamports)
-      + (1 + Math.floor(Math.random() * NONCE_STUFEN)) * NONCE_SCHRITT;
+      + (1 + Math.floor(Math.random() * NONCE_TIERS)) * NONCE_STEP;
     const { data, error } = await db.from('challenges')
       .insert({ wallet, lamports, expires_at: expiresAt, secret_hash })
       .select().single();
     if (!error) return challengeResponse(cfg, data, geheimnis);
-    // P0001: die Obergrenze offener Challenges je Wallet aus der Migration.
-    // Sie ist keine Kollision, die man wegwürfeln kann – hier ist Schluss.
+    // P0001: the per-wallet cap on open challenges from the migration.
+    // That's not a collision you can reroll away - it's a hard stop.
     if (error.code === 'P0001') return fail(error.message, 429);
     if (error.code !== '23505') throw new Error(error.message);
   }
@@ -751,8 +749,8 @@ async function createChallenge(
 }
 
 /**
- * Das Geheimnis geht GENAU HIER heraus und sonst nirgends. In der Datenbank
- * steht nur sein Abdruck; wer es verliert, fängt neu an.
+ * The secret goes out EXACTLY HERE and nowhere else. Only its fingerprint
+ * sits in the database; whoever loses it starts over.
  */
 function challengeResponse(
   cfg: Awaited<ReturnType<typeof loadConfig>>, c: any, geheimnis: string,
@@ -778,13 +776,13 @@ async function checkStatus(
 
   if (!MOCK) await scanTreasury(cfg.treasury!);
 
-  // Ohne das passende Geheimnis gibt es hier nichts – auch nicht mit der
-  // richtigen Kennung. Das ist die Zeile, an der die Übernahme hing: Sie las
-  // die Challenge früher allein über die id.
+  // Without the matching secret there's nothing here - not even with the
+  // right id. This is the line the takeover hinged on: it used to load the
+  // challenge by id alone.
   //
-  // Dieselbe Absage für "gibt es nicht" und "Geheimnis falsch": Sonst wäre die
-  // Antwort ein Orakel dafür, welche Kennungen existieren.
-  const c = await challengeMitGeheimnis(id, geheimnis);
+  // Same refusal for "doesn't exist" and "wrong secret": otherwise the
+  // response would be an oracle for which ids exist.
+  const c = await challengeWithSecret(id, geheimnis);
   if (!c) return fail('Unknown request', 404);
 
   if (c.status === 'pending' && new Date(c.expires_at).getTime() < Date.now()) {
@@ -793,14 +791,14 @@ async function checkStatus(
   }
   if (c.status !== 'paid') return json({ status: c.status });
 
-  // Genau einmal einlösbar: nur wer den Statuswechsel gewinnt, bekommt das JWT.
+  // Redeemable exactly once: only whoever wins the status change gets the JWT.
   const { data: claimed } = await db.from('challenges')
     .update({ status: 'used' }).eq('id', id).eq('status', 'paid').select().maybeSingle();
   if (!claimed) return json({ status: 'used' });
 
-  // Der Bestandsabruf darf den Login nicht scheitern lassen: Die Challenge ist
-  // schon eingelöst, ein Fehler hier würde die Zahlung wertlos machen. Der
-  // Cron-Lauf holt den Bestand ohnehin nach.
+  // A holdings lookup failure must not fail the login: the challenge is
+  // already redeemed, and an error here would make the payment worthless.
+  // The cron run picks up the holdings later anyway.
   let holdings = { uiAmount: 0, usdValue: 0, price: 0 };
   try {
     holdings = await refreshWallet(db, c.wallet, cfg.ansem_mint ?? '');
@@ -835,23 +833,23 @@ async function checkStatus(
 }
 
 /**
- * Wie weit der Scan zurückblickt.
+ * How far back the scan looks.
  *
- * Das war 40 – und 40 ist die Zahl, bei der bei einem Start mit vielen
- * gleichzeitigen Anmeldungen echtes Geld verloren geht: Landen zwischen zwei
- * Scans mehr als 40 Zahlungen an der Treasury, fallen die ältesten aus dem
- * Fenster und werden NIE gesehen. Die Challenge läuft nach 25 Minuten ab, das
- * SOL ist überwiesen, und niemand kommt herein.
+ * This used to be 40 - and 40 is the number at which a launch with many
+ * simultaneous logins loses real money: if more than 40 payments land at the
+ * treasury between two scans, the oldest ones fall out of the window and are
+ * NEVER seen. The challenge expires after 25 minutes, the SOL has been sent,
+ * and nobody gets in.
  *
- * 200 kostet fast nichts, weil die Signaturliste ein einziger RPC-Aufruf ist
- * und bekannte Signaturen davor aussortiert werden.
+ * 200 costs almost nothing, because the signature list is a single RPC call
+ * and known signatures get filtered out before that.
  */
 const TREASURY_FENSTER = 200;
 
 /**
- * Liest die letzten Treasury-Transaktionen und bucht passende Zahlungen auf
- * offene Challenges. Höchstens alle 5 Sekunden, damit paralleles Polling
- * vieler Nutzer das RPC-Limit nicht sprengt.
+ * Reads the latest treasury transactions and posts matching payments to
+ * open challenges. At most every 5 seconds, so parallel polling by many
+ * users doesn't blow through the RPC limit.
  */
 async function scanTreasury(treasury: string) {
   if (Date.now() - lastScan < 5_000) return;
@@ -860,22 +858,23 @@ async function scanTreasury(treasury: string) {
   const { count } = await db.from('challenges')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'pending').gt('expires_at', new Date().toISOString());
-  if (!count) return; // nichts offen -> kein RPC-Call
+  if (!count) return; // nothing open -> no RPC call
 
-  // Die zuletzt verbuchten Signaturen, EINMAL geholt und als Sieb an den Scan
-  // gegeben: damit fällt alles Bekannte weg, bevor der RPC pro Signatur eine
-  // Detailabfrage bekommt. Vorher lief das Sieb erst danach – jeder Lauf holte
-  // also alle 40 Transaktionen erneut, im Sekundentakt, ohne Ergebnis.
+  // The most recently recorded signatures, fetched ONCE and handed to the
+  // scan as a filter: that drops everything already known before the RPC
+  // does a per-signature detail lookup. It used to filter only afterward -
+  // so every run fetched all 40 transactions again, once a second, for
+  // nothing.
   //
-  // 600 Zeilen decken das 200er-Fenster mit Reserve ab: Eine Signatur aus dem
-  // Fenster, die wir schon kennen, kann nur dann aus diesen 600 herausfallen,
-  // wenn seither über 600 Zahlungen eingingen – dann wäre sie längst nicht mehr
-  // im Fenster. Und selbst wenn das Sieb einmal durchlässt, bleibt der
-  // Primärschlüssel auf seen_txs.signature die eigentliche Sperre gegen
-  // Doppelbuchung: Das Sieb spart Arbeit, es garantiert nichts.
-  const { data: letzte } = await db.from('seen_txs')
+  // 600 rows cover the 200-wide window with margin: a signature from the
+  // window that we already know can only fall out of these 600 if more than
+  // 600 payments have come in since - and by then it would be long out of
+  // the window anyway. And even if the filter lets one slip through once,
+  // the primary key on seen_txs.signature is the actual guard against double
+  // booking: the filter saves work, it guarantees nothing.
+  const { data: last } = await db.from('seen_txs')
     .select('signature').order('seen_at', { ascending: false }).limit(600);
-  const verbucht = new Set((letzte ?? []).map((k) => k.signature));
+  const verbucht = new Set((last ?? []).map((k) => k.signature));
 
   const payments = await recentTreasuryPayments(
     treasury,
@@ -885,8 +884,8 @@ async function scanTreasury(treasury: string) {
   if (!payments.length) return;
 
   for (const p of payments) {
-    // Zuerst festschreiben, dass diese Signatur verbraucht ist. Schlägt das
-    // fehl, hat ein paralleler Lauf sie schon – dann nicht doppelt buchen.
+    // Commit that this signature has been used first. If that fails, a
+    // parallel run already has it - so don't book it twice.
     const { error: insErr } = await db.from('seen_txs').insert({
       signature: p.signature, slot: p.slot, sender: p.sender, lamports: p.lamports,
     });
@@ -907,11 +906,11 @@ async function scanTreasury(treasury: string) {
 }
 
 /**
- * Verlängert eine noch gültige Sitzung, ohne neue Zahlung.
+ * Renews a still-valid session, without a new payment.
  *
- * Wer die App regelmäßig öffnet, bleibt damit dauerhaft angemeldet. Bezahlt
- * wird nur einmal – und wieder, wenn jemand ein Jahr lang nicht vorbeischaut
- * oder sein Token abgelaufen ist.
+ * Anyone who opens the app regularly stays logged in indefinitely this way.
+ * Payment happens only once - and again if someone stays away for a year, or
+ * their token has expired.
  */
 async function renewSession(cfg: Awaited<ReturnType<typeof loadConfig>>, req: Request) {
   const auth = req.headers.get('authorization') ?? '';
@@ -926,13 +925,13 @@ async function renewSession(cfg: Awaited<ReturnType<typeof loadConfig>>, req: Re
     return fail('Session too old - please verify again', 401);
   }
 
-  // Adminrechte werden frisch aus der Konfiguration gelesen, nicht aus dem
-  // alten Token: Wechselt Ansems Wallet, verliert das alte Token die Rechte.
+  // Admin rights are read fresh from config, not from the old token: if
+  // Ansem's wallet changes, the old token loses the rights.
   const isAdmin = Boolean(cfg.admin_wallet) && claims.wallet === cfg.admin_wallet;
 
-  // Dasselbe Tor auch hier. Sonst behielte jede Sitzung, die vor dem
-  // Zusperren ausgestellt wurde, ihren Zugang auf unbestimmte Zeit – die
-  // Verlaengerung laeuft von selbst und fragt sonst niemanden mehr.
+  // Same gate here too. Otherwise any session issued before the site closed
+  // would keep its access indefinitely - renewal runs on its own and
+  // otherwise never asks anyone again.
   if (!mayEnter(cfg, claims.wallet)) {
     return fail('Not open yet - check back at launch.', 403);
   }
@@ -963,10 +962,11 @@ async function renewSession(cfg: Awaited<ReturnType<typeof loadConfig>>, req: Re
 
 async function mockPay(id: unknown, geheimnis: unknown) {
   if (!MOCK) return fail('Not available', 404);
-  // Auch hier das Geheimnis: MOCK_CHAIN ist eine Umgebungsvariable, und eine
-  // Umgebungsvariable steht irgendwann versehentlich auf 1. Dann soll die
-  // Abkürzung wenigstens nicht auch noch für fremde Challenges gelten.
-  const c = await challengeMitGeheimnis(id, geheimnis);
+  // The secret applies here too: MOCK_CHAIN is an environment variable, and
+  // an environment variable ends up set to 1 by accident eventually. If it
+  // does, the shortcut should at least not also work for someone else's
+  // challenges.
+  const c = await challengeWithSecret(id, geheimnis);
   if (!c) return fail('No open request', 400);
   const { data } = await db.from('challenges')
     .update({ status: 'paid', tx_sig: `mock-${crypto.randomUUID()}` })

@@ -1,25 +1,25 @@
 // ============================================================================
-// Vorschaubild: Wie hell darf der Betrag im Chat sein?
+// Preview image: how bright can the amount in chat be?
 //
-// Fassung 2 ist entschieden – der Betrag bekommt Textgröße (.78rem) und
-// Gewicht. Offen ist nur noch die Helligkeit.
+// Version 2 is decided - the amount gets text size (.78rem) and weight.
+// The only thing still open is the brightness.
 //
-// Der Grund, warum "einfach --text" hier nicht die Antwort ist: --text ist die
-// Farbe für Fließtext, den man Zeile für Zeile liest. Der Betrag ist aber kein
-// Fließtext, sondern ein kurzer, fetter Block aus Schreibmaschinenziffern, und
-// derselbe Farbwert wirkt in fetter Monoschrift deutlich lauter als in
-// normaler Grotesk. Dazu kommt: Im Chat stehen zwanzig davon untereinander in
-// einer Spalte. Was bei einer Zahl richtig aussieht, ist bei zwanzig eine
-// Leuchtspur am rechten Rand.
+// The reason "just use --text" isn't the answer here: --text is the
+// color for body text, read line by line. But the amount isn't body
+// text, it's a short, bold block of monospace digits, and the same
+// color value reads noticeably louder in bold mono than in a regular
+// grotesk. On top of that: twenty of them stack in a column in chat.
+// What looks right for one number becomes a glowing streak down the
+// right edge for twenty.
 //
-// Deshalb wird hier abgestuft und nicht geraten. Alle Fassungen haben dieselbe
-// Größe und dasselbe Gewicht wie Nummer 2; nur der Farbwert wandert zwischen
-// --dim (dem heutigen, zu leisen Wert) und --text (dem vollen).
+// So this steps through options instead of guessing. Every version has
+// the same size and weight as number 2; only the color value moves
+// between --dim (today's, too quiet a value) and --text (the full one).
 //
-// Die Kontrastwerte werden mitgerechnet und mit ausgegeben, damit die
-// Entscheidung nicht allein am Bildschirmeindruck hängt.
+// The contrast values are computed and printed along with it, so the
+// decision doesn't rest on screen impression alone.
 //
-// Erzeugt preview/chat-betrag-helligkeit.png
+// Produces preview/chat-betrag-helligkeit.png
 // ============================================================================
 
 import { chromium } from 'playwright';
@@ -27,9 +27,10 @@ import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 
 const GRUND = '#0a0b0f';
 
-// WCAG-Kontrast. Nicht als Prüfsiegel – 4,5:1 ist die Grenze für Fließtext,
-// und der Betrag ist fett und kurz, da gilt schon 3:1. Die Zahl steht hier
-// als Maß, um die Stufen miteinander zu vergleichen.
+// WCAG contrast. Not as a pass/fail stamp - 4.5:1 is the threshold for
+// body text, and the amount is bold and short, where 3:1 already
+// applies. The number is used here as a yardstick to compare the steps
+// against each other.
 const kanal = (v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 const leucht = (hex) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -40,22 +41,22 @@ const kontrast = (a, b) => {
   return (x + 0.05) / (y + 0.05);
 };
 
-const STUFEN = [
-  { name: 'Wie heute',   farbe: '#8b93a7', gewicht: 400, groesse: '.72rem',
+const TIERS = [
+  { name: 'Wie heute',   color: '#8b93a7', gewicht: 400, groesse: '.72rem',
     hinweis: 'Nur zum Vergleich mit dabei – der Stand von jetzt, in alter Größe und altem Gewicht.' },
-  { name: 'Gedämpft',    farbe: '#a4acbe', gewicht: 600, groesse: '.78rem',
+  { name: 'Gedämpft',    color: '#a4acbe', gewicht: 600, groesse: '.78rem',
     hinweis: 'Nur eine Spur heller als heute, aber fett und in Textgröße. Die Größe trägt hier fast die ganze Wirkung.' },
-  { name: 'Mittel',      farbe: '#b9c0d0', gewicht: 600, groesse: '.78rem',
-    hinweis: 'Klar heller als der Nachrichtentext, aber merklich unter Weiß. Die Spalte fällt auf, ohne zu leuchten.' },
-  { name: 'Mittel, leichter', farbe: '#b9c0d0', gewicht: 500, groesse: '.78rem',
+  { name: 'Mittel',      color: '#b9c0d0', gewicht: 600, groesse: '.78rem',
+    hinweis: 'Klar heller als der Nachrichtentext, aber merklich under Weiß. Die Spalte fällt auf, ohne zu leuchten.' },
+  { name: 'Mittel, leichter', color: '#b9c0d0', gewicht: 500, groesse: '.78rem',
     hinweis: 'Dieselbe Farbe, ein Gewicht weniger. Fette Monoziffern wirken heller als sie sind – das nimmt etwas davon zurück.' },
-  { name: 'Hell',        farbe: '#cfd5e2', gewicht: 600, groesse: '.78rem',
+  { name: 'Hell',        color: '#cfd5e2', gewicht: 600, groesse: '.78rem',
     hinweis: 'Deutlich vorn, aber noch nicht die Farbe von Fließtext. Letzte Stufe vor Weiß.' },
-  { name: 'Voll (--text)', farbe: '#e7e9ee', gewicht: 600, groesse: '.78rem',
+  { name: 'Voll (--text)', color: '#e7e9ee', gewicht: 600, groesse: '.78rem',
     hinweis: 'Fassung 2 unverändert, wie im letzten Bild. Zwanzig davon untereinander ergeben eine Leuchtspur am rechten Rand.' },
 ];
 
-const NACHRICHTEN = [
+const MESSAGES = [
   { h: '9Qm', ton: 0, usd: '$3.4K', body: 'gm', zeit: '14:02' },
   { h: 'bH2', ton: 1, usd: '$8.8K', body: 'when is the next poll going up', zeit: '14:03' },
   { admin: true, h: '4bo', usd: '$12M', body: 'New poll is up. Go vote.', zeit: '14:03' },
@@ -68,7 +69,7 @@ const NACHRICHTEN = [
   { admin: true, h: '4bo', usd: '$12M', body: '24h', zeit: '14:09' },
 ];
 
-const zeile = (m) => `
+const line = (m) => `
   <div class="msg ${m.admin ? 'is-admin' : ''}">
     <span class="who">${m.admin
       ? `<span class="h admin-name">${m.h}</span>`
@@ -78,8 +79,8 @@ const zeile = (m) => `
     <span class="meta"><span class="time">${m.zeit}</span></span>
   </div>`;
 
-const regeln = STUFEN.map((s, i) =>
-  `#v${i} .msg .worth { font-size: ${s.groesse}; font-weight: ${s.gewicht}; color: ${s.farbe}; }`
+const regeln = TIERS.map((s, i) =>
+  `#v${i} .msg .worth { font-size: ${s.groesse}; font-weight: ${s.gewicht}; color: ${s.color}; }`
 ).join('\n');
 
 const html = `<!doctype html>
@@ -88,7 +89,7 @@ const html = `<!doctype html>
 <style>
   body { padding: 26px 26px 40px; background: var(--bg); }
   .raster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px 22px; max-width: 1560px; }
-  .karte h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .card h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
   .nr {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; border-radius: 999px;
@@ -105,13 +106,13 @@ const html = `<!doctype html>
 <h1>Fassung 2 – wie hell?</h1>
 <p class="lead">Gleiche Größe, gleiches Gewicht, nur die Helligkeit wandert. Zehn Zeilen statt sieben, weil es genau darum geht: Eine einzelne Zahl darf heller sein als eine ganze Spalte davon.</p>
 <div class="raster">
-  ${STUFEN.map((s, i) => `
-  <section class="karte">
+  ${TIERS.map((s, i) => `
+  <section class="card">
     <h2><span class="nr">${i}</span>${s.name}
-      <span class="werte">${s.farbe} · ${kontrast(s.farbe, GRUND).toFixed(1)}:1</span></h2>
+      <span class="werte">${s.color} · ${kontrast(s.color, GRUND).toFixed(1)}:1</span></h2>
     <p class="hinweis">${s.hinweis}</p>
     <div class="chat-panel" id="v${i}">
-      <div class="chat-list">${NACHRICHTEN.map(zeile).join('')}</div>
+      <div class="chat-list">${MESSAGES.map(line).join('')}</div>
     </div>
   </section>`).join('')}
 </div>`;
@@ -123,15 +124,15 @@ writeFileSync(tmp, html);
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 1620, height: 1200 }, deviceScaleFactor: 2 });
-await seite.goto(`file://${tmp}`);
-await seite.waitForTimeout(400);
-await seite.screenshot({ path: `${ausgabe}chat-betrag-helligkeit.png`, fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1620, height: 1200 }, deviceScaleFactor: 2 });
+await page.goto(`file://${tmp}`);
+await page.waitForTimeout(400);
+await page.screenshot({ path: `${ausgabe}chat-betrag-helligkeit.png`, fullPage: true });
 await browser.close();
 rmSync(tmp);
 
 console.log('');
-for (const [i, s] of STUFEN.entries()) {
-  console.log(`  ${i}  ${s.name.padEnd(18)} ${s.farbe}  ${kontrast(s.farbe, GRUND).toFixed(1)}:1`);
+for (const [i, s] of TIERS.entries()) {
+  console.log(`  ${i}  ${s.name.padEnd(18)} ${s.color}  ${kontrast(s.color, GRUND).toFixed(1)}:1`);
 }
 console.log(`\n  ${ausgabe}chat-betrag-helligkeit.png\n`);

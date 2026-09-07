@@ -1,25 +1,25 @@
 project_id = "sized"
 
 [functions.verify]
-# Muss ohne Login erreichbar sein – hier entsteht die Session ja erst.
+# Must be reachable without login - this is where the session is created.
 verify_jwt = false
 
 [functions.refresh-holdings]
-# Prüft das Wallet-JWT selbst (bzw. den CRON_SECRET-Header), damit auch der
-# Cron-Job ohne Supabase-Auth-Token durchkommt.
+# Checks the wallet JWT itself (or the CRON_SECRET header), so the cron
+# job can get through without a Supabase auth token too.
 verify_jwt = false
 
 [functions.holdings-webhook]
-# Helius kann kein Supabase-JWT mitschicken; die Function prüft stattdessen
-# den frei gewählten Auth-Header gegen WEBHOOK_SECRET.
+# Helius cannot send a Supabase JWT; the function instead checks a
+# freely chosen auth header against WEBHOOK_SECRET.
 verify_jwt = false
 
 [functions.og]
-# Die Vorschaubilder fuer geteilte Abstimmungen. Der Crawler von X schickt kein
-# Supabase-JWT mit – ohne diese Zeile antwortet die Function ihm mit 401 und
-# ein geteilter Link zeigt keine Karte.
+# The preview images for shared polls. X's crawler sends no Supabase JWT -
+# without this line the function answers it with 401 and a shared link
+# shows no card.
 #
-# Sie hat lange gefehlt, und niemandem ist es aufgefallen: Die Function war in
-# keiner der beiden READMEs erwaehnt und in dieser Datei auch nicht. Wer der
-# Anleitung folgte, rollte sie gar nicht erst aus.
+# It was missing for a long time, and nobody noticed: the function was
+# mentioned in neither of the two READMEs, nor in this file. Anyone who
+# followed the setup guide never deployed it at all.
 verify_jwt = false

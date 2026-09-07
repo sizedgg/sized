@@ -1,72 +1,73 @@
 -- ============================================================================
--- Der Anmeldebetrag braucht weniger Nachkommastellen
+-- The login amount needs fewer decimal places
 -- ============================================================================
 --
--- Der Befund, aus dem Betrieb
+-- The finding, from production
 --
--- Der Betrag sah bisher so aus:
+-- The amount used to look like this:
 --
---   0.002 SOL  +  1 bis 99.999 Lamports   ->   0.002043217 SOL
+--   0.002 SOL  +  1 to 99,999 lamports   ->   0.002043217 SOL
 --
--- Das sind NEUN Nachkommastellen. In Phantom auf dem Handy lässt sich das
--- nicht eintippen: Das Eingabefeld nimmt weniger Stellen an, die letzte fällt
--- weg. Wer 0.002043217 senden will, sendet 0.00204321 – und dieser Betrag
--- passt auf keine Challenge. Die Zahlung ist weg, die Anmeldung scheitert,
--- und der Grund ist von aussen nicht zu sehen.
+-- That's NINE decimal places. On Phantom on a phone that can't be typed in:
+-- the input field accepts fewer digits, the last one gets dropped. Someone
+-- trying to send 0.002043217 sends 0.00204321 instead - and that amount
+-- doesn't match any challenge. The payment is gone, the login fails, and
+-- the reason isn't visible from outside.
 --
--- Bei einer Seite, deren einziger Weg hinein eine Zahlung ist, ist das kein
--- Schönheitsfehler, sondern die Tür.
+-- On a site whose only way in is a payment, that isn't a cosmetic flaw,
+-- it's the door.
 --
 -- ----------------------------------------------------------------------------
--- Warum der Betrag überhaupt so genau war
+-- Why the amount was that precise in the first place
 --
--- Wegen dieses Index hier:
+-- Because of this index here:
 --
 --   create unique index uq_challenges_open_amount
 --     on public.challenges (lamports) where status = 'pending';
 --
--- Begründet war er mit: "Solange eine Challenge offen ist, muss ihr Betrag
--- eindeutig sein – sonst liesse sich eine fremde Zahlung auf die eigene
--- Challenge buchen." Damit brauchte es viele mögliche Beträge, und viele
--- Beträge brauchten viele Stellen.
+-- It was justified with: "As long as a challenge is open, its amount must
+-- be unique - otherwise a stranger's payment could get booked onto your
+-- challenge." That called for many possible amounts, and many amounts
+-- called for many digits.
 --
--- Der Satz stimmt aber nicht mehr. Der Abgleich in scanTreasury lautet:
+-- But that reasoning no longer holds. The match in scanTreasury is:
 --
 --   .eq('status', 'pending')
---   .eq('wallet',   p.sender)      <-- die Absenderadresse aus der Kette
+--   .eq('wallet',   p.sender)      <-- the sender address from the chain
 --   .eq('lamports', p.lamports)
 --
--- Es wird also GEGEN DIE ABSENDERADRESSE abgeglichen, nicht nur gegen den
--- Betrag. Eine fremde Zahlung kann schon deshalb nicht auf eine fremde
--- Challenge laufen: Sie käme aus einer anderen Wallet. Und die eigene Wallet
--- fremd bezahlen zu lassen, geht nicht – dafür bräuchte man deren Schlüssel.
+-- So it's matched AGAINST THE SENDER ADDRESS, not just against the amount.
+-- A stranger's payment can't land on someone else's challenge for that
+-- reason alone: it would come from a different wallet. And getting your
+-- own wallet paid by someone else isn't possible either - that would need
+-- their private key.
 --
--- Eindeutig sein muss der Betrag also nur INNERHALB einer Wallet. Und dort
--- sind höchstens drei Challenges gleichzeitig offen (app.limit_open_challenges
--- aus 20260903020000). Drei.
+-- So the amount only needs to be unique WITHIN a wallet. And there, at
+-- most three challenges are open at once (app.limit_open_challenges from
+-- 20260903020000). Three.
 --
 -- ----------------------------------------------------------------------------
--- Was das ändert
+-- What this changes
 --
--- Statt 100.000 Beträgen mit Lamport-Genauigkeit genügen tausend in Schritten
--- von 1.000 Lamports:
+-- Instead of 100,000 amounts at lamport precision, a thousand in steps
+-- of 1,000 lamports is enough:
 --
---   0.002001 … 0.002999 SOL     ->  SECHS Nachkommastellen
+--   0.002001 … 0.002999 SOL     ->  SIX decimal places
 --
--- Sechs Stellen nimmt jede Wallet-App an. Der Preis für den Nutzer bleibt
--- praktisch gleich (rund 0,0025 SOL), und die Zahl ist nebenbei deutlich
--- leichter abzutippen.
+-- Every wallet app accepts six digits. The cost to the user stays
+-- practically the same (around 0.0025 SOL), and the number is
+-- noticeably easier to type as a bonus.
 --
--- Nebeneffekt, der wichtiger ist als er klingt: Der alte Index war eine
--- Wachstumsgrenze. Bei 900 gleichzeitig offenen Anmeldungen und 100.000
--- Beträgen traf jeder zwanzigste Versuch auf eine Kollision; die Function
--- würfelt bis zu 20 Mal neu und gäbe danach auf. Pro Wallet gezählt gibt es
--- diese Grenze nicht mehr – egal wie viele Leute gleichzeitig hereinwollen.
+-- Side effect that matters more than it sounds: the old index was a
+-- growth ceiling. At 900 simultaneously open logins and 100,000 amounts,
+-- one attempt in twenty hit a collision; the function rerolls up to 20
+-- times and then gives up. Counted per wallet, that ceiling is gone -
+-- no matter how many people try to come in at once.
 -- ============================================================================
 
 drop index if exists public.uq_challenges_open_amount;
 
--- Eindeutig je Wallet, nicht global. Genau das, was der Abgleich braucht.
+-- Unique per wallet, not globally. Exactly what the matching needs.
 create unique index if not exists uq_challenges_open_amount_wallet
   on public.challenges (wallet, lamports) where status = 'pending';
 

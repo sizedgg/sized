@@ -1,52 +1,52 @@
 -- ============================================================================
--- Die DM-Schwelle laesst sich nicht mehr unter $1.000 setzen
+-- The DM threshold can no longer be set below $1,000
 --
--- Bisher nahm set_min_dm_usd() jeden Wert ab 0 an, und 0 hiess: aus, jeder
--- verifizierte Nutzer darf schreiben. Das geht nicht mehr – unter 1000 wird
--- abgelehnt, null eingeschlossen.
---
--- ----------------------------------------------------------------------------
--- Warum es gar keinen Aus-Zustand mehr gibt
---
--- Der Posteingang ist der teurere Kanal. Eine DM landet nicht in einem Strom,
--- den man ueberfliegt, sondern bei einer einzelnen Person, die sie abarbeitet –
--- genau deshalb ist er das lohnendere Ziel fuer Spam. Eine Schwelle, die sich
--- versehentlich auf null stellen laesst, ist an dieser Stelle keine.
---
--- Und "versehentlich" ist hier woertlich gemeint: Im Formular hiess ein leeres
--- Feld bisher 0. Wer die Zahl markierte und loeschte, um eine neue zu tippen,
--- und dann wegklickte, hatte den Posteingang geoeffnet – ohne einen einzigen
--- Schritt, der danach aussah.
+-- Until now, set_min_dm_usd() accepted any value from 0 up, and 0 meant:
+-- off, any verified user may write. That no longer works - anything under
+-- 1000 is rejected, null included.
 --
 -- ----------------------------------------------------------------------------
--- Warum abgelehnt und nicht angehoben
+-- Why there's no "off" state at all anymore
 --
--- Das Formular hebt an: Wer 500 tippt, bekommt 1000, ohne rote Meldung. Das
--- ist die richtige Antwort fuer jemanden, der gerade tippt.
+-- The inbox is the more expensive channel. A DM doesn't land in a stream
+-- you skim, it lands with a single person who works through it - that's
+-- exactly why it's the more rewarding target for spam. A threshold that can
+-- accidentally be set to zero isn't one, in this spot.
 --
--- Hier waere es die falsche. Diese Funktion ist die Sperre, und eine Sperre,
--- die stillschweigend etwas anderes tut als verlangt, ist keine Auskunft mehr:
--- Wer sie umgeht – und der Browser ist der Teil, den man umgehen kann –, soll
--- ein Nein bekommen und keine stille Korrektur. Sonst steht in der Datenbank
--- ein Wert, den niemand gesetzt hat.
---
--- ----------------------------------------------------------------------------
--- Die Obergrenze
---
--- Sie lag bei 1.000.000 und war als Tippfehlerbremse gedacht: eine
--- versehentlich angehaengte Null sollte nicht den Posteingang fuer alle
--- schliessen. Jetzt steht dort, was in zehn Stellen hineinpasst, weil das
--- Feld genau so lang ist. Die Bremse ist damit schwaecher – eine Null zu viel
--- auf 100.000 geht durch. Sichtbar wird so etwas trotzdem sofort, und zwar an
--- der Stelle, an der es auffaellt: Der Posteingang ist danach leer.
+-- And "accidentally" is meant literally here: in the form, an empty field
+-- used to mean 0. Anyone who selected the number and deleted it to type a
+-- new one, then clicked away, had opened the inbox - without a single step
+-- that looked like it.
 --
 -- ----------------------------------------------------------------------------
--- Bestehende Zeilen
+-- Why rejected and not raised
 --
--- Die vorige Migration hat eine 0 bereits auf 1000 gehoben. Steht dort etwas
--- zwischen 0 und 1000 – von Hand gesetzt, bevor es diese Grenze gab –, wird es
--- ebenfalls angehoben: Sonst laesst sich der Wert zwar nicht mehr setzen, gilt
--- aber weiter.
+-- The form raises it: type 500, get 1000, no red error. That's the right
+-- answer for someone in the middle of typing.
+--
+-- Here it would be the wrong one. This function is the block, and a block
+-- that silently does something other than what was asked isn't an
+-- authority anymore: anyone who bypasses it - and the browser is the part
+-- that can be bypassed - should get a no, not a silent correction.
+-- Otherwise there's a value sitting in the database that nobody set.
+--
+-- ----------------------------------------------------------------------------
+-- The upper limit
+--
+-- It used to be 1,000,000 and was meant as a typo brake: an accidentally
+-- added zero shouldn't close the inbox for everyone. Now it holds whatever
+-- fits in ten digits, because that's exactly how long the field is. The
+-- brake is weaker as a result - one zero too many on 100,000 gets through.
+-- Still, something like that becomes visible immediately, right where it
+-- would be noticed: the inbox is empty afterward.
+--
+-- ----------------------------------------------------------------------------
+-- Existing rows
+--
+-- The previous migration already raised a 0 to 1000. If something between 0
+-- and 1000 is sitting there - set by hand before this limit existed - it
+-- gets raised too: otherwise the value could no longer be set, but would
+-- still apply.
 -- ============================================================================
 
 create or replace function public.set_min_dm_usd(p_usd numeric)
@@ -62,15 +62,15 @@ begin
     raise exception 'Not allowed';
   end if;
 
-  -- Untergrenze. Die Zahl steht auch in app.js (MIN_DM_SCHWELLE); dort haelt
-  -- sie das Formular davon ab, etwas anzubieten, das hier abgelehnt wuerde.
+  -- Lower limit. The number also lives in app.js (MIN_DM_SCHWELLE); there
+  -- it keeps the form from offering something this would reject.
   if p_usd is null or p_usd < 1000 then
     raise exception 'Minimum is $1,000';
   end if;
 
-  -- Obergrenze: dieselbe Zahl, die oben ins Feld passt (zehn Stellen, siehe
-  -- MAX_STELLEN in app.js). Sie ist keine Politik mehr, sondern nur noch die
-  -- Laenge des Feldes – bis hierhin gilt, was getippt wurde.
+  -- Upper limit: the same number that fits into the field above (ten
+  -- digits, see MAX_STELLEN in app.js). It's no longer a policy, just the
+  -- length of the field - up to here, whatever was typed stands.
   if p_usd > 9999999999 then
     raise exception 'Amount is too high';
   end if;

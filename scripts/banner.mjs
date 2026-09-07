@@ -1,29 +1,30 @@
 // ============================================================================
-// Das Banner fuer den Artikel – drei Entwuerfe, 5:2
+// The banner for the article - three drafts, 5:2
 //
-// 1600 x 640 CSS-Pixel bei doppelter Punktdichte, also 3200 x 1280 im Bild.
-// Das ist gross genug fuer jeden Artikelkopf und teilt sich sauber durch zwei.
-//
-// ----------------------------------------------------------------------------
-// Woher die Farben und die Schrift kommen
-//
-// Nicht ausgesucht, sondern aus public/styles.css gelesen: Grund, Linien,
-// Textfarben und das Blau der fuehrenden Antwort stehen dort als Variablen,
-// und dieses Skript zieht sie von dort. Ein Banner, dessen Grau eine Spur
-// neben dem Grau der Seite liegt, sieht neben den Bildschirmfotos falsch aus,
-// und niemand kann sagen warum.
-//
-// Dasselbe gilt fuer die Schrift: Die Vorschaubilder sind in diesem Container
-// entstanden, also mit DejaVu Sans Mono. Das Banner nimmt dieselbe. Auf einem
-// iPhone waere es SF Mono – aber ein PNG ist fertig, wenn es hier entsteht,
-// und dann soll es zu den Bildern passen, neben denen es steht.
+// 1600 x 640 CSS pixels at double pixel density, so 3200 x 1280 in the
+// image. That's large enough for any article header and divides cleanly by
+// two.
 //
 // ----------------------------------------------------------------------------
-// Das Zeichen
+// Where the colors and the font come from
 //
-// Zwei Balken, woertlich aus index.html geschnitten. Nachgezeichnet waere es
-// die vierte Kopie derselben Form – und die erste, die beim naechsten Aendern
-// stehen bleibt.
+// Not picked, but read from public/styles.css: ground, lines, text colors
+// and the blue of the leading answer live there as variables, and this
+// script pulls them from there. A banner whose gray sits a shade off from
+// the page's gray looks wrong next to the screenshots, and nobody can say
+// why.
+//
+// The same goes for the font: the preview images were made in this
+// container, so with DejaVu Sans Mono. The banner takes the same one. On an
+// iPhone it would be SF Mono - but a PNG is finished once it's made here,
+// and then it should match the images it stands next to.
+//
+// ----------------------------------------------------------------------------
+// The mark
+//
+// Two bars, cut verbatim from index.html. Redrawn, it would be the fourth
+// copy of the same shape - and the first one that goes stale at the next
+// change.
 //
 //   node scripts/banner.mjs
 // ============================================================================
@@ -40,64 +41,65 @@ const pub = path.join(root, 'public');
 const html = fs.readFileSync(path.join(pub, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(pub, 'styles.css'), 'utf8');
 
-/** Das Zeichen aus index.html – nur das SVG. */
-const MARKE = (() => {
+/** The mark from index.html - just the SVG. */
+const MARKER = (() => {
   const a = html.indexOf('<svg viewBox="29 16 42 64"');
   const b = html.indexOf('</svg>', a) + 6;
   if (a < 0) throw new Error('Zeichen nicht in index.html gefunden');
   return html.slice(a, b);
 })();
 
-/** Eine Farbvariable aus styles.css. */
-const farbe = (name) => {
+/** A color variable from styles.css. */
+const color = (name) => {
   const t = new RegExp(`--${name}:\\s*([^;]+);`).exec(css);
   if (!t) throw new Error(`--${name} nicht in styles.css gefunden`);
   return t[1].trim();
 };
 const C = {
-  bg: farbe('bg'), bg1: farbe('bg-1'), bg2: farbe('bg-2'), bg3: farbe('bg-3'),
-  line: farbe('line'), text: farbe('text'), dim: farbe('dim'),
-  dimmer: farbe('dimmer'), accent: farbe('accent'),
-  fuellung: farbe('fuellung'), spitze: farbe('fuellung-spitze'),
+  bg: color('bg'), bg1: color('bg-1'), bg2: color('bg-2'), bg3: color('bg-3'),
+  line: color('line'), text: color('text'), dim: color('dim'),
+  dimmer: color('dimmer'), accent: color('accent'),
+  fuellung: color('fuellung'), spitze: color('fuellung-spitze'),
 };
 
 const B = { w: 1600, h: 640 };   // 5:2
 
 /**
- * Wie viele Bildpunkte eines PNG haben ueberhaupt eine Farbe?
+ * How many pixels of a PNG actually have a color at all?
  *
- * Ohne Bildbibliothek: Das PNG wird entpackt und Zeile fuer Zeile
- * zurueckgefiltert – so schreibt PNG nun einmal, jede Zeile bezieht sich auf
- * die davor. "Farbig" heisst hier: Die drei Kanaele liegen weiter als 24
- * auseinander. Das Banner ist grau in grau, ein Ochse ist braun.
+ * No image library: the PNG gets inflated and un-filtered line by line -
+ * that's just how PNG writes it, every line refers back to the one before.
+ * "Colored" here means: the three channels are more than 24 apart. The
+ * banner is gray on gray, an ox is brown.
  */
-function farbanteil(png) {
-  const stuecke = [];
+function colorShare(png) {
+  const pieces = [];
   for (let i = 8; i < png.length;) {
     const len = png.readUInt32BE(i);
     const art = png.toString('ascii', i + 4, i + 8);
     if (art === 'IHDR') {
-      var breite = png.readUInt32BE(i + 8);
+      var width = png.readUInt32BE(i + 8);
       var tiefe = png[i + 16];
       var typ = png[i + 17];
     }
-    if (art === 'IDAT') stuecke.push(png.subarray(i + 8, i + 8 + len));
+    if (art === 'IDAT') pieces.push(png.subarray(i + 8, i + 8 + len));
     i += len + 12;
   }
-  // Chromium schreibt je nach Inhalt mit oder ohne Alphakanal. Beide Faelle
-  // muessen durch: Erst stand hier nur RGBA, und die Pruefung gab bei jedem
-  // Bild -1 zurueck – eine Pruefung, die immer dasselbe sagt, prueft nichts.
+  // Chromium writes with or without an alpha channel depending on content.
+  // Both cases need to work: this used to only handle RGBA, and the check
+  // returned -1 for every image - a check that always says the same thing
+  // checks nothing.
   const bpp = typ === 6 ? 4 : typ === 2 ? 3 : 0;
   if (!bpp || tiefe !== 8) return -1;
-  const roh = zlib.inflateSync(Buffer.concat(stuecke));
-  const zeile = breite * bpp;
-  const vor = Buffer.alloc(zeile);
-  let jetzt = Buffer.alloc(zeile);
+  const roh = zlib.inflateSync(Buffer.concat(pieces));
+  const line = width * bpp;
+  const vor = Buffer.alloc(line);
+  let jetzt = Buffer.alloc(line);
   let bunt = 0;
   for (let y = 0, p = 0; p < roh.length; y++) {
     const f = roh[p++];
-    roh.copy(jetzt, 0, p, p + zeile); p += zeile;
-    for (let x = 0; x < zeile; x++) {
+    roh.copy(jetzt, 0, p, p + line); p += line;
+    for (let x = 0; x < line; x++) {
       const a = x >= bpp ? jetzt[x - bpp] : 0;
       const b = vor[x];
       const c = x >= bpp ? vor[x - bpp] : 0;
@@ -110,7 +112,7 @@ function farbanteil(png) {
         jetzt[x] = (jetzt[x] + (da <= db && da <= dc ? a : db <= dc ? b : c)) & 255;
       }
     }
-    for (let x = 0; x < zeile; x += bpp) {
+    for (let x = 0; x < line; x += bpp) {
       const r = jetzt[x]; const g = jetzt[x + 1]; const bl = jetzt[x + 2];
       if (Math.max(r, g, bl) - Math.min(r, g, bl) > 24) bunt++;
     }
@@ -128,105 +130,107 @@ const GRUND = `
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
   }
-  .marke { display: flex; align-items: center; gap: .42em;
+  .marker { display: flex; align-items: center; gap: .42em;
     font-weight: 700; letter-spacing: .18em; }
-  .marke svg { width: .82em; height: 1.18em; fill: ${C.accent}; }
+  .marker svg { width: .82em; height: 1.18em; fill: ${C.accent}; }
   .satz { color: ${C.dim}; }
-  /* Die Zeichen von Ansem.
+  /* Ansem's characters.
      -------------------------------------------------------------------------
-     Zwei Wege, und der Unterschied ist sichtbar – siehe SATZ weiter unten.
+     Two approaches, and the difference is visible - see the sets further
+     below.
 
-     Als Schrift: eigene Schriftfamilie, sonst greift der Browser auf die
-     Monoschrift zu und setzt zwei leere Kaesten. DejaVu Sans Mono hat kein
-     U+1F402 und kein U+1F004, Noto Color Emoji hat beide.
+     As a font: its own font family, otherwise the browser falls back to the
+     monospace font and sets two empty boxes. DejaVu Sans Mono has neither
+     U+1F402 nor U+1F004, Noto Color Emoji has both.
 
-     Ein Sperrsatz zwischen den beiden, weil sie sonst aneinanderkleben. Der
-     Ausgleich mit text-indent haelt die Gruppe trotzdem mittig: Sperrsatz
-     haengt auch hinter dem letzten Zeichen und schiebt sie sonst nach links. */
+     Letter-spacing between the two, because otherwise they stick together.
+     The offset with text-indent still keeps the group centered:
+     letter-spacing also trails behind the last character and would
+     otherwise push the group to the left. */
   .zeichen {
     font-family: "Noto Color Emoji", "Apple Color Emoji", sans-serif;
     letter-spacing: .16em; text-indent: .16em; line-height: 1;
   }
-  /* Als Bild: dann bestimmt nicht die Schrift des Rechners, wie der Ochse
-     aussieht, sondern die Datei. Gleiche Hoehe wie die Schriftgroesse, damit
-     beide Wege dasselbe Mass haben und der Vergleich einer ist. */
+  /* As an image: then it's not the machine's font that decides how the ox
+     looks, but the file. Same height as the font size, so both approaches
+     share the same scale and the comparison is a fair one. */
   .zeichen.bilder { display: flex; align-items: center; gap: .16em; }
   .zeichen.bilder img { height: 1em; width: 1em; }
 `;
 
 // ---------------------------------------------------------------------------
-// Das Banner
+// The banner
 // ---------------------------------------------------------------------------
 //
-// Der Grund von SIZED und das Zeichen klein in der Mitte, sonst nichts.
+// The SIZED ground and the mark small in the middle, nothing else.
 //
-// Der Grund ist wirklich nur eine Farbe: In styles.css lagen einmal zwei
-// weiche Lichter darin, violett oben rechts und knochenweiss unten links; die
-// sind laengst raus. Was hier steht, ist deshalb kein vereinfachter Nachbau,
-// sondern derselbe Grund, den die Seite hat.
+// The ground really is just one color: styles.css used to have two soft
+// glows in it, violet top right and bone-white bottom left; those are long
+// gone. What's here isn't a simplified reconstruction, then, it's the same
+// ground the page has.
 //
-// Drei Groessen, damit die Entscheidung am Bild faellt und nicht an einer
-// Zahl. "Klein" ist relativ zur Flaeche, und 1600 px sind breiter, als man
-// sie sich beim Tippen vorstellt.
-// Die Groesse steht fest: Nr. 3 aus dem ersten Durchgang, nachgemessen an
-// dem gewaehlten Bild (23.3 % Markenbreite, auf die Nachkommastelle dieselbe).
-const GROESSEN = [{ nr: 0, name: 'gewaehlt', px: 76 }];
+// Three sizes, so the decision gets made from the image, not a number.
+// "Small" is relative to the area, and 1600 px is wider than you picture it
+// while typing.
+// The size is settled: no. 3 from the first pass, re-measured against the
+// chosen image (23.3% of mark width, matching to the decimal).
+const SIZES = [{ nr: 0, name: 'chosen', px: 76 }];
 
-// Darunter die Zeichen, mit denen Ansem auf X steht.
+// Below it, the characters Ansem uses on X.
 //
-// "Etwas kleiner" ist hier 0.62 der Marke und keine feste Pixelzahl: Die
-// Marke gibt es in drei Groessen, und eine feste Zahl waere beim kleinsten
-// Banner zu gross und beim groessten verloren.
+// "A bit smaller" here means 0.62 of the mark, not a fixed pixel count: the
+// mark comes in three sizes, and a fixed number would be too big for the
+// smallest banner and lost on the largest.
 //
-// 0.62 und nicht 0.8: Emoji-Zeichen wirken bei gleicher Schriftgroesse
-// schwerer als Buchstaben, weil sie die Zeile ganz ausfuellen – ein "kleiner"
-// gesetztes Paar sieht sonst gleich gross aus wie das Wort darueber. Und
-// nicht 0.4, denn dann liest man es als Fussnote statt als Teil des Zeichens.
-const ZEICHEN = '🐂🀄️';
-const ZEICHEN_ANTEIL = 0.62;
-const ABSTAND_ANTEIL = 0.34;   // Luft zwischen Marke und Zeichen, an der Marke
+// 0.62 and not 0.8: emoji characters look heavier than letters at the same
+// font size, because they fill the whole line - a pair set "smaller" would
+// otherwise look the same size as the word above it. And not 0.4, because
+// then it reads as a footnote instead of part of the mark.
+const CHARACTERS = '🐂🀄️';
+const CHARACTER_SHARE = 0.62;
+const ABSTAND_ANTEIL = 0.34;   // gap between mark and characters, relative to the mark
 
 // ---------------------------------------------------------------------------
-// Welcher Ochse?
+// Which ox?
 // ---------------------------------------------------------------------------
 //
-// Ein Emoji ist ein Codepunkt, kein Bild. Wie er aussieht, entscheidet der
-// Rechner, der ihn anzeigt – und die Saetze unterscheiden sich deutlich. Ein
-// Banner ist aber ein fertiges PNG: Was hier hineingerendert wird, sehen alle,
-// egal auf welchem Geraet.
+// An emoji is a codepoint, not an image. How it looks is decided by the
+// machine displaying it - and the sets look noticeably different. A banner,
+// though, is a finished PNG: whatever gets rendered into it here, everyone
+// sees, no matter what device they're on.
 //
-//   noto     – die Schrift in diesem Container. Kam heraus, weil sie da war,
-//              nicht weil sie gewaehlt wurde.
-//   twemoji  – der Satz, den X selbst benutzt. Auf X steht das Banner also
-//              neben denselben Zeichen, die daneben in Ansems Namen stehen.
+//   noto     - the font in this container. It came up because it was there,
+//              not because it was chosen.
+//   twemoji  - the set X itself uses. On X the banner then sits next to the
+//              very same characters that appear next to Ansem's name.
 //
-// Apple faellt aus: Apple Color Emoji liegt auf dem Mac davor, nicht hier, und
-// laesst sich nicht mitliefern. Wer den Ochsen so will, wie er ihn beim Tippen
-// sieht, muesste das Bild auf dem Mac erzeugen.
+// Apple is out: Apple Color Emoji lives on the Mac in front of it, not here,
+// and can't be shipped along. Anyone who wants the ox exactly as it looks
+// while typing would have to generate the image on the Mac.
 //
-// Die Twemoji-Dateien liegen unter scripts/zeichen/ – Twitter/X, CC-BY 4.0.
-// Woertlich uebernommen und nicht nachgezeichnet, aus demselben Grund wie
-// beim Zeichen der Marke.
-const alsBild = (datei) => 'data:image/svg+xml;base64,'
-  + fs.readFileSync(path.join(root, 'scripts', 'zeichen', datei)).toString('base64');
+// The Twemoji files live under scripts/zeichen/ - Twitter/X, CC-BY 4.0.
+// Taken verbatim rather than redrawn, for the same reason as the mark's
+// symbol.
+const alsBild = (file) => 'data:image/svg+xml;base64,'
+  + fs.readFileSync(path.join(root, 'scripts', 'zeichen', file)).toString('base64');
 
-const SAETZE = [
-  { nr: 1, name: 'Noto (die Schrift hier)', klasse: '', inhalt: ZEICHEN },
+const SENTENCES = [
+  { nr: 1, name: 'Noto (die Schrift hier)', klasse: '', content: CHARACTERS },
   { nr: 2, name: 'Twemoji (der Satz von X)', klasse: ' bilder',
-    inhalt: `<img src="${alsBild('1f402.svg')}" alt="">`
+    content: `<img src="${alsBild('1f402.svg')}" alt="">`
           + `<img src="${alsBild('1f004.svg')}" alt="">` },
 ];
 
-const ENTWUERFE = SAETZE.flatMap((s) => GROESSEN.map((g) => ({
+const DRAFTS = SENTENCES.flatMap((s) => SIZES.map((g) => ({
   nr: s.nr,
   name: s.name,
   was: `Die Marke nimmt ${Math.round(g.px * 5.4 / B.w * 100)} % der Breite ein, `
-     + `die Zeichen darunter ${Math.round(g.px * ZEICHEN_ANTEIL)} px.`,
+     + `die Zeichen darunter ${Math.round(g.px * CHARACTER_SHARE)} px.`,
   css: `body { gap: ${Math.round(g.px * ABSTAND_ANTEIL)}px; }
-        .marke { font-size: ${g.px}px; }
-        .zeichen { font-size: ${Math.round(g.px * ZEICHEN_ANTEIL)}px; }`,
-  body: `<div class="marke">${MARKE}SIZED</div>
-         <div class="zeichen${s.klasse}">${s.inhalt}</div>`,
+        .marker { font-size: ${g.px}px; }
+        .zeichen { font-size: ${Math.round(g.px * CHARACTER_SHARE)}px; }`,
+  body: `<div class="marker">${MARKER}SIZED</div>
+         <div class="zeichen${s.klasse}">${s.content}</div>`,
 })));
 
 // ---------------------------------------------------------------------------
@@ -237,35 +241,35 @@ fs.mkdirSync(path.join(root, 'preview'), { recursive: true });
 
 console.log(`\nBanner ${B.w}x${B.h} (5:2), doppelte Punktdichte\n`);
 
-for (const e of ENTWUERFE) {
-  const seite = await browser.newPage({
+for (const e of DRAFTS) {
+  const page = await browser.newPage({
     viewport: { width: B.w, height: B.h }, deviceScaleFactor: 2,
   });
-  await seite.setContent(
+  await page.setContent(
     `<style>${GRUND}${e.css}</style>${e.body}`, { waitUntil: 'load' });
 
-  // Nachmessen statt vertrauen: Ein Banner, dessen Inhalt an den Rand stoesst,
-  // sieht auf einem schmalen Bildschirm abgeschnitten aus – und ob das
-  // passiert, haengt an der Schrift, nicht an der Absicht.
-  const luft = await seite.evaluate(() => {
-    const teile = [...document.body.children];
-    const r = teile.map((t) => t.getBoundingClientRect());
+  // Measure, don't trust: a banner whose content touches the edge looks
+  // clipped on a narrow screen - and whether that happens depends on the
+  // font, not the intent.
+  const luft = await page.evaluate(() => {
+    const parts = [...document.body.children];
+    const r = parts.map((t) => t.getBoundingClientRect());
     return {
-      links: Math.round(Math.min(...r.map((x) => x.left))),
-      rechts: Math.round(innerWidth - Math.max(...r.map((x) => x.right))),
-      oben: Math.round(Math.min(...r.map((x) => x.top))),
-      unten: Math.round(innerHeight - Math.max(...r.map((x) => x.bottom))),
+      left: Math.round(Math.min(...r.map((x) => x.left))),
+      right: Math.round(innerWidth - Math.max(...r.map((x) => x.right))),
+      peek: Math.round(Math.min(...r.map((x) => x.top))),
+      bottom: Math.round(innerHeight - Math.max(...r.map((x) => x.bottom))),
     };
   });
 
-  // Sind die Zeichen wirklich Zeichen – oder zwei leere Kaesten?
+  // Are the characters really characters - or two empty boxes?
   // -------------------------------------------------------------------------
-  // Fehlt die Schrift, setzt der Browser Ersatzkaesten. Die haben eine Breite,
-  // stehen an der richtigen Stelle und bestehen jede Messung, die nur die
-  // Geometrie anschaut. Der Unterschied liegt in der Farbe: Ochse und
-  // Mahjong-Stein sind bunt, ein Ersatzkasten ist es nie. Also wird gezaehlt,
-  // wie viele Bildpunkte in dem Feld ueberhaupt eine Farbe haben.
-  const zeichen = await seite.evaluate(() => {
+  // If the font is missing, the browser sets fallback boxes. Those have a
+  // width, sit in the right spot, and pass any check that only looks at
+  // geometry. The difference is in the color: the ox and the mahjong tile
+  // are colorful, a fallback box never is. So this counts how many pixels in
+  // the field actually have a color at all.
+  const zeichen = await page.evaluate(() => {
     const el = document.querySelector('.zeichen');
     if (!el) return null;
     const r = el.getBoundingClientRect();
@@ -273,23 +277,23 @@ for (const e of ENTWUERFE) {
       width: Math.ceil(r.width), height: Math.ceil(r.height) };
   });
 
-  const datei = path.join(root, 'preview', `banner-${e.nr}.png`);
-  await seite.screenshot({ path: datei });
-  const ausschnitt = zeichen && zeichen.width > 0
-    ? await seite.screenshot({ clip: zeichen }) : null;
-  await seite.close();
+  const file = path.join(root, 'preview', `banner-${e.nr}.png`);
+  await page.screenshot({ path: file });
+  const cutout = zeichen && zeichen.width > 0
+    ? await page.screenshot({ clip: zeichen }) : null;
+  await page.close();
 
-  const bunt = ausschnitt ? farbanteil(ausschnitt) : 0;
+  const bunt = cutout ? colorShare(cutout) : 0;
 
-  const eng = Math.min(luft.links, luft.rechts, luft.oben, luft.unten);
+  const eng = Math.min(luft.left, luft.right, luft.peek, luft.bottom);
   console.log(`  ${e.nr}. ${e.name}`);
-  console.log(`     Rand: ${luft.oben} oben, ${luft.rechts} rechts, `
-    + `${luft.unten} unten, ${luft.links} links`
+  console.log(`     Rand: ${luft.peek} peek, ${luft.right} right, `
+    + `${luft.bottom} bottom, ${luft.left} left`
     + `${eng < 40 ? `   << eng (${eng} px)` : ''}`);
   console.log(`     ${e.was}`);
   console.log(`     Zeichen: ${bunt} farbige Bildpunkte`
     + `${bunt < 200 ? '   << ERSATZKASTEN? Schrift pruefen' : ''}`);
-  console.log(`     ${path.relative(root, datei)}\n`);
+  console.log(`     ${path.relative(root, file)}\n`);
 }
 
 await browser.close();

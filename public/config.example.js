@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// Verbindung zum Supabase-Projekt.
-// Beide Werte stehen im Dashboard unter Project Settings → API und sind
-// öffentlich: Der anon-Key darf im Browser stehen, weil jeder Zugriff über
-// Row Level Security läuft. Der service_role-Key gehört NIEMALS hierher.
+// Connection to the Supabase project.
+// Both values are in the dashboard under Project Settings -> API, and both are
+// public: the anon key is allowed to sit in the browser, because every access
+// goes through Row Level Security. The service_role key NEVER belongs here.
 // ---------------------------------------------------------------------------
 
 const override = globalThis.ANSEM_CONFIG ?? {};

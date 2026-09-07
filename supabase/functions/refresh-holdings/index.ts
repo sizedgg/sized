@@ -1,16 +1,15 @@
 /**
- * Aktualisiert Token-Bestand und $-Wert in der Tabelle `wallets`.
+ * Refreshes token balance and $ value in the `wallets` table.
  *
- *   POST {}                                    mit Wallet-JWT  -> eigene Wallet
- *   POST { all: true, stale: 300 }             mit CRON_SECRET -> alte Einträge
- *   POST { all: true, votersOnly: true, stale: 60 }            -> nur Wallets,
- *        die in einer offenen Abstimmung eine Stimme haben
+ *   POST {}                                    with wallet JWT  -> own wallet
+ *   POST { all: true, stale: 300 }             with CRON_SECRET -> stale entries
+ *   POST { all: true, votersOnly: true, stale: 60 }             -> only wallets
+ *        that have a vote in an open poll
  *
- * Nur diese Funktion schreibt `wallets`; daran hängen alle Gewichte in Chat,
- * Abstimmungen und DM-Sortierung. Sinkt der Bestand einer Wallet, zieht ein
- * Trigger in der Datenbank ihre Stimmen in offenen Abstimmungen nach – der
- * `votersOnly`-Lauf ist deshalb der wichtigste: Er hält die laufende
- * Abstimmung ehrlich.
+ * Only this function writes `wallets`; every weight in chat, polls, and DM
+ * sorting hangs off it. If a wallet's balance drops, a trigger in the
+ * database pulls its votes in open polls down with it - the `votersOnly`
+ * run is therefore the most important one: it keeps a running poll honest.
  */
 import { serviceClient, loadConfig, json, fail, CORS, MOCK } from '../_shared/common.ts';
 import { verifyWalletJwt } from '../_shared/jwt.ts';
@@ -18,12 +17,12 @@ import { refreshWallet } from '../_shared/holdings.ts';
 import { tokenPrice } from '../_shared/solana.ts';
 
 /**
- * Zeichenweiser Vergleich in fester Zeit.
+ * Character-by-character comparison in constant time.
  *
- * Ein gewoehnliches !== bricht beim ersten Unterschied ab. Ueber das Netz ist
- * das kaum auszunutzen, aber verify/index.ts macht es an derselben Stelle
- * richtig – und zwei Massstaebe fuer dieselbe Sache in einem Projekt sind
- * schlechter als der strengere ueberall.
+ * An ordinary !== bails out at the first difference. Over the network that
+ * is barely exploitable, but verify/index.ts gets it right at the same
+ * spot - and two different standards for the same thing in one project
+ * are worse than the stricter one everywhere.
  */
 function gleich(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -33,33 +32,34 @@ function gleich(a: string, b: string): boolean {
 }
 
 /**
- * Sperrfrist zwischen zwei selbst ausgelösten Auffrischungen.
+ * Cooldown between two self-triggered refreshes.
  *
- * Sie schützt das RPC-Kontingent davor, dass jemand den Knopf im Sekundentakt
- * drückt. 60 Sekunden waren dafür zu lang: Genau im wichtigsten Moment – man
- * hat gerade Token gekauft und will schreiben – lieferte die Funktion eine
- * Minute lang stur die alte Null zurück, und der Knopf drehte sich dabei, als
- * hätte er etwas getan. 15 Sekunden bremsen Dauerdrücker genauso, sind aber
- * kürzer als die Geduld eines Menschen, der auf seinen Bestand wartet.
+ * It protects the RPC quota from someone hammering the button every
+ * second. 60 seconds were too long for that: right at the moment that
+ * mattered most - you just bought tokens and want to post - the function
+ * stubbornly kept returning the old zero for a full minute, and the
+ * button spun as if it had done something. 15 seconds slow down repeat
+ * clickers just as well, but are shorter than the patience of a person
+ * waiting on their balance.
  */
 const MIN_INTERVAL_MS = Number(Deno.env.get('HOLDINGS_MIN_INTERVAL_SEC') ?? 15) * 1000;
 const CRON_BATCH = 120;
 
 /**
- * Wie viele Wallets gleichzeitig gelesen werden. Nacheinander wäre bei 120
- * Wallets die Laufzeitgrenze der Function erreicht, bevor der Stapel durch
- * ist; alles auf einmal würde die RPC mit einem Schlag treffen und in ein
- * Ratenlimit laufen. Acht ist der Mittelweg.
+ * How many wallets are read at once. One at a time would hit the
+ * function's runtime limit before getting through 120 wallets; all at
+ * once would slam the RPC in one shot and run into a rate limit. Eight is
+ * the middle ground.
  */
 const PARALLEL = 8;
 
-/** Führt `arbeit` über alle Einträge aus, aber höchstens `PARALLEL` zugleich. */
-async function inHaeppchen<T>(items: T[], arbeit: (item: T) => Promise<void>) {
+/** Runs `arbeit` over all entries, but at most `PARALLEL` at a time. */
+async function inChunks<T>(items: T[], arbeit: (item: T) => Promise<void>) {
   let i = 0;
-  const laeufer = Array.from({ length: Math.min(PARALLEL, items.length) }, async () => {
+  const runner = Array.from({ length: Math.min(PARALLEL, items.length) }, async () => {
     while (i < items.length) await arbeit(items[i++]);
   });
-  await Promise.all(laeufer);
+  await Promise.all(runner);
 }
 
 const db = serviceClient();
@@ -74,22 +74,23 @@ Deno.serve(async (req) => {
     const cfg = await loadConfig(db);
     if (!cfg.ansem_mint) return fail('Token mint is not configured', 503);
 
-    // --- Kurs-Takt: ein Kurs, eine Anweisung, alle Wallets ---
+    // --- Price tick: one price, one statement, all wallets ---
     //
-    // Das ist der Lauf, der jede Minute läuft. Er liest keine einzige Wallet
-    // von der Chain, sondern holt genau einen Kurs und lässt die Datenbank ihn
-    // auf alle Bestände anwenden. Dadurch ändern sich alle Beträge im selben
-    // Augenblick, statt über eine Minute verteilt einzeln zu springen.
+    // This is the run that fires every minute. It does not read a single
+    // wallet from the chain; instead it fetches exactly one price and has
+    // the database apply it to every balance. That way all amounts change
+    // in the same instant, instead of jumping individually spread over a
+    // minute.
     if (body.prices === true) {
       const secret = Deno.env.get('CRON_SECRET');
       if (!secret || !gleich(req.headers.get('x-cron-secret') ?? '', secret)) return fail('Not allowed', 403);
 
       const price = MOCK ? 0.0042 : await tokenPrice(cfg.ansem_mint);
 
-      // Ein fehlgeschlagener Kursabruf gibt 0 zurück. Den anzuwenden hieße,
-      // jeden Bestand im Haus auf null zu setzen – Chat-Filter leer,
-      // Schreibsperren überall, Stimmgewichte weg. Lieber diesen Takt
-      // auslassen; der letzte bekannte Kurs bleibt stehen.
+      // A failed price fetch returns 0. Applying that would mean setting
+      // every balance in the house to null - chat filter empty, write
+      // locks everywhere, vote weights gone. Better to skip this tick;
+      // the last known price stays in place.
       if (!(price > 0)) return fail('Price lookup failed - keeping the last known price', 503);
 
       const { data: touched, error } = await db.rpc('apply_token_price', { p_price: price });
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
       return json({ price, wallets: Number(touched ?? 0) });
     }
 
-    // --- Cron-Variante: viele Wallets auf einmal auffrischen ---
+    // --- Cron variant: refresh many wallets at once ---
     if (body.all === true) {
       const secret = Deno.env.get('CRON_SECRET');
       if (!secret || !gleich(req.headers.get('x-cron-secret') ?? '', secret)) return fail('Not allowed', 403);
@@ -109,11 +110,11 @@ Deno.serve(async (req) => {
       });
       if (error) throw new Error(error.message);
 
-      // Der Kurs ist für alle derselbe – einmal holen statt einmal pro Wallet.
+      // The price is the same for everyone - fetch it once instead of once per wallet.
       const price = MOCK ? 0.0042 : await tokenPrice(cfg.ansem_mint);
 
       let updated = 0;
-      await inHaeppchen(rows ?? [], async (row: { address: string }) => {
+      await inChunks(rows ?? [], async (row: { address: string }) => {
         try {
           await refreshWallet(db, row.address, cfg.ansem_mint, price > 0 ? price : undefined);
           updated++;
@@ -122,7 +123,7 @@ Deno.serve(async (req) => {
       return json({ updated, considered: rows?.length ?? 0, votersOnly: body.votersOnly === true });
     }
 
-    // --- Normalfall: der Aufrufer frischt seine eigene Wallet auf ---
+    // --- Normal case: the caller refreshes their own wallet ---
     const auth = req.headers.get('authorization') ?? '';
     const claims = auth.startsWith('Bearer ')
       ? await verifyWalletJwt(Deno.env.get('APP_JWT_SECRET')!, auth.slice(7).trim())
@@ -132,10 +133,10 @@ Deno.serve(async (req) => {
     const { data: existing } = await db.from('wallets')
       .select('ui_amount, usd_value, updated_at').eq('address', claims.wallet).maybeSingle();
 
-    // Innerhalb der Sperrfrist wird nicht neu gelesen. Wichtig ist, dass der
-    // Aufrufer das erfährt: Ein unveränderter Wert ohne Erklärung ist von
-    // einem kaputten Knopf nicht zu unterscheiden. retryInSec sagt, wie lange
-    // es noch dauert.
+    // Within the cooldown, nothing is re-read. What matters is that the
+    // caller finds out: an unchanged value without explanation is
+    // indistinguishable from a broken button. retryInSec says how much
+    // longer it will take.
     if (existing && Date.now() - new Date(existing.updated_at).getTime() < MIN_INTERVAL_MS) {
       const restMs = MIN_INTERVAL_MS - (Date.now() - new Date(existing.updated_at).getTime());
       return json({

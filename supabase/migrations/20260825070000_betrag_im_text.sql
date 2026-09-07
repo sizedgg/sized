@@ -1,18 +1,18 @@
 -- ============================================================================
--- Der Betrag in den Sperrmeldungen hatte einen Punkt zu viel
+-- The amount in the lockout messages had one dot too many
 --
--- Beide Meldungen bauten den Betrag mit to_char(x, 'FM999999990.99'). Das FM
--- entfernt zwar die überflüssigen Nullen, aber nicht den Dezimalpunkt davor.
--- Bei einer glatten Schwelle stand deshalb:
+-- Both messages built the amount with to_char(x, 'FM999999990.99'). The FM
+-- strips the redundant zeros, but not the decimal point in front of them.
+-- So at a round threshold it read:
 --
 --     You need at least $10. in $ANSEM to message Ansem
 --
--- Ein Punkt mitten im Satz, direkt hinter der Zahl. Das liest sich wie ein
--- abgeschnittener Betrag – man fragt sich, ob da noch Nachkommastellen
--- fehlen. Bei 10.50 fiel es nicht auf, deshalb ist es lange durchgerutscht.
+-- A dot in the middle of the sentence, right after the number. Reads like a
+-- truncated amount - you wonder if decimal places are missing. At 10.50 it
+-- didn't stand out, which is why it slipped through for so long.
 --
--- app.betrag_text() macht daraus eine Stelle, an der sich das reparieren
--- lässt, statt die Formatierung an zwei Orten zu pflegen.
+-- app.betrag_text() turns this into one place where that can be fixed,
+-- instead of maintaining the formatting in two spots.
 -- ============================================================================
 
 create or replace function app.betrag_text(v numeric)
@@ -29,8 +29,8 @@ comment on function app.betrag_text(numeric) is
 -- ----------------------------------------------------------------------------
 -- Chat
 -- ----------------------------------------------------------------------------
--- Unverändert bis auf die Zeile mit der Meldung. Die Begründungen zur
--- Absenderprüfung stehen im Kopf von 20260825010000_min_balance_to_chat.sql.
+-- Unchanged except for the line with the message. The reasoning behind the
+-- sender check is at the top of 20260825010000_min_balance_to_chat.sql.
 
 create or replace function app.rate_limit_messages()
 returns trigger
@@ -50,13 +50,13 @@ begin
     return new;
   end if;
 
-  -- Nicht new.wallet: Trigger auf derselben Tabelle feuern in alphabetischer
-  -- Reihenfolge, und die Absenderkorrektur läuft nach dieser Prüfung.
+  -- Not new.wallet: triggers on the same table fire in alphabetical order,
+  -- and the sender correction runs after this check.
   sender := coalesce(app.jwt_wallet(), new.wallet);
 
   select * into cfg from public.app_config where id = 1;
 
-  -- ---- Mindestbestand ------------------------------------------------------
+  -- ---- Minimum balance -------------------------------------------------
   if coalesce(cfg.min_chat_usd, 0) > 0 then
     select coalesce(w.usd_value, 0) into bal
     from public.wallets w
@@ -69,12 +69,12 @@ begin
     end if;
   end if;
 
-  -- ---- Keine Links ---------------------------------------------------------
+  -- ---- No links -----------------------------------------------------------
   if app.contains_link(new.body) then
     raise exception 'Links are not allowed in chat - send it as a DM instead';
   end if;
 
-  -- ---- Takt ----------------------------------------------------------------
+  -- ---- Rate limit -----------------------------------------------------
   select
     count(*) filter (where created_at > now() - interval '1 minute'),
     count(*)
@@ -90,7 +90,7 @@ begin
     raise exception 'Message limit reached - try again later';
   end if;
 
-  -- ---- Keine zweimal identische Nachricht hintereinander --------------------
+  -- ---- No identical message twice in a row ---------------------------
   select regexp_replace(lower(btrim(body)), '\s+', ' ', 'g')
   into last_body
   from public.messages
@@ -111,8 +111,8 @@ $$;
 -- ----------------------------------------------------------------------------
 -- DMs
 -- ----------------------------------------------------------------------------
--- Ebenfalls unverändert bis auf die Meldung. Warum hier app.is_admin() steht
--- und nicht new.from_admin, erklärt der Kopf von
+-- Also unchanged except for the message. Why app.is_admin() is used here
+-- instead of new.from_admin is explained at the top of
 -- 20260825030000_min_balance_for_dms.sql.
 
 create or replace function app.rate_limit_dms()
@@ -136,7 +136,7 @@ begin
 
   select * into cfg from public.app_config where id = 1;
 
-  -- ---- Mindestbestand ------------------------------------------------------
+  -- ---- Minimum balance -------------------------------------------------
   if coalesce(cfg.min_dm_usd, 0) > 0 then
     select coalesce(w.usd_value, 0) into bal
     from public.wallets w
@@ -149,7 +149,7 @@ begin
     end if;
   end if;
 
-  -- ---- Takt ----------------------------------------------------------------
+  -- ---- Rate limit -----------------------------------------------------
   select
     count(*) filter (where created_at > now() - interval '1 minute'),
     count(*)

@@ -1,30 +1,31 @@
 // ============================================================================
-// Vorschaubilder: Rund um das Solana-Mint
+// Preview images: around the Solana mint color
 //
-// Aus der ersten Runde ist Fassung 1 übrig geblieben – der Grünton aus dem
-// Solana-Logo. Hier wird ausgefächert, was "in diese Richtung" alles heissen
-// kann, und zwar entlang von ZWEI Achsen, die man sonst durcheinanderwirft:
+// Version 1 is what's left from the first round - the green pulled from the
+// Solana logo. This one fans out what "in that direction" can mean, along
+// TWO axes that otherwise get mixed up:
 //
-//   Der TON  – wo genau zwischen Türkis, Mint und Gras die Farbe sitzt.
-//   Die LAUTSTÄRKE – wie kräftig die Fläche gegenüber dem Zeilengrund steht.
+//   The HUE - exactly where between turquoise, mint and grass the color sits.
+//   The LOUDNESS - how forcefully the area stands out against the row
+//   background.
 //
-// Beides gleichzeitig zu ändern führt beim Vergleichen in die Irre: Ein
-// wärmeres Grün, das nebenbei dichter aufgetragen ist, wirkt "besser", und
-// man weiss hinterher nicht, was davon der Grund war. Deshalb:
+// Changing both at once is misleading when comparing: a warmer green that's
+// also laid on more densely looks "better", and afterwards you don't know
+// which of the two caused it. Hence:
 //
-//   Fassungen 0–4 haben ALLE denselben Helligkeitssprung wie die heutige
-//   Füllung (2,06:1). Sie unterscheiden sich nur im Ton.
-//   Fassungen 5–8 sind derselbe Ton (das reine Solana-Mint) in vier
-//   Lautstärken. Sie unterscheiden sich nur in der Deckkraft.
+//   Versions 0-4 ALL have the same brightness jump as today's fill (2.06:1).
+//   They differ only in hue.
+//   Versions 5-8 are the same hue (pure Solana mint) at four loudness
+//   levels. They differ only in opacity.
 //
-// Die Grenze nach oben ist keine Geschmacksfrage. Auf der Füllung liegen zwei
-// Dinge: der Antworttext (--text) und die Stimmenzahl (--votes). Je dichter
-// die Fläche, desto knapper wird beides – die Stimmenzahl zuerst, weil sie
-// die dunklere der beiden ist. Sie stand hier schon einmal bei 1,3:1 und war
-// unsichtbar. Dieses Blatt rechnet jede Fassung nach und schreibt es an die
-// Überschrift; was unter 4:1 fällt, ist ausdrücklich markiert.
+// The upper limit isn't a matter of taste. Two things sit on the fill: the
+// answer text (--text) and the vote count (--votes). The denser the area,
+// the tighter both get - the vote count first, since it's the darker of the
+// two. It stood at 1.3:1 here once before and was invisible. This sheet
+// computes every version and writes it into the heading; anything falling
+// below 4:1 is marked explicitly.
 //
-// Erzeugt preview/mint-*.png und preview/mint-uebersicht.png
+// Produces preview/mint-*.png and preview/mint-uebersicht.png
 //   node scripts/vorschau-balken-mint.mjs
 // ============================================================================
 
@@ -38,26 +39,26 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
 
-const zeichner = schneide('const cssWert =', '\nasync function ladeOgBildHoch');
-const markup = schneide('function pollHtml(p) {', '\n/**\n * Eine Abstimmung löschen');
-const formate = schneide('const nfGanz =', 'const ganzeZahl')
-  + schneide('const ganzeZahl =', '\n');
-const escFn = schneide('const esc = (s) =>', '\n\n');
-const symbole = schneide('const LINK_SVG =', '\n/**\n * Die Adresse einer einzelnen');
+const drawSource = cut('const cssWert =', '\nasync function ladeOgBildHoch');
+const markup = cut('function pollHtml(p) {', 'async function deletePoll(id) {');
+const formate = cut('const nfGanz =', 'const wholeNumber')
+  + cut('const wholeNumber =', '\n');
+const escFn = cut('const esc = (s) =>', '\n\n');
+const symbole = cut('const LINK_SVG =', 'const pollLink = (id) => `${location.origin}/p/${id}`;');
 
 const CSS_STELLE = 'background: rgba(var(--accent-rgb), .24);';
-const JS_STELLE = 'ctx.fillStyle = `rgba(${farbe.akzentRgb}, .24)`;';
+const JS_STELLE = 'ctx.fillStyle = `rgba(${color.akzentRgb}, .24)`;';
 if (!css.includes(CSS_STELLE)) throw new Error('Die Füllung im Blatt sieht anders aus als erwartet');
-if (!zeichner.includes(JS_STELLE)) throw new Error('Die Füllung im Zeichner sieht anders aus als erwartet');
+if (!drawSource.includes(JS_STELLE)) throw new Error('Die Füllung im Zeichner sieht anders aus als erwartet');
 
-// --- Farbrechnung ----------------------------------------------------------
+// --- Color math ----------------------------------------------------------
 const hex = (h) => {
   const s = h.replace('#', '');
   return [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16));
@@ -70,7 +71,7 @@ const kontrast = (a, b) => {
   const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
 };
-const mische = (v, a, h) => v.map((c, i) => Math.round(a * c + (1 - a) * h[i]));
+const mix = (v, a, h) => v.map((c, i) => Math.round(a * c + (1 - a) * h[i]));
 
 const cssVar = (name) => {
   const m = new RegExp(`\\n\\s*${name}:\\s*([^;]+);`).exec(css);
@@ -82,13 +83,13 @@ const GRUND = hex(cssVar('--bg-3'));
 const TEXT = hex(cssVar('--text'));
 const VOTES = hex(cssVar('--votes'));
 const AKZENT = hex(cssVar('--accent'));
-const ZIEL_SPRUNG = kontrast(mische(AKZENT, 0.24, GRUND), GRUND);
+const ZIEL_SPRUNG = kontrast(mix(AKZENT, 0.24, GRUND), GRUND);
 
-const alphaFuer = (farbe) => {
+const alphaFor = (color) => {
   let lo = 0, hi = 1;
   for (let i = 0; i < 40; i++) {
     const m = (lo + hi) / 2;
-    if (kontrast(mische(farbe, m, GRUND), GRUND) < ZIEL_SPRUNG) lo = m; else hi = m;
+    if (kontrast(mix(color, m, GRUND), GRUND) < ZIEL_SPRUNG) lo = m; else hi = m;
   }
   return Math.round(((lo + hi) / 2) * 100) / 100;
 };
@@ -96,27 +97,27 @@ const alphaFuer = (farbe) => {
 const MINT = '#14f195';
 
 const FASSUNGEN = [
-  // --- Der Ton, alle gleich laut -------------------------------------------
-  { gruppe: 'Der Ton – alle gleich laut', datei: 'pur', name: 'Solana-Mint, unverändert', hex: MINT,
+  // --- The hue, all equally loud -------------------------------------------
+  { gruppe: 'Der Ton – alle gleich laut', file: 'pur', name: 'Solana-Mint, unverändert', hex: MINT,
     hinweis: 'Der Ton aus der ersten Runde, unangetastet. Der Bezugspunkt für alles darunter.' },
-  { gruppe: 'Der Ton – alle gleich laut', datei: 'tuerkis', name: 'Richtung Türkis', hex: '#12e8c4',
+  { gruppe: 'Der Ton – alle gleich laut', file: 'tuerkis', name: 'Richtung Türkis', hex: '#12e8c4',
     hinweis: 'Ein Stück ins Blaugrüne. Sitzt näher am kühlen Rest des Blattes und liest sich weniger als "Signalfarbe" – dafür ist die Herkunft aus dem Solana-Logo nicht mehr abzulesen.' },
-  { gruppe: 'Der Ton – alle gleich laut', datei: 'gras', name: 'Richtung Gras', hex: '#5cf07a',
+  { gruppe: 'Der Ton – alle gleich laut', file: 'gras', name: 'Richtung Gras', hex: '#5cf07a',
     hinweis: 'Ein Stück ins Gelbgrüne. Wärmer und freundlicher, aber genau dieser Bereich ist der, in dem Grün als "erledigt, richtig, bestanden" gelesen wird – bei einer Abstimmung ohne richtige Antwort eine Aussage, die niemand gemeint hat.' },
-  { gruppe: 'Der Ton – alle gleich laut', datei: 'gedeckt', name: 'Gedecktes Mint', hex: '#5cc9a2',
+  { gruppe: 'Der Ton – alle gleich laut', file: 'gedeckt', name: 'Gedecktes Mint', hex: '#5cc9a2',
     hinweis: 'Derselbe Ton, aus dem der Leuchtstift heraus ist. Wirkt gedruckt statt beleuchtet und passt damit zum flachen Kartenhintergrund; das Logo klingt noch an, drängt sich aber nicht auf.' },
-  { gruppe: 'Der Ton – alle gleich laut', datei: 'tief', name: 'Tiefes Sattgrün', hex: '#0aa96f',
+  { gruppe: 'Der Ton – alle gleich laut', file: 'tief', name: 'Tiefes Sattgrün', hex: '#0aa96f',
     hinweis: 'Dunkler und satter. Weil alle Fassungen auf denselben Helligkeitssprung gestellt sind, braucht dieser Ton am meisten Deckkraft – die Fläche ist dadurch fast deckend und die Farbe entsprechend rein.' },
 
-  // --- Die Lautstärke, ein Ton ---------------------------------------------
-  { gruppe: 'Die Lautstärke – alles Solana-Mint', datei: 'leise', name: 'Leiser', hex: MINT, feste: 0.20,
+  // --- The loudness, one hue -----------------------------------------------
+  { gruppe: 'Die Lautstärke – alles Solana-Mint', file: 'leise', name: 'Leiser', hex: MINT, feste: 0.20,
     hinweis: 'Deutlich zurückgenommen: Die Farbe ist zu erkennen, der Balken bleibt aber Hintergrund. Die Kante, an der der Anteil endet, wird dabei weicher ablesbar.' },
-  { gruppe: 'Die Lautstärke – alles Solana-Mint', datei: 'gleich', name: 'Wie in der ersten Runde', hex: MINT, feste: 0.29,
+  { gruppe: 'Die Lautstärke – alles Solana-Mint', file: 'gleich', name: 'Wie in der ersten Runde', hex: MINT, feste: 0.29,
     hinweis: 'Derselbe Helligkeitssprung wie die heutige weisse Füllung. Identisch mit Fassung 0 – hier nur noch einmal in der Reihe, damit man die Nachbarn daneben halten kann.' },
-  { gruppe: 'Die Lautstärke – alles Solana-Mint', datei: 'laut', name: 'Kräftiger', hex: MINT, feste: 0.42,
+  { gruppe: 'Die Lautstärke – alles Solana-Mint', file: 'laut', name: 'Kräftiger', hex: MINT, feste: 0.42,
     hinweis: 'Der Balken wird zur Hauptsache in der Zeile. Der Antworttext liegt jetzt auf einer deutlich helleren Fläche – die harte Kante quer durch ein Wort tritt entsprechend stärker hervor.' },
-  { gruppe: 'Die Lautstärke – alles Solana-Mint', datei: 'sehrlaut', name: 'Sehr kräftig', hex: MINT, feste: 0.60,
-    hinweis: 'Die Obergrenze, um zu zeigen, wo es kippt. Ab hier gewinnt die Fläche gegen den Text, der darauf steht – die Zahlen an der Überschrift sagen, ob das noch trägt.' },
+  { gruppe: 'Die Lautstärke – alles Solana-Mint', file: 'sehrlaut', name: 'Sehr kräftig', hex: MINT, feste: 0.60,
+    hinweis: 'Die Obergrenze, um zu show, wo es kippt. Ab hier gewinnt die Fläche gegen den Text, der darauf steht – die Zahlen an der Überschrift sagen, ob das noch trägt.' },
 ];
 
 console.log(`\n  Maßstab: die heutige weisse Füllung springt ${ZIEL_SPRUNG.toFixed(2)}:1 vom Zeilengrund ab.\n`);
@@ -124,10 +125,10 @@ console.log('  ' + 'Fassung'.padEnd(28) + 'Deckkraft'.padEnd(11) + 'Sprung'.padE
   + 'Antwort'.padEnd(10) + 'Stimmen');
 
 for (const f of FASSUNGEN) {
-  const farbe = hex(f.hex);
-  f.alpha = f.feste ?? alphaFuer(farbe);
-  f.rgb = farbe.join(', ');
-  const m = mische(farbe, f.alpha, GRUND);
+  const color = hex(f.hex);
+  f.alpha = f.feste ?? alphaFor(color);
+  f.rgb = color.join(', ');
+  const m = mix(color, f.alpha, GRUND);
   f.mischung = m;
   f.sprung = kontrast(m, GRUND);
   f.aufText = kontrast(TEXT, m);
@@ -137,7 +138,7 @@ for (const f of FASSUNGEN) {
     + `${(f.alpha * 100).toFixed(0)} %`.padEnd(11)
     + `${f.sprung.toFixed(2)}:1`.padEnd(9)
     + `${f.aufText.toFixed(1)}:1`.padEnd(10)
-    + `${f.aufVotes.toFixed(1)}:1${f.knapp ? '   <- unter 4:1' : ''}`);
+    + `${f.aufVotes.toFixed(1)}:1${f.knapp ? '   <- under 4:1' : ''}`);
 }
 
 const eng = FASSUNGEN.filter((f) => f.knapp);
@@ -145,7 +146,7 @@ console.log(eng.length
   ? `\n  Unter 4:1 bei der Stimmenzahl: ${eng.map((f) => f.name).join(', ')}`
   : '\n  Alle Fassungen halten die Stimmenzahl über 4:1.');
 
-// --- Bilder ----------------------------------------------------------------
+// --- Images ----------------------------------------------------------------
 const opt = (id, label, votes, usd, share) => ({ id, label, votes, usd, share });
 const POLL = {
   id: 1, closed: false, myOptionId: 2, totalVotes: 191, totalUsd: 781420,
@@ -170,11 +171,11 @@ fs.mkdirSync(ausgabe, { recursive: true });
 
 const ergebnisse = [];
 for (const f of FASSUNGEN) {
-  const neuCss = `rgba(${f.rgb}, ${f.alpha})`;
-  const seite = await browser.newPage({ viewport: { width: 760, height: 420 } });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.addStyleTag({ content: `.opt-fill { background: ${neuCss} !important; }` });
-  await seite.addScriptTag({
+  const newCss = `rgba(${f.rgb}, ${f.alpha})`;
+  const page = await browser.newPage({ viewport: { width: 760, height: 420 } });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.addStyleTag({ content: `.opt-fill { background: ${newCss} !important; }` });
+  await page.addScriptTag({
     content: `
       const state = { cfg: { symbol: 'ANSEM' }, me: { isAdmin: false }, polls: [] };
       const fmtUsd = (n) => '$' + Math.round(Number(n)).toLocaleString('en-US');
@@ -183,26 +184,26 @@ for (const f of FASSUNGEN) {
       ${formate}
       ${symbole}
       ${markup}
-      ${zeichner.replace(JS_STELLE, 'ctx.fillStyle = ' + JSON.stringify(neuCss) + ';')}
+      ${drawSource.replace(JS_STELLE, 'ctx.fillStyle = ' + JSON.stringify(newCss) + ';')}
       window.pollHtml = pollHtml;
-      window.zeichnePoll = zeichnePoll;`,
+      window.drawPoll = drawPoll;`,
   });
-  await seite.evaluate((p) => { document.querySelector('#ziel').innerHTML = window.pollHtml(p); }, POLL);
-  await seite.waitForTimeout(120);
+  await page.evaluate((p) => { document.querySelector('#ziel').innerHTML = window.pollHtml(p); }, POLL);
+  await page.waitForTimeout(120);
 
-  const seitenBild = await seite.locator('#ziel').screenshot();
-  const daten = await seite.evaluate(async (p) => ({
-    gross: (await window.zeichnePoll(p)).toDataURL('image/png'),
+  const pageImage = await page.locator('#ziel').screenshot();
+  const daten = await page.evaluate(async (p) => ({
+    big: (await window.drawPoll(p)).toDataURL('image/png'),
   }), POLL);
-  await seite.close();
+  await page.close();
 
-  fs.writeFileSync(path.join(ausgabe, `mint-${f.datei}-seite.png`), seitenBild);
-  fs.writeFileSync(path.join(ausgabe, `mint-${f.datei}-download.png`),
-    Buffer.from(daten.gross.split(',')[1], 'base64'));
-  ergebnisse.push({ seite: 'data:image/png;base64,' + seitenBild.toString('base64'), ...daten });
+  fs.writeFileSync(path.join(ausgabe, `mint-${f.file}-seite.png`), pageImage);
+  fs.writeFileSync(path.join(ausgabe, `mint-${f.file}-download.png`),
+    Buffer.from(daten.big.split(',')[1], 'base64'));
+  ergebnisse.push({ page: 'data:image/png;base64,' + pageImage.toString('base64'), ...daten });
 }
 
-let letzteGruppe = null;
+let lastGroup = null;
 const blatt = `<!doctype html>
 <meta charset="utf-8">
 <style>${css}</style>
@@ -222,18 +223,18 @@ const blatt = `<!doctype html>
   .knapp { color: var(--warn); }
   p.t { margin: .3rem 0 .8rem; font-size: .84rem; color: #8b93a7; line-height: 1.55; max-width: 118ch; }
   .paar { display: grid; grid-template-columns: 1.05fr 1fr; gap: 20px; align-items: start; }
-  .beschriftung { font-size: .72rem; color: var(--dimmer); margin: 0 0 .35rem; }
+  .caption { font-size: .72rem; color: var(--dimmer); margin: 0 0 .35rem; }
   img { width: 100%; display: block; border-radius: 8px; }
   .buehne { background: #16181c; padding: 12px; border-radius: 12px; }
 </style>
 <h1>Rund um das Solana-Mint</h1>
 <p class="lead">Zwei Achsen, getrennt gehalten. Oben ändert sich nur der <b>Ton</b> – alle fünf Fassungen springen
-gleich weit vom Zeilengrund ab (${ZIEL_SPRUNG.toFixed(2)}:1), sind also gleich laut. Unten ändert sich nur die
+gleich far vom Zeilengrund ab (${ZIEL_SPRUNG.toFixed(2)}:1), sind also gleich laut. Unten ändert sich nur die
 <b>Lautstärke</b>, bei ein und demselben Ton. An jeder Überschrift steht, wie gut Antworttext und Stimmenzahl auf
 der Füllung noch lesbar sind; die Stimmenzahl ist die kritische.</p>
 ${FASSUNGEN.map((f, i) => {
-  const kopf = f.gruppe !== letzteGruppe ? `<h3>${(letzteGruppe = f.gruppe)}</h3>` : '';
-  return `${kopf}
+  const header = f.gruppe !== lastGroup ? `<h3>${(lastGroup = f.gruppe)}</h3>` : '';
+  return `${header}
 <section>
   <h2><span class="nr">${i}</span>
     <span class="probe" style="background: rgba(${f.rgb}, ${f.alpha})"></span>${f.name}
@@ -242,16 +243,16 @@ ${FASSUNGEN.map((f, i) => {
       · <span class="${f.knapp ? 'knapp' : ''}">Stimmen ${f.aufVotes.toFixed(1)}:1${f.knapp ? ' – zu knapp' : ''}</span></span></h2>
   <p class="t">${f.hinweis}</p>
   <div class="paar">
-    <div><p class="beschriftung">Auf der Seite</p><div class="buehne"><img src="${ergebnisse[i].seite}"></div></div>
-    <div><p class="beschriftung">Bild zum Herunterladen</p><div class="buehne"><img src="${ergebnisse[i].gross}"></div></div>
+    <div><p class="caption">Auf der Seite</p><div class="buehne"><img src="${ergebnisse[i].page}"></div></div>
+    <div><p class="caption">Bild zum Herunterladen</p><div class="buehne"><img src="${ergebnisse[i].big}"></div></div>
   </div>
 </section>`;
 }).join('')}`;
 
-const seite = await browser.newPage({ viewport: { width: 1700, height: 1200 }, deviceScaleFactor: 1.5 });
-await seite.setContent(blatt);
-await seite.waitForTimeout(700);
-await seite.screenshot({ path: path.join(ausgabe, 'mint-uebersicht.png'), fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1700, height: 1200 }, deviceScaleFactor: 1.5 });
+await page.setContent(blatt);
+await page.waitForTimeout(700);
+await page.screenshot({ path: path.join(ausgabe, 'mint-uebersicht.png'), fullPage: true });
 await browser.close();
 server.close();
 

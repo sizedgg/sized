@@ -1,20 +1,20 @@
 -- ============================================================================
--- Rate-Limits
+-- Rate limits
 --
--- RLS regelt, WAS jemand darf – nicht, WIE OFT. Eine verifizierte Wallet
--- könnte den Chat sonst mit einer Schleife fluten, und das kostet nicht nur
--- Nerven, sondern Egress und Realtime-Nachrichten.
+-- RLS governs WHAT someone may do - not HOW OFTEN. A verified wallet could
+-- otherwise flood the chat with a loop, and that costs more than nerves -
+-- it costs egress and realtime messages.
 --
--- Bewusst in der Datenbank und nicht im Frontend: Der Browser spricht direkt
--- mit PostgREST, ein Limit im JavaScript wäre eine Höflichkeitsbitte.
+-- Deliberately in the database and not the frontend: the browser talks
+-- directly to PostgREST, a limit in JavaScript would be a polite request.
 -- ============================================================================
 
--- Für die Zählfenster
+-- For the counting windows
 create index if not exists idx_messages_wallet_time on public.messages (wallet, created_at desc);
 create index if not exists idx_dms_wallet_time      on public.dms (wallet, created_at desc);
 
 -- ----------------------------------------------------------------------------
--- Chat: 10 Nachrichten pro Minute, 120 pro Stunde. Ansem ist ausgenommen.
+-- Chat: 10 messages per minute, 120 per hour. Ansem is exempt.
 -- ----------------------------------------------------------------------------
 
 create or replace function app.rate_limit_messages()
@@ -56,8 +56,8 @@ create trigger trg_messages_rate_limit
   for each row execute function app.rate_limit_messages();
 
 -- ----------------------------------------------------------------------------
--- DMs: 5 pro Minute, 30 pro Stunde – Ansems Posteingang soll lesbar bleiben.
--- Antworten von Ansem selbst sind ausgenommen.
+-- DMs: 5 per minute, 30 per hour - Ansem's inbox is meant to stay readable.
+-- Replies from Ansem himself are exempt.
 -- ----------------------------------------------------------------------------
 
 create or replace function app.rate_limit_dms()
@@ -100,12 +100,13 @@ create trigger trg_dms_rate_limit
   for each row execute function app.rate_limit_dms();
 
 -- ----------------------------------------------------------------------------
--- Login-Beträge gegen Erschöpfung schützen
+-- Protect login amounts against exhaustion
 --
--- Jeder offene Login belegt einen von rund 100.000 möglichen Beträgen. Wer
--- massenhaft Challenges für erfundene Adressen anlegt, könnte den Vorrat
--- leerräumen und damit alle Logins blockieren. Diese Funktion gibt der Edge
--- Function eine Bremse an die Hand: Wird es eng, wird der Andrang sichtbar.
+-- Every open login occupies one of roughly 100,000 possible amounts.
+-- Anyone creating challenges for invented addresses en masse could empty
+-- out the supply and thereby block every login. This function gives the
+-- edge function a brake to work with: when it gets tight, the surge
+-- becomes visible.
 -- ----------------------------------------------------------------------------
 
 create or replace function public.pending_challenge_count()
@@ -120,7 +121,7 @@ $$;
 
 revoke all on function public.pending_challenge_count() from public, anon, authenticated;
 
--- Abgelaufene Challenges freigeben, damit ihr Betrag wieder nutzbar wird.
+-- Release expired challenges so their amount becomes usable again.
 create or replace function public.expire_stale_challenges()
 returns integer
 language sql

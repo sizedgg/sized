@@ -1,7 +1,7 @@
 // ============================================================================
-// Kontrollblick auf die Laufzeit: das Formular und vier Zustände der Kopfzeile.
+// Sanity check on the deadline: the form and four states of the header line.
 //
-// Schneidet Blatt und Markup wörtlich aus der Quelle und ändert nichts.
+// Cuts the stylesheet and markup verbatim from the source and changes nothing.
 //
 //   node scripts/vorschau-frist.mjs
 // ============================================================================
@@ -17,25 +17,25 @@ const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-const zeit = schneide('function fristText(closesAt)', '\n// Unter einer Stunde');
-const zeile = schneide('const BALD_MS =', '\n/**\n * Der Zeiger');
-const markup = schneide('function pollHtml(p) {', '\n/**\n * Eine Abstimmung löschen');
-const formate = schneide('const nfGanz =', 'const ganzeZahl')
-  + schneide('const ganzeZahl =', '\n');
-const escFn = schneide('const esc = (s) =>', '\n\n');
-const symbole = schneide('const LINK_SVG =', '\n/**\n * Die Adresse einer einzelnen');
+const zeit = cut('function fristText(closesAt)', 'const BALD_MS = 60 * 60 * 1000;');
+const line = cut('const BALD_MS =', 'let fristT = null;');
+const markup = cut('function pollHtml(p) {', 'async function deletePoll(id) {');
+const formate = cut('const nfGanz =', 'const wholeNumber')
+  + cut('const wholeNumber =', '\n');
+const escFn = cut('const esc = (s) =>', '\n\n');
+const symbole = cut('const LINK_SVG =', 'const pollLink = (id) => `${location.origin}/p/${id}`;');
 
 const formular = /<div id="poll-admin"[\s\S]*?\n    <\/div>/.exec(html);
 if (!formular) throw new Error('Das Anlegeformular sieht anders aus als erwartet');
 
 const M = 60_000, H = 60 * M, T = 24 * H;
-const FAELLE = [
+const CASES = [
   { name: '3 Tage', ms: 3 * T + 5 * H + 2000 },
   { name: '5 Stunden', ms: 5 * H + 12 * M + 2000 },
   { name: 'Unter einer Stunde', ms: 20 * M + 2000 },
@@ -47,7 +47,7 @@ const server = http.createServer((_q, res) =>
   res.writeHead(200, { 'content-type': 'text/html' })
      .end(`<!doctype html><meta charset="utf-8"><style>${css}</style>
        <body style="background:var(--bg);padding:18px">
-       <div id="oben">${formular[0].replace('hidden', '')}</div>
+       <div id="peek">${formular[0].replace('hidden', '')}</div>
        <div class="polls-panel" id="ziel"></div>`));
 await new Promise((r) => server.listen(0, r));
 
@@ -56,9 +56,9 @@ const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: 
 const ausgabe = path.join(root, 'preview');
 fs.mkdirSync(ausgabe, { recursive: true });
 
-const seite = await browser.newPage({ viewport: { width: Number(process.env.BREITE || 780), height: 900 }, deviceScaleFactor: 2 });
-await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-await seite.addScriptTag({
+const page = await browser.newPage({ viewport: { width: Number(process.env.WIDTH || 780), height: 900 }, deviceScaleFactor: 2 });
+await page.goto(`http://127.0.0.1:${server.address().port}/`);
+await page.addScriptTag({
   content: `
     const state = { cfg: { symbol: 'ANSEM' }, me: { isAdmin: true }, polls: [] };
     const toast = () => {};
@@ -66,20 +66,20 @@ await seite.addScriptTag({
     ${formate}
     ${symbole}
     ${zeit}
-    ${zeile}
+    ${line}
     ${markup}
     window.pollHtml = pollHtml;`,
 });
-// Die Frage füllen, damit das Formular so aussieht wie kurz vor dem Anlegen.
-await seite.fill('#poll-question', 'Should we open the token gate to smaller holders?');
-await seite.locator('.poll-option').nth(0).fill('Ship it this week');
-await seite.locator('.poll-option').nth(1).fill('Wait for the audit');
-await seite.mouse.move(0, 0);
-await seite.waitForTimeout(300);
-await seite.locator('#oben').screenshot({ path: path.join(ausgabe, (process.env.BREITE ? 'frist-formular-handy.png' : 'frist-formular.png')) });
+// Fill in the question, so the form looks like it does right before creating a poll.
+await page.fill('#poll-question', 'Should we open the token gate to smaller holders?');
+await page.locator('.poll-option').nth(0).fill('Ship it this week');
+await page.locator('.poll-option').nth(1).fill('Wait for the audit');
+await page.mouse.move(0, 0);
+await page.waitForTimeout(300);
+await page.locator('#peek').screenshot({ path: path.join(ausgabe, (process.env.WIDTH ? 'frist-formular-handy.png' : 'frist-formular.png')) });
 
-await seite.evaluate((faelle) => {
-  document.querySelector('#ziel').innerHTML = faelle.map((f, i) => window.pollHtml({
+await page.evaluate((cases) => {
+  document.querySelector('#ziel').innerHTML = cases.map((f, i) => window.pollHtml({
     id: i + 1, closed: !!f.zu,
     closesAt: f.ms === null ? null : new Date(Date.now() + f.ms).toISOString(),
     totalVotes: 191, totalUsd: 781420,
@@ -87,12 +87,12 @@ await seite.evaluate((faelle) => {
     options: [{ id: 1, label: 'Ship it this week', votes: 128, usd: 482900, share: .618 },
               { id: 2, label: 'Wait for the audit', votes: 63, usd: 298520, share: .382 }],
   })).join('');
-}, FAELLE);
-await seite.waitForTimeout(200);
-await seite.locator('#ziel').screenshot({ path: path.join(ausgabe, (process.env.BREITE ? 'frist-zeilen-handy.png' : 'frist-zeilen.png')) });
+}, CASES);
+await page.waitForTimeout(200);
+await page.locator('#ziel').screenshot({ path: path.join(ausgabe, (process.env.WIDTH ? 'frist-zeilen-handy.png' : 'frist-zeilen.png')) });
 
-console.log('\n  ' + FAELLE.map((f) => f.name).join('  ·  '));
+console.log('\n  ' + CASES.map((f) => f.name).join('  ·  '));
 await browser.close();
 server.close();
-console.log(`\n  ${path.join(ausgabe, (process.env.BREITE ? 'frist-formular-handy.png' : 'frist-formular.png'))}`);
-console.log(`  ${path.join(ausgabe, (process.env.BREITE ? 'frist-zeilen-handy.png' : 'frist-zeilen.png'))}\n`);
+console.log(`\n  ${path.join(ausgabe, (process.env.WIDTH ? 'frist-formular-handy.png' : 'frist-formular.png'))}`);
+console.log(`  ${path.join(ausgabe, (process.env.WIDTH ? 'frist-zeilen-handy.png' : 'frist-zeilen.png'))}\n`);

@@ -1,106 +1,108 @@
 # ===========================================================================
-# Netlify-Kopfzeilen
+# Netlify headers
 #
-# /p/12 wird an die Supabase-Function durchgereicht, und die antwortet mit
-# text/html. Netlify liefert es trotzdem als text/plain aus: Beim Durchreichen
-# rät es den Typ aus der Dateiendung im Pfad, und /p/12 hat keine. Der Browser
-# zeigt dann den Quelltext statt der Seite, die Weiterleitung greift nicht,
-# und Xs Crawler findet die Meta-Zeilen nicht.
+# /p/12 gets proxied through to the Supabase function, and it responds with
+# text/html. Netlify still serves it as text/plain: when proxying, it guesses
+# the type from the file extension in the path, and /p/12 has none. The
+# browser then shows the raw source instead of the page, the redirect never
+# fires, and X's crawler cannot find the meta lines.
 #
-# Nachgemessen, nicht geraten:
+# Measured, not guessed:
 #   curl -sI https://sized.gg/p/16                        -> text/plain
-#   curl -sI https://<projekt>.supabase.co/.../og/p/16    -> text/html
+#   curl -sI https://<project>.supabase.co/.../og/p/16    -> text/html
 #
-# Dieselbe Datei liegt richtig, wenn sie im Wurzelverzeichnis der
-# hochgeladenen Seite steht – also neben index.html.
+# This file only takes effect when it sits in the root directory of the
+# uploaded site - next to index.html.
 # ===========================================================================
 
 # ===========================================================================
-# Die Sicherheitskopfzeilen
+# The security headers
 #
-# WICHTIG – vor dem Hochladen einsetzen:
+# IMPORTANT - fill in before uploading:
 #
-# In connect-src unten steht zweimal DEIN-PROJEKT. Dort muss die echte
-# Projektadresse stehen, sonst kommt die Seite an ihre eigene Datenbank nicht
-# heran und zeigt gar nichts. Derselbe Handgriff wie bei _redirects:
+# In connect-src below, DEIN-PROJEKT appears twice. It needs the real
+# project address there, or the site cannot reach its own database and
+# shows nothing at all. Same step as in _redirects:
 #
-#   cd <projektordner>
+#   cd <project-folder>
 #   URL=$(grep -o 'https://[a-z0-9]*\.supabase\.co' public/config.js | head -1)
 #   HOST=${URL#https://}
 #   perl -pi -e "s{wbkfjvpxxlwcivqcmmpo\.supabase\.co}{$HOST}g" public/_headers
 #   grep connect-src public/_headers
 #
-# Die letzte Zeile zeigt, was jetzt dort steht – da darf kein "DEIN-PROJEKT"
-# mehr stehen.
+# The last line shows what is there now - it must no longer say
+# "DEIN-PROJEKT".
 #
 # ---------------------------------------------------------------------------
-# Was die einzelnen Zeilen tun, und warum sie so und nicht strenger sind
+# What each line does, and why it's set this way and not stricter
 #
 # default-src 'none'
-#   Nichts ist erlaubt, ausser was darunter ausdrücklich dasteht. Alles, was
-#   vergessen wurde, fällt auf und funktioniert nicht – lieber so herum als
-#   eine Lücke, die niemand bemerkt.
+#   Nothing is allowed except what is explicitly listed below. Anything that
+#   got forgotten breaks and does not work - better that way round than
+#   a gap nobody notices.
 #
 # script-src 'self'
-#   Nur Skripte von sized.gg selbst. Kein 'unsafe-inline', kein CDN. Das ist
-#   die Zeile, auf die es ankommt: Sie ist es, die eingeschleusten Code
-#   wirkungslos macht. Die Seite hat kein einziges Inline-Skript und lädt
-#   supabase-js aus public/vendor/, deshalb kostet die Strenge hier nichts.
+#   Only scripts from sized.gg itself. No 'unsafe-inline', no CDN. This is
+#   the line that matters: it's the one that makes injected code
+#   harmless. The site has not a single inline script and loads
+#   supabase-js from public/vendor/, so this strictness costs nothing here.
 #
 # style-src 'self' 'unsafe-inline'
-#   Hier steht 'unsafe-inline', und das ist eine Abwägung, keine
-#   Nachlässigkeit. Die Balkenbreite einer Abstimmung steht als
-#   style="width:61.8%" in der Auszeichnung (app.js, in pollHtml). Ohne
-#   'unsafe-inline' stünden alle Balken auf null.
+#   'unsafe-inline' is set here, and that is a tradeoff, not
+#   carelessness. A poll's bar width is set as
+#   style="width:61.8%" in the markup (app.js, in pollHtml). Without
+#   'unsafe-inline' every bar would sit at zero.
 #
-#   Der Umbau wäre möglich – die Breite nach dem Einsetzen per JavaScript
-#   setzen –, aber pollHtml wird von dreizehn Skripten wörtlich mitbenutzt,
-#   und in jedem müsste der neue Aufruf mit. Ein vergessener davon zeigt
-#   stillschweigend leere Balken.
+#   The rework is possible - set the width via JavaScript after
+#   inserting the markup - but pollHtml is reused verbatim by thirteen
+#   scripts, and each one would need the new call added. Miss one and it
+#   silently shows empty bars.
 #
-#   Was 'unsafe-inline' beim Stil wirklich öffnet: eingeschleustes CSS. Das
-#   setzt voraus, dass jemand überhaupt Auszeichnung einschleusen kann (alles
-#   Eingesetzte läuft durch esc()), und der übliche Weg, damit Daten
-#   abzugreifen – background: url(https://fremde-adresse/…) – ist durch
-#   default-src 'none' ohnehin zu. Skripte bleiben streng, und dort liegt der
-#   Schaden.
+#   What 'unsafe-inline' actually opens up for style: injected CSS. That
+#   requires someone to be able to inject markup at all (everything
+#   inserted runs through esc()), and the usual way to exfiltrate data
+#   with it - background: url(https://attacker-address/...) - is blocked
+#   anyway by default-src 'none'. Scripts stay strict, and that's where
+#   the real damage would be.
 #
 # img-src 'self' data: blob:
-#   data: für das Symbol in der Adresszeile, das als SVG direkt in der
-#   index.html steht. blob: für die Bilder, die die Seite selbst aus einer
-#   Abstimmung baut.
+#   data: for the icon in the address bar, which sits as an SVG directly
+#   in index.html. blob: for the images the site itself builds from a
+#   poll.
 #
-# connect-src 'self' https://… wss://…
-#   Die Datenbank und die Live-Leitung. wss:// ist nicht optional – ohne die
-#   zweite Adresse kommen DMs nicht mehr an, und man sähe es erst im Betrieb.
+# connect-src 'self' https://... wss://...
+#   The database and the live connection. wss:// is not optional - without
+#   the second address DMs stop arriving, and you would only see it in
+#   production.
 #
-# frame-ancestors 'none' (und X-Frame-Options als Wiederholung für ältere
-#   Browser): Niemand kann sized.gg in einen unsichtbaren Rahmen legen und
-#   Klicks abfangen. Bei einer Seite, auf der man Ansems Abstimmungen bedient,
-#   ist das nicht theoretisch.
+# frame-ancestors 'none' (and X-Frame-Options repeating it for older
+#   browsers): nobody can put sized.gg inside an invisible frame and
+#   hijack clicks. On a site where people cast votes in Ansem's polls,
+#   that is not theoretical.
 #
 # base-uri 'none' / form-action 'none' / object-src 'none'
-#   Drei Wege, die kein Mensch braucht und über die sich sonst umleiten lässt.
+#   Three paths nobody needs, and through which redirects would
+#   otherwise be possible.
 #
 # Referrer-Policy: no-referrer
-#   Beim Klick auf den X-Link erfährt die Gegenseite nicht, von welcher Seite
-#   er kam. Das ist die Zeile, die zu "keiner soll den Namen finden können"
-#   gehört.
+#   Clicking the X link does not tell the other side which page it came
+#   from. This is the line that belongs to "nobody should be able to
+#   find the name".
 #
 # Strict-Transport-Security
-#   Zwei Jahre, alle Unteradressen. OHNE preload, und das mit Absicht: preload
-#   trägt die Domain in eine Liste ein, die in den Browsern selbst
-#   mitgeliefert wird, und da wieder herauszukommen dauert Monate. Wenn
-#   sized.gg ein Jahr steht, kann man das nachholen.
+#   Two years, all subdomains. WITHOUT preload, and deliberately so: preload
+#   adds the domain to a list that ships baked into the browsers
+#   themselves, and getting off it again takes months. Once sized.gg has
+#   been up for a year, that can be added.
 #
 # Permissions-Policy
-#   Kamera, Mikrofon, Ort, Bewegungsmelder, Bezahlvorgänge: nichts davon
-#   braucht die Seite, also fragt sie auch nie danach.
+#   Camera, microphone, location, motion sensors, payments: the site
+#   needs none of it, so it never asks for any of it.
 #
-# Was bewusst FEHLT: Cross-Origin-Resource-Policy. Auf same-origin gesetzt,
-# könnte es Xs Kartenvorschau daran hindern, og-karte.png zu holen – und die
-# Karte ist der halbe Grund, warum ein geteilter Link etwas taugt. Der Gewinn
-# stünde in keinem Verhältnis.
+# What is deliberately MISSING: Cross-Origin-Resource-Policy. Set to
+# same-origin, it could stop X's card preview from fetching og-karte.png -
+# and the card is half the reason a shared link is worth anything. The
+# gain would not be worth it.
 # ===========================================================================
 
 /*
@@ -113,13 +115,13 @@
   Cross-Origin-Opener-Policy: same-origin
 
 # ===========================================================================
-# /p/* braucht KEINE eigene CSP – nachgemessen am 3. September 2026
+# /p/* needs NO CSP of its own - measured on September 3, 2026
 #
-# Hier stand kurzzeitig eine eigene, weichere Regel, mit der Begründung: Die
-# og-Function liefert eine Seite mit einem Inline-Skript, und die strenge
-# Regel oben (script-src 'self') würde das blockieren. Beides war falsch.
+# A separate, looser rule sat here briefly, with the reasoning: the og
+# function serves a page with an inline script, and the strict rule
+# above (script-src 'self') would block that. Both parts were wrong.
 #
-# Was wirklich zurückkommt:
+# What actually comes back:
 #
 #   curl -s -D - -o /dev/null 'https://sized.gg/p/16'
 #   -> HTTP/2 302
@@ -127,23 +129,23 @@
 #      content-length: 0
 #      x-served-by: supabase-edge-runtime
 #
-# Eine leere Weiterleitung. Kein HTML, kein Skript, nichts, was eine CSP
-# blockieren könnte. Die og-Function unterscheidet nämlich: Menschen bekommen
-# ein echtes 302, nur Crawler bekommen die Seite mit den Meta-Zeilen – und ein
-# Crawler wertet keine CSP aus, er liest Text. Siehe die ausführliche
-# Begründung in supabase/functions/og/index.ts.
+# An empty redirect. No HTML, no script, nothing a CSP could
+# block. The og function distinguishes: humans get a real 302, only
+# crawlers get the page with the meta lines - and a crawler does not
+# evaluate a CSP, it reads text. See the full explanation in
+# supabase/functions/og/index.ts.
 #
-# Zweiter Befund aus derselben Messung: In der Antwort steht
+# Second finding from the same measurement: the response contains
 #
 #   strict-transport-security: max-age=31536000; includeSubDomains; preload
 #
-# Das ist NICHT unser Wert (oben stehen 63072000 ohne preload), sondern
-# Supabases. Netlify legt auf eine durchgereichte Antwort also gar keine
-# Kopfzeilen aus dieser Datei. Der ganze Block hier ist wirkungslos.
+# That is NOT our value (above it's 63072000 without preload), it's
+# Supabase's. Netlify does not add any headers from this file to a
+# proxied response at all. This entire block has no effect.
 #
-# Die Content-Type-Zeile bleibt trotzdem stehen: Sie kostet nichts, sie stand
-# schon vorher da, und sollte Netlify das Durchreichen einmal ändern, greift
-# sie wieder. Nur soll niemand glauben, sie täte gerade etwas.
+# The Content-Type line stays anyway: it costs nothing, it was already
+# here before, and if Netlify ever changes how it proxies, it will take
+# effect again. Just don't assume it is doing anything right now.
 # ===========================================================================
 
 /p/*

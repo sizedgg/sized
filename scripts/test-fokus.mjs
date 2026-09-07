@@ -1,36 +1,38 @@
 // ============================================================================
-// Prüft, dass kein Bedienelement mehr den Systemring des Browsers zeigt.
+// Checks that no control still shows the browser's own system ring.
 //
-// Der Anlass: Die drei Felder im "New poll"-Kasten waren die einzigen der
-// Seite ohne eigene Fokusregel und zeigten deshalb Chromes eigenen Ring. Der
-// ist unter macOS blau – nicht als Entscheidung, sondern weil Chrome die
-// Akzentfarbe des Systems nimmt. Auf fast schwarzem Grund war er der lauteste
-// Punkt der Seite.
+// The trigger: the three fields in the "New poll" box were the only ones on
+// the page without their own focus rule, and so showed Chrome's own ring.
+// Under macOS that's blue - not a design choice, but because Chrome uses the
+// system's accent color. On an almost-black background it was the loudest
+// point on the page.
 //
-// Das ist genau die Sorte Fehler, die man einmal behebt und beim nächsten
-// neuen Eingabefeld sofort wieder einbaut. Deshalb prüft dieser Test nicht die
-// drei Felder, sondern ALLE Bedienelemente aus index.html – ein künftiges Feld
-// ohne Fokusregel fällt hier auf, bevor es jemand auf der Seite sieht.
+// This is exactly the kind of bug you fix once and immediately reintroduce
+// with the next new input field. So this test doesn't check the three
+// fields, it checks ALL controls from index.html - a future field without a
+// focus rule shows up here before anyone sees it on the page.
 //
-// Die andere Hälfte ist wichtiger und leichter zu übersehen: Ein Ring, der
-// ersatzlos verschwindet, macht die Seite mit der Tastatur unbedienbar. Man
-// tabbt dann blind. "Kein blauer Ring" ist also nur die halbe Bedingung – die
-// andere ist "aber ein sichtbarer Ersatz". Beides wird hier geprüft, und der
-// zweite Teil ist der, der wehtut, wenn er fehlt.
+// The other half is more important and easier to overlook: a ring that just
+// disappears with nothing to replace it makes the page unusable with a
+// keyboard. You end up tabbing blind. "No blue ring" is only half the
+// requirement - the other half is "but a visible replacement". Both get
+// checked here, and the second part is the one that hurts when it's missing.
 //
-// Der Ersatz ist bei einem Textfeld nichts Zusätzliches: Der Rahmen, den das
-// Feld ohnehin hat, wird heller. Kein zweiter Umriss daneben – zwei Linien für
-// eine Auskunft. Genau das wird geprüft, weil ein Schein oder ein Ring dort
-// leicht wieder hineinrutscht, sobald jemand "man sieht es zu wenig" sagt.
+// For a text field the replacement isn't anything extra: the border the
+// field already has just gets brighter. No second outline next to it - two
+// lines for one piece of information. That's exactly what's checked, because
+// a glow or a ring there slips back in easily the moment someone says "it's
+// not visible enough".
 //
-// Und geprüft werden alle sechs Textfelder der Seite, nicht nur die drei aus
-// dem Abstimmungskasten. Eine Seite mit zwei Fokusfarben hat keine Fokusfarbe,
-// sondern zwei Zufälle – so ist der blaue Ring überhaupt entstanden.
+// And all six text fields on the page get checked, not just the three from
+// the poll box. A page with two focus colors doesn't have a focus color, it
+// has two accidents - that's exactly how the blue ring happened in the first
+// place.
 //
-// Dazu die Feinheit, um die es beim Ersatz geht: Er soll bei der Tastatur
-// erscheinen und beim Mausklick nicht. Wer klickt, weiß, wohin er geklickt
-// hat. Das leistet :focus-visible – und wer es versehentlich zu :focus
-// vereinfacht, merkt es ohne Test nicht.
+// Plus the detail the replacement is really about: it should appear for the
+// keyboard and not for a mouse click. Whoever clicks knows where they
+// clicked. That's what :focus-visible does - and if someone accidentally
+// simplifies it to :focus, nothing catches it without a test.
 //
 //   node scripts/test-fokus.mjs
 // ============================================================================
@@ -44,37 +46,37 @@ import { chromium } from 'playwright';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cssRoh = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 
-/* Kommentare raus, bevor irgendetwas nach Waehlern sucht.
+/* Strip comments before anything searches for selectors.
    ---------------------------------------------------------------------------
-   Diese Reihe liest das Blatt mit regulaeren Ausdruecken, und die kennen keine
-   Kommentare. Ein Kommentar zwischen zwei Regeln wurde deshalb als Teil des
-   naechsten Waehlers gelesen: Aus
+   This check reads the stylesheet with regular expressions, and those know
+   nothing about comments. A comment between two rules used to get read as
+   part of the next selector: from
 
      .composer input {
-     .../* min-width: 0 - ohne das ragt "Send" ... *\/
+     .../* min-width: 0 - without this "Send" sticks out ... *\/
      .composer input {
 
-   wurde ein Waehler, der mit "/* min-width" anfaengt, und die Pruefung meldete
-   ein fehlendes Autofill fuer ein Feld, das es gar nicht gibt.
+   the result was a selector starting with "/* min-width", and the check
+   reported a missing autofill rule for a field that doesn't even exist.
 
-   Das ist keine Kleinigkeit: Eine Reihe, die beim Hinzufuegen eines Kommentars
-   rot wird, erzieht dazu, keine Kommentare zu schreiben.
+   This isn't a minor detail: a check that turns red the moment someone adds
+   a comment trains people to stop writing comments.
 
-   Der Ausdruck ist nicht gierig und laesst Zeilenumbrueche zu. Ein "/*" in
-   einer Zeichenkette gibt es in diesem Blatt nicht. */
+   The pattern is non-greedy and allows line breaks. There's no "/*" inside a
+   string anywhere in this stylesheet. */
 const css = cssRoh.replace(/\/\*[\s\S]*?\*\//g, '');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-// Die paar Zeilen aus app.js, die data-tastatur setzen – woertlich, damit der
-// Test nicht seine eigene Fassung prueft. Ohne sie gaebe es die
-// Unterscheidung zwischen Maus und Tastatur bei Textfeldern nicht.
-const tastaturSchalter = (() => {
+// The few lines from app.js that set data-tastatur - verbatim, so the test
+// doesn't end up checking its own copy. Without them there'd be no way to
+// distinguish mouse from keyboard for text fields.
+const keyboardSwitch = (() => {
   const a = appJs.indexOf("addEventListener('keydown'");
   const b = appJs.indexOf('}, true);', appJs.indexOf("addEventListener('pointerdown'"));
   if (a < 0 || b < 0) throw new Error('Der Tastaturschalter fehlt in app.js');
   return appJs.slice(a, b + 9);
 })();
-// Das echte Blatt, nur ohne Skripte und mit allen Bereichen sichtbar – sonst
-// liesse sich nur der Login prüfen.
+// The real stylesheet, just without scripts and with all sections visible -
+// otherwise only the login could be checked.
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8')
   .replace(/<script[\s\S]*?<\/script>/g, '')
   .replace(/ hidden(?=[ >])/g, '');
@@ -86,30 +88,30 @@ await new Promise((r) => server.listen(0, r));
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 1200, height: 900 } });
-await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-await seite.addScriptTag({ content: tastaturSchalter });
+const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+await page.goto(`http://127.0.0.1:${server.address().port}/`);
+await page.addScriptTag({ content: keyboardSwitch });
 
-// Kontrastrechnung wie anderswo im Projekt – hier fuer die Schrift auf
-// dem Knopf.
+// Contrast math like elsewhere in the project - here for the text on
+// the button.
 const kanal = (v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-const verhaeltnis = (a, b) => {
+const ratio = (a, b) => {
   const [x, y] = [a, b].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
 };
 
 const befunde = [];
-const pruefe = (name, ok, zusatz = '') => {
+const check = (name, ok, zusatz = '') => {
   befunde.push({ name, ok });
   console.log(`  ${ok ? 'ok  ' : 'FEHL'}  ${name}${zusatz ? '  – ' + zusatz : ''}`);
 };
 
 console.log('\nKein Systemring mehr\n');
 
-// "outline-style: auto" ist die Signatur von Chromes eigenem Ring. Wer eine
-// eigene Regel schreibt, setzt solid oder none – auto schreibt niemand von
-// Hand. Genau danach wird gesucht.
-const mitSystemring = await seite.evaluate(() => {
+// "outline-style: auto" is the signature of Chrome's own ring. Anyone
+// writing their own rule sets solid or none - nobody writes auto by hand.
+// That's exactly what this searches for.
+const mitSystemring = await page.evaluate(() => {
   const treffer = [];
   for (const el of document.querySelectorAll('input, textarea, select, button, a[href]')) {
     el.focus();
@@ -120,146 +122,148 @@ const mitSystemring = await seite.evaluate(() => {
   }
   return treffer;
 });
-pruefe('Kein Bedienelement fällt auf den Browserring zurück',
+check('Kein Bedienelement fällt auf den Browserring zurück',
   mitSystemring.length === 0, mitSystemring.join(', '));
 
 console.log('\nDie Textfelder der Seite\n');
 
-// Der Übergang läuft 150 ms; ohne Warten misst man den Startwert und der Test
-// wäre grün oder rot je nach Laune der Maschine.
-const feldStand = async (wahl) => {
-  await seite.focus(wahl);
-  await seite.waitForTimeout(260);
-  return seite.evaluate((w) => {
+// The transition runs 150 ms; without waiting you measure the starting
+// value and the test would be green or red depending on the machine's mood.
+const fieldState = async (wahl) => {
+  await page.focus(wahl);
+  await page.waitForTimeout(260);
+  return page.evaluate((w) => {
     const c = getComputedStyle(document.querySelector(w));
     return { outline: c.outlineStyle, border: c.borderColor, shadow: c.boxShadow };
   }, wahl);
 };
 
-// --fokus. Der Wert steht hier als Zahl und nicht als Variable, damit ein
-// versehentliches Verschieben im Blatt hier auffaellt statt stillschweigend
-// mitzugehen.
+// --fokus. The value is written here as a literal, not a variable, so an
+// accidental change in the stylesheet shows up here instead of silently
+// going along with it.
 const FOKUS = 'rgb(139, 147, 167)';
 const RUHE  = 'rgb(38, 43, 57)';
 
-// Alle Textfelder der Seite, nicht nur die drei aus dem Abstimmungskasten:
-// Eine Seite mit zwei verschiedenen Fokusfarben hat keine, sie hat zwei
-// Zufaelle.
-// Zweimal derselbe Weg, einmal mit der Maus und einmal mit der Tastatur.
-// Klicken darf nichts aendern – wer hineinklickt, weiss, wo er ist. Tabben
-// muss etwas aendern, sonst navigiert man blind.
+// All text fields on the page, not just the three from the poll box: a
+// page with two different focus colors doesn't have one, it has two
+// accidents.
+// The same path twice, once with the mouse and once with the keyboard.
+// Clicking must not change anything - whoever clicks into a field knows
+// where they are. Tabbing must change something, or you navigate blind.
 const stand = async (wahl) => {
-  await seite.waitForTimeout(260);
-  return seite.evaluate((w) => {
+  await page.waitForTimeout(260);
+  return page.evaluate((w) => {
     const c = getComputedStyle(document.querySelector(w));
     return { outline: c.outlineStyle, border: c.borderColor, shadow: c.boxShadow };
   }, wahl);
 };
 
-// .poll-option steht nicht mehr dabei, und der Grund ist kein Verzicht: Die
-// Antwortzeilen baut app.js, das Blatt liefert #poll-options leer aus – hier
-// laeuft aber nur das Blatt, ohne Skript. Die Regel, die die Felder betrifft,
-// ist ohnehin `.poll-admin input`, und die wird an #poll-question gemessen.
+// .poll-option is no longer included, and that's not an omission: app.js
+// builds the answer rows, the stylesheet ships #poll-options empty - but
+// only the stylesheet runs here, without the script. The rule that affects
+// these fields is `.poll-admin input` anyway, and that gets measured on
+// #poll-question.
 for (const wahl of ['#poll-question',
                     '#wallet-input', '#dm-input', '#admin-dm-input']) {
-  await seite.click(wahl);
+  await page.click(wahl);
   const geklickt = await stand(wahl);
-  pruefe(`${wahl}: beim Anklicken ändert sich nichts`,
+  check(`${wahl}: beim Anklicken ändert sich nichts`,
     geklickt.border === RUHE && geklickt.shadow === 'none' && geklickt.outline === 'none',
     `${geklickt.border} / ${geklickt.shadow} / ${geklickt.outline}`);
 
-  // Vom Feld aus zurueck und wieder vor: Damit wird dasselbe Feld ueber die
-  // Tastatur angesteuert.
-  await seite.keyboard.press('Shift+Tab');
-  await seite.keyboard.press('Tab');
+  // Back and forward from the field: that reaches the same field via the
+  // keyboard.
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
   const getabbt = await stand(wahl);
-  pruefe(`${wahl}: beim Tabben hellt der Rahmen auf`, getabbt.border === FOKUS, getabbt.border);
-  pruefe(`${wahl}: und bekommt keinen zweiten Umriss daneben`,
+  check(`${wahl}: beim Tabben hellt der Rahmen auf`, getabbt.border === FOKUS, getabbt.border);
+  check(`${wahl}: und bekommt keinen zweiten Umriss daneben`,
     getabbt.shadow === 'none' && getabbt.outline === 'none',
     `${getabbt.shadow} / ${getabbt.outline}`);
 
-  // Und mit dem naechsten Mausklick ist der Hinweis wieder weg.
-  await seite.mouse.click(5, 5);
+  // And with the next mouse click, the hint is gone again.
+  await page.mouse.click(5, 5);
 }
 
-// Ansems Schwellenfeld faellt aus der Reihe oben heraus, und genau deshalb hat
-// es lange gar nichts gezeigt: Es hat keinen eigenen Rahmen, der Rahmen gehoert
-// der Gruppe drumherum. Mit outline: none am Feld und keiner Regel an der
-// Gruppe war ein Sprung mit der Tabulatortaste unsichtbar – der Fall, vor dem
-// der Kommentar bei :focus-visible ausdruecklich warnt. Aufgefallen ist er
-// erst, als die Pruefung weiter unten die Feldregeln der Seite auszaehlte.
+// Ansem's threshold field falls outside the loop above, and that's exactly
+// why it showed nothing at all for a long time: it has no border of its
+// own, the border belongs to the group around it. With outline: none on the
+// field and no rule on the group, a jump via the Tab key was invisible -
+// exactly the case the comment on :focus-visible explicitly warns about. It
+// only came to light when the check further down counted up the page's
+// field rules.
 {
-  const lies = () => seite.evaluate(() =>
+  const read = () => page.evaluate(() =>
     getComputedStyle(document.querySelector('.filter-group')).borderTopColor);
-  await seite.mouse.click(5, 5);
-  await seite.waitForTimeout(260);
-  const ruhig = await lies();
-  await seite.click('#dm-min-input');
-  await seite.waitForTimeout(260);
-  pruefe('Ansems Schwellenfeld: beim Anklicken ändert sich nichts',
-    (await lies()) === ruhig, await lies());
-  await seite.keyboard.press('Shift+Tab');
-  await seite.keyboard.press('Tab');
-  await seite.waitForTimeout(260);
-  const getabbt = await lies();
-  pruefe('Und beim Tabben hellt der Rahmen der Gruppe auf', getabbt === FOKUS, getabbt);
-  await seite.mouse.click(5, 5);
-  await seite.waitForTimeout(260);
+  await page.mouse.click(5, 5);
+  await page.waitForTimeout(260);
+  const ruhig = await read();
+  await page.click('#dm-min-input');
+  await page.waitForTimeout(260);
+  check('Ansems Schwellenfeld: beim Anklicken ändert sich nichts',
+    (await read()) === ruhig, await read());
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(260);
+  const getabbt = await read();
+  check('Und beim Tabben hellt der Rahmen der Gruppe auf', getabbt === FOKUS, getabbt);
+  await page.mouse.click(5, 5);
+  await page.waitForTimeout(260);
 }
 
-// Und ohne Fokus wieder zurueck – sonst bliebe der helle Rahmen stehen und
-// zeigte auf ein Feld, in dem niemand mehr tippt.
-await seite.evaluate(() => document.activeElement.blur());
-await seite.waitForTimeout(260);
-const ruhe = await seite.evaluate(() =>
+// And back to no focus - otherwise the bright border would stay and point
+// at a field nobody is typing in anymore.
+await page.evaluate(() => document.activeElement.blur());
+await page.waitForTimeout(260);
+const ruhe = await page.evaluate(() =>
   getComputedStyle(document.querySelector('#poll-question')).borderColor);
-pruefe('Ohne Fokus ist der Rahmen wieder ruhig', ruhe === RUHE, ruhe);
+check('Ohne Fokus ist der Rahmen wieder ruhig', ruhe === RUHE, ruhe);
 
-// Die Flaeche des hellen Knopfes wird schon hier gemessen, weil die
-// Rangfolge weiter unten dagegen geprueft wird.
-const knopfFlaeche = await seite.evaluate(() =>
+// The bright button's surface color is measured here already, because the
+// ordering further down gets checked against it.
+const buttonArea = await page.evaluate(() =>
   getComputedStyle(document.querySelector('#dm-form .btn-primary')).backgroundColor
     .match(/\d+/g).slice(0, 3).map(Number));
 
 console.log('\nTastatur sieht den Ring, Maus nicht\n');
 
-// Ein Knopf, der sicher sichtbar und anklickbar ist.
-const KNOPF = '#btn-create-poll';
+// A button that's definitely visible and clickable.
+const BUTTON = '#btn-create-poll';
 
-await seite.click(KNOPF);
-const nachKlick = await seite.evaluate((w) => {
+await page.click(BUTTON);
+const nachKlick = await page.evaluate((w) => {
   const el = document.querySelector(w);
   return { hatFokus: document.activeElement === el, ring: getComputedStyle(el).outlineStyle };
-}, KNOPF);
-pruefe('Nach dem Klicken kein Ring', nachKlick.ring === 'none', nachKlick.ring);
+}, BUTTON);
+check('Nach dem Klicken kein Ring', nachKlick.ring === 'none', nachKlick.ring);
 
-// Vom Knopf aus einmal zurück und wieder vor: Damit landet der Fokus über die
-// Tastatur auf demselben Knopf, und :focus-visible greift.
-await seite.keyboard.press('Shift+Tab');
-await seite.keyboard.press('Tab');
-const nachTab = await seite.evaluate((w) => {
+// Back and forward from the button once: that lands focus on the same
+// button via the keyboard, and :focus-visible kicks in.
+await page.keyboard.press('Shift+Tab');
+await page.keyboard.press('Tab');
+const nachTab = await page.evaluate((w) => {
   const el = document.querySelector(w);
   const c = getComputedStyle(el);
   return {
     hatFokus: document.activeElement === el,
-    ring: c.outlineStyle, farbe: c.outlineColor, breite: c.outlineWidth,
+    ring: c.outlineStyle, color: c.outlineColor, width: c.outlineWidth,
     rundung: c.borderRadius,
   };
-}, KNOPF);
-pruefe('Der Fokus liegt nach dem Tabben auf dem Knopf', nachTab.hatFokus);
-pruefe('Mit der Tastatur ist ein Ring da', nachTab.ring === 'solid', nachTab.ring);
-// Derselbe Ton wie der Rahmen eines Feldes im Fokus – ein Knopf hat keinen
-// Rahmen zum Aufhellen, also bleibt hier ein Umriss, aber in derselben Farbe.
-pruefe('Der Ring hat dieselbe Farbe wie ein Feld im Fokus',
-  nachTab.farbe === FOKUS, nachTab.farbe);
-// Ein fester border-radius in der Fokusregel würde runde Knöpfe eckig machen.
-pruefe('Die Rundung des Knopfes bleibt im Fokus erhalten',
+}, BUTTON);
+check('Der Fokus liegt nach dem Tabben auf dem Knopf', nachTab.hatFokus);
+check('Mit der Tastatur ist ein Ring da', nachTab.ring === 'solid', nachTab.ring);
+// The same color as a focused field's border - a button has no border to
+// brighten, so what stays here is an outline, but in the same color.
+check('Der Ring hat dieselbe Farbe wie ein Feld im Fokus',
+  nachTab.color === FOKUS, nachTab.color);
+// A fixed border-radius in the focus rule would turn round buttons square.
+check('Die Rundung des Knopfes bleibt im Fokus erhalten',
   nachTab.rundung === '10px', nachTab.rundung);
 
-// Die Rangfolge, die zweimal gekippt ist, weil sich die Umgebung bewegt hat:
-// Ein Feld, in dem man tippt, darf nicht lauter sein als der Knopf, der die
-// Sache abschickt. Ohne diese Pruefung faellt das erst auf, wenn es jemand
-// sieht – und dann ist unklar, welcher der beiden Werte gewandert ist.
+// The ordering that's flipped twice already because something around it
+// moved: a field you're typing in must not be louder than the button that
+// submits it. Without this check, that only shows up once someone sees it -
+// and by then it's unclear which of the two values drifted.
 const GRUND_HEX = '#0a0b0f';
 const leuchtHex = (hex) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -270,105 +274,106 @@ const leuchtArr = (rgb) => {
   const [r, g, b] = rgb.map((n) => n / 255);
   return 0.2126 * kanal(r) + 0.7152 * kanal(g) + 0.0722 * kanal(b);
 };
-const kFokus = verhaeltnis(leuchtArr(rgbArr(FOKUS)), leuchtHex(GRUND_HEX));
-const kKnopf = verhaeltnis(leuchtArr(knopfFlaeche), leuchtHex(GRUND_HEX));
-pruefe('Der Fokusrahmen bleibt dunkler als der helle Knopf',
-  kFokus < kKnopf, `${kFokus.toFixed(1)}:1 vs ${kKnopf.toFixed(1)}:1`);
-pruefe('Und bleibt über der Grenze für eine Zustandsanzeige (3:1)',
+const kFokus = ratio(leuchtArr(rgbArr(FOKUS)), leuchtHex(GRUND_HEX));
+const kButton = ratio(leuchtArr(buttonArea), leuchtHex(GRUND_HEX));
+check('Der Fokusrahmen bleibt dunkler als der helle Knopf',
+  kFokus < kButton, `${kFokus.toFixed(1)}:1 vs ${kButton.toFixed(1)}:1`);
+check('Und bleibt über der Grenze für eine Zustandsanzeige (3:1)',
   kFokus >= 3, `${kFokus.toFixed(1)}:1`);
 
 console.log('\nDer helle Knopf\n');
 
-// Er ist die hellste Flaeche der Seite. Das Aufhellen unter dem Zeiger war
-// dort kein gelegentlicher Effekt, sondern der Normalzustand: Beim Schreiben
-// steht der Zeiger fast immer genau auf "Send".
-const KNOPF_PRIM = '#dm-form .btn-primary';
-await seite.hover(KNOPF_PRIM);
-await seite.waitForTimeout(260);
-const knopf = await seite.evaluate((w) => {
+// It's the brightest surface on the page. Brightening it further under the
+// pointer used to not be an occasional effect there but the normal state:
+// while typing, the pointer sits almost always right on "Send".
+const BUTTON_PRIMARY = '#dm-form .btn-primary';
+await page.hover(BUTTON_PRIMARY);
+await page.waitForTimeout(260);
+const button = await page.evaluate((w) => {
   const el = document.querySelector(w);
   const c = getComputedStyle(el);
   const rgb = (s) => s.match(/\d+/g).slice(0, 3).map(Number);
-  return { filter: c.filter, flaeche: rgb(c.backgroundColor), schrift: rgb(c.color) };
-}, KNOPF_PRIM);
-pruefe('Der helle Knopf hellt unter dem Zeiger nicht auf',
-  knopf.filter === 'none', knopf.filter);
+  return { filter: c.filter, flaeche: rgb(c.backgroundColor), font: rgb(c.color) };
+}, BUTTON_PRIMARY);
+check('Der helle Knopf hellt under dem Zeiger nicht auf',
+  button.filter === 'none', button.filter);
 
-// Die uebrigen behalten es: Sie sind dunkel, dort hellt es etwas auf, das
-// vorher kaum zu sehen war. Faellt die Regel zu breit aus, geht das mit.
-await seite.hover('#btn-create-poll');
-await seite.waitForTimeout(260);
-const ghost = await seite.evaluate(() => getComputedStyle(document.querySelector('#btn-create-poll')).filter);
-pruefe('Die übrigen Knöpfe hellen weiter auf', ghost !== 'none', ghost);
+// The rest keep it: they're dark, and it brightens something there that was
+// barely visible before. If the rule is too broad, this goes along with it.
+await page.hover('#btn-create-poll');
+await page.waitForTimeout(260);
+const ghost = await page.evaluate(() => getComputedStyle(document.querySelector('#btn-create-poll')).filter);
+check('Die übrigen Knöpfe hellen next auf', ghost !== 'none', ghost);
 
-// Lesbarkeit auf dem Knopf: Das ist ein Bedienelement, kein Schmuck.
+// Readability on the button: this is a control, not decoration.
 const leuchtRgb2 = (rgb) => {
   const [r, g, b] = rgb.map((n) => n / 255);
   return 0.2126 * kanal(r) + 0.7152 * kanal(g) + 0.0722 * kanal(b);
 };
-const kSchrift = verhaeltnis(leuchtRgb2(knopf.schrift), leuchtRgb2(knopf.flaeche));
-pruefe('Die Schrift auf dem Knopf bleibt lesbar (mindestens 4,5:1)',
-  kSchrift >= 4.5, `${kSchrift.toFixed(1)}:1`);
+const kFont = ratio(leuchtRgb2(button.font), leuchtRgb2(button.flaeche));
+check('Die Schrift auf dem Knopf bleibt lesbar (mindestens 4,5:1)',
+  kFont >= 4.5, `${kFont.toFixed(1)}:1`);
 
-// Ein Name je Wert. --accent-fill-weich war der zweite fuer denselben Ton,
-// nachdem der Knopf auf die Hoehe der DM-Blase heruntergegangen ist.
-pruefe('Kein zweiter Name für dieselbe Füllfarbe',
+// One name per value. --accent-fill-weich was the second one for the same
+// tone, after the button was toned down to the level of the DM bubble.
+check('Kein zweiter Name für dieselbe Füllfarbe',
   !/--accent-fill-weich/.test(css));
 
 console.log('\nBlatt\n');
-pruefe('Die Regel benutzt :focus-visible, nicht :focus',
+check('Die Regel benutzt :focus-visible, nicht :focus',
   /:focus-visible:not\(input\):not\(textarea\)/.test(css));
-pruefe('Die Ringfarbe kommt aus --fokus, steht also nicht fest',
+check('Die Ringfarbe kommt aus --fokus, steht also nicht fest',
   /:focus-visible[^{]*\{[^}]*outline:[^;]*var\(--fokus\)/s.test(css));
-// Eine Quelle fuer alle Feldregeln – wie viele es sind, ist egal und aendert
-// sich mit jedem neuen Feld. Frueher stand hier eine feste Vier; die schlug an,
-// als das Laufzeitfeld dazukam, obwohl daran nichts falsch war. Ein Test, der
-// bei jeder Erweiterung fehlschlaegt, wird abgeschaltet statt gelesen.
+// One source for all field rules - how many there are doesn't matter and
+// changes with every new field. This used to be a fixed four; it tripped
+// when the runtime field was added, even though nothing about that was
+// wrong. A test that fails on every extension gets disabled instead of read.
 //
-// Geprueft wird stattdessen die Absicht: KEINE Regel, die einen Feldrahmen im
-// Fokus einfaerbt, darf einen festen Farbwert nehmen. Einer bliebe stehen,
-// sobald jemand --fokus verschiebt – und genau so entstehen zwei Fokusfarben.
-// Ganze Regeln samt Waehler, ohne Kommentare – sonst faellt der Vorsatz
-// ":root[data-tastatur]" aus dem Treffer heraus und die Pruefung darunter
-// meldet einen Fehler, den es nicht gibt.
+// What's checked instead is the intent: NO rule that colors a field border
+// on focus may use a fixed color value. One would stay behind the moment
+// someone moves --fokus - and that's exactly how two focus colors happen.
+// Whole rules including the selector, without comments - otherwise the
+// prefix ":root[data-tastatur]" would drop out of the match and the check
+// below would report an error that doesn't exist.
 const ohneKommentare = css.replace(/\/\*[\s\S]*?\*\//g, '');
-const feldRegeln = (ohneKommentare.match(/[^{}]+\{[^{}]*\}/g) || [])
+const fieldRules = (ohneKommentare.match(/[^{}]+\{[^{}]*\}/g) || [])
   .filter((r) => /:focus(-within)?/.test(r) && /border-color:/.test(r));
-const festeFarbe = feldRegeln.filter((r) => !/border-color: var\(--fokus\)/.test(r));
-pruefe('Jede Fokusregel an einem Feldrahmen holt die Farbe aus --fokus',
-  feldRegeln.length >= 4 && festeFarbe.length === 0,
-  `${feldRegeln.length} Regeln, ${festeFarbe.length} mit festem Wert`);
-// Und jede haengt an data-tastatur. Faellt die Bedingung bei einer weg,
-// leuchtet ausgerechnet dieses eine Feld wieder beim blossen Anklicken auf.
-const ohneSchalter = feldRegeln.filter((r) => !/:root\[data-tastatur\]/.test(r));
-pruefe('Und jede hängt an data-tastatur',
-  ohneSchalter.length === 0, ohneSchalter.join(' | ').slice(0, 120));
-pruefe('app.js setzt den Schalter nur bei der Tabulatortaste',
+const fixedColor = fieldRules.filter((r) => !/border-color: var\(--fokus\)/.test(r));
+check('Jede Fokusregel an einem Feldrahmen holt die Farbe aus --fokus',
+  fieldRules.length >= 4 && fixedColor.length === 0,
+  `${fieldRules.length} Regeln, ${fixedColor.length} mit festem Wert`);
+// And every one hangs on data-tastatur. If that condition drops off one of
+// them, that one field lights up again from a plain click.
+const withoutSwitch = fieldRules.filter((r) => !/:root\[data-tastatur\]/.test(r));
+check('Und jede hängt an data-tastatur',
+  withoutSwitch.length === 0, withoutSwitch.join(' | ').slice(0, 120));
+check('app.js setzt den Schalter nur bei der Tabulatortaste',
   /e\.key === 'Tab'/.test(appJs) && /pointerdown/.test(appJs));
-pruefe('Nirgends bleibt ein box-shadow an einem Feld im Fokus',
+check('Nirgends bleibt ein box-shadow an einem Feld im Fokus',
   !/input:focus \{[^}]*box-shadow/s.test(css));
 
 // ---------------------------------------------------------------------------
 console.log('\nAusgefüllt vom Browser\n');
 //
-// Chrome faerbt ein Feld hellblau, sobald man einen gespeicherten Vorschlag
-// antippt. Auf einer durchgehend dunklen Seite ist das ein weisser Kasten
-// mitten im Formular.
+// Chrome colors a field pale blue the moment you tap a saved suggestion. On
+// a page that's uniformly dark, that's a white box sitting in the middle of
+// the form.
 //
-// WAS HIER NICHT GEPRUEFT WIRD, und das gehoert dazugesagt: der Zustand
-// selbst. Autofill braucht ein echtes Browserprofil mit gespeicherten
-// Formularwerten; im Test gibt es keins. Auch CSS.forcePseudoState aus dem
-// Chrome-Protokoll hilft nicht – der Aufruf wird angenommen, aendert an der
-// Stilberechnung aber nichts. Nachgemessen: Ein Feld mit erzwungenem
-// :-webkit-autofill meldet denselben Schatten wie eines ohne.
+// WHAT'S NOT CHECKED HERE, and this needs saying: the state itself.
+// Autofill needs a real browser profile with saved form values; the test
+// has none. CSS.forcePseudoState from the Chrome protocol doesn't help
+// either - the call is accepted, but it changes nothing about the computed
+// style. Measured directly: a field with :-webkit-autofill forced on
+// reports the same shadow as one without.
 //
-// Geprueft wird deshalb die BUCHFUEHRUNG: Zu jedem Feldgrund der Seite muss es
-// einen Autofill-Eintrag mit DEMSELBEN Grund geben. Das faengt den Fehler, der
-// hier wirklich passiert – ein neues Feld kommt dazu, und niemand denkt an den
-// Sonderfall. Ob die Regel im Betrieb greift, sieht man nur im Betrieb.
+// So what's checked instead is the BOOKKEEPING: for every field background
+// on the page, there must be an autofill entry with the SAME background.
+// That catches the failure that actually happens here - a new field gets
+// added, and nobody thinks of the special case. Whether the rule actually
+// works in production can only be seen in production.
 {
-  // Jede Regel, die einem Feld einen Grund gibt.
-  const gruende = new Map();
+  // Every rule that gives a field a background.
+  const reasons = new Map();
   for (const treffer of css.matchAll(
     /(^|\})\s*([^{}]*\binput\b[^{}]*)\{([^}]*)\}/g)) {
     const wahl = treffer[2].trim();
@@ -377,36 +382,36 @@ console.log('\nAusgefüllt vom Browser\n');
     if (!grund) continue;
     const wert = grund[1].trim();
     if (wert === 'transparent' || wert === 'none') continue;
-    // Nur die Grundregel zaehlt, nicht die im @media-Block.
-    if (!gruende.has(wahl)) gruende.set(wahl, wert);
+    // Only the base rule counts, not the one inside the @media block.
+    if (!reasons.has(wahl)) reasons.set(wahl, wert);
   }
   console.log('     Felder mit eigenem Grund:');
-  for (const [wahl, wert] of gruende) console.log(`       ${wahl.padEnd(20)}${wert}`);
+  for (const [wahl, wert] of reasons) console.log(`       ${wahl.padEnd(20)}${wert}`);
 
   const fehlt = [];
-  const falsch = [];
-  for (const [wahl, wert] of gruende) {
-    // Der passende Autofill-Block: Er nennt denselben Waehler mit dem Zusatz.
+  const wrong = [];
+  for (const [wahl, wert] of reasons) {
+    // The matching autofill block: it names the same selector with the suffix.
     const muster = new RegExp(
       `${wahl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:-webkit-autofill[^{]*\\{([^}]*)\\}`);
-    // Der Block kann mehrere Waehler tragen; dann steht der gesuchte in der
-    // Liste und die Klammer folgt erst spaeter. Deshalb zweistufig.
+    // The block can carry several selectors; then the one we want sits in
+    // the list and the brace only follows later. Hence the two-step check.
     const inListe = new RegExp(
       `${wahl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:-webkit-autofill\\b`);
     if (!inListe.test(css)) { fehlt.push(wahl); continue; }
-    // Den Block finden, in dem der Waehler steht, und dessen Schatten lesen.
-    const bloecke = [...css.matchAll(/([^{}]*:-webkit-autofill[^{}]*)\{([^}]*)\}/g)];
-    const block = bloecke.find((b) => inListe.test(b[1]));
-    const schatten = block && /box-shadow:[^;]*var\((--[\w-]+)\)/.exec(block[2]);
-    if (!schatten) { fehlt.push(wahl); continue; }
-    if (`var(${schatten[1]})` !== wert) falsch.push(`${wahl}: ${wert} gegen ${schatten[1]}`);
+    // Find the block the selector lives in, and read its shadow.
+    const blocks = [...css.matchAll(/([^{}]*:-webkit-autofill[^{}]*)\{([^}]*)\}/g)];
+    const block = blocks.find((b) => inListe.test(b[1]));
+    const shadow = block && /box-shadow:[^;]*var\((--[\w-]+)\)/.exec(block[2]);
+    if (!shadow) { fehlt.push(wahl); continue; }
+    if (`var(${shadow[1]})` !== wert) wrong.push(`${wahl}: ${wert} gegen ${shadow[1]}`);
   }
-  pruefe('Jedes Feld mit eigenem Grund hat einen Autofill-Eintrag',
-    fehlt.length === 0, fehlt.join(', ') || `${gruende.size} Felder`);
-  pruefe('Und der Eintrag deckt mit DEMSELBEN Grund zu',
-    falsch.length === 0, falsch.join(' | ') || 'alle gleich');
-  // Der Grund allein reicht nicht: Chrome setzt auch die Schrift dunkel.
-  pruefe('Die Schriftfarbe wird ebenfalls zurückgeholt',
+  check('Jedes Feld mit eigenem Grund hat einen Autofill-Eintrag',
+    fehlt.length === 0, fehlt.join(', ') || `${reasons.size} Felder`);
+  check('Und der Eintrag deckt mit DEMSELBEN Grund zu',
+    wrong.length === 0, wrong.join(' | ') || 'alle gleich');
+  // The background alone isn't enough: Chrome also sets the text dark.
+  check('Die Schriftfarbe wird ebenfalls zurückgeholt',
     (css.match(/-webkit-text-fill-color: var\(--text\)/g) || []).length
       >= (css.match(/box-shadow: 0 0 0 100px var\(--bg/g) || []).length / 2,
     'text-fill-color steht in jedem Block');

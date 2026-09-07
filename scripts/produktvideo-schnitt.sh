@@ -1,33 +1,32 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Schneidet die Rohclips zum Produktvideo (16:9, ~32s)
+# Cuts the raw clips for the product video (16:9, ~32s)
 #
-# Reihenfolge: Titel, Anmeldung, Abstimmung, Posteingang, Abspann.
-#
-# ----------------------------------------------------------------------------
-# Die Schnittpunkte sind gemessen, nicht geschaetzt
-#
-# Fuer jeden Rohclip wurde ein Kontaktbogen erzeugt (ffmpeg tile) und
-# nachgesehen, wann welches Bild tatsaechlich steht. Beim Posteingang war das
-# noetig: Die Aufnahme beginnt mit einer Anmeldung als Ansem, der Posteingang
-# selbst faengt erst bei Sekunde 6 an. Geraten haette man das nicht.
+# Order: title, login, poll, inbox, outro.
 #
 # ----------------------------------------------------------------------------
-# Zum Tempo
+# The cut points are measured, not guessed
 #
-# Beschleunigt wird genau eine Stelle – das Warten auf die Zahlung – und sie
-# ist im Bild als "3x" beschriftet. Der Faktor in der Beschriftung ist
-# derselbe, der im Filter steht (setpts=PTS/3). Ein Video, das schneller
-# laeuft als es sagt, verspricht eine Anmeldung in drei Sekunden, die in
-# Wirklichkeit eine halbe Minute dauert.
+# For every raw clip a contact sheet was generated (ffmpeg tile) and
+# checked for when which frame actually appears. That was necessary for
+# the inbox: the recording starts with logging in as Ansem, the inbox
+# itself only starts at second 6. There was no guessing that.
+#
+# ----------------------------------------------------------------------------
+# On pacing
+#
+# Exactly one spot is sped up - waiting for the payment - and it is
+# labeled "3x" in the frame. The factor in the label is the same one in
+# the filter (setpts=PTS/3). A video that runs faster than it claims
+# promises a login in three seconds that in reality takes half a minute.
 #
 # ----------------------------------------------------------------------------
 # "demo data"
 #
-# Der Posteingang traegt die ganze Zeit einen Hinweis. Die Gespraeche sind
-# erfunden – die Seite ist neu und hat noch keine. Das steht so auch in der
-# README ("any post showing a full inbox is showing invented data"), und ein
-# Video ohne den Hinweis wuerde dem widersprechen.
+# The inbox carries a notice the whole time. The conversations are
+# invented - the site is new and has none yet. The README says the same
+# ("any post showing a full inbox is showing invented data"), and a video
+# without the notice would contradict that.
 #
 #   bash scripts/produktvideo-schnitt.sh
 # ============================================================================
@@ -41,9 +40,9 @@ FONT=/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf
 FONT_R=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
 rm -rf "$ARB"; mkdir -p "$ARB"
 
-# Untertitel: heller Text auf einem dunklen Balken, unteres Drittel.
-# box=1 statt eines eigenen Overlays – ein Balken, der sich nach der Textlaenge
-# richtet, muss nicht von Hand ausgemessen werden.
+# Subtitle: light text on a dark bar, bottom third.
+# box=1 instead of a custom overlay - a bar that sizes itself to the text
+# length does not need to be measured out by hand.
 unterzeile() {
   local datei="$1"
   echo "drawtext=fontfile=$FONT:textfile=$datei:fontsize=40:fontcolor=white@0.96\
@@ -53,7 +52,7 @@ unterzeile() {
 schreib() { printf '%s' "$2" > "$ARB/$1.txt"; echo "$ARB/$1.txt"; }
 
 # ---------------------------------------------------------------------------
-# 0. Titel
+# 0. Title
 # ---------------------------------------------------------------------------
 t1=$(schreib t1 'SIZED')
 t2=$(schreib t2 'token-gated polls and DMs for $ANSEM holders')
@@ -63,8 +62,8 @@ drawtext=fontfile=$FONT_R:textfile=$t2:fontsize=38:fontcolor=0x8a8a95:x=(w-text_
   -c:v libx264 -pix_fmt yuv420p -r 30 "$ARB/00-titel.mp4"
 
 # ---------------------------------------------------------------------------
-# 1. Anmeldung  (Rohclip 1-anmelden.webm, 14.5s)
-#    gemessen: Tippen 1.0-5.4 | Betrag 5.6-9.0 | Warten 9.0-11.6 | drin 11.8-14.4
+# 1. Login  (raw clip 1-anmelden.webm, 14.5s)
+#    measured: typing 1.0-5.4 | amount 5.6-9.0 | waiting 9.0-11.6 | in 11.8-14.4
 # ---------------------------------------------------------------------------
 u=$(schreib u1a 'type your Solana address')
 ffmpeg -v error -y -ss 1.0 -to 5.4 -i "$ROH/1-anmelden.webm" \
@@ -78,18 +77,18 @@ u=$(schreib u1c '3x  -  waiting for the payment')
 ffmpeg -v error -y -ss 9.0 -to 11.6 -i "$ROH/1-anmelden.webm" \
   -vf "setpts=PTS/3,$(unterzeile $u)" -an -c:v libx264 -pix_fmt yuv420p -r 30 "$ARB/01c.mp4"
 
-# Das Ankommen zeigt der ANFANG von Clip 2, nicht das Ende von Clip 1.
+# Arriving is shown by the START of clip 2, not the end of clip 1.
 #
-# Am Ende von Clip 1 ist die Abstimmungsseite zwar da, aber halb aus dem Bild
-# gerutscht – bei zoom 2 ist die Liste hoeher als das Fenster, und der Browser
-# steht noch am unteren Ende. Im Kontaktbogen sah das aus wie eine kaputte
-# Seite. Clip 2 faengt sauber oben an und zeigt dasselbe: man ist drin.
+# At the end of clip 1 the poll page is there, but has half slid out of
+# frame - at zoom 2 the list is taller than the window, and the browser
+# still sits at the bottom. In the contact sheet that looked like a broken
+# page. Clip 2 starts cleanly at the top and shows the same thing: you're in.
 u=$(schreib u1d 'verified - you are in')
 ffmpeg -v error -y -ss 0.4 -to 2.4 -i "$ROH/2-abstimmen.webm" \
   -vf "$(unterzeile $u)" -an -c:v libx264 -pix_fmt yuv420p -r 30 "$ARB/01d.mp4"
 
 # ---------------------------------------------------------------------------
-# 2. Abstimmen  (Rohclip 2-abstimmen.webm, 8.8s)
+# 2. Voting  (raw clip 2-abstimmen.webm, 8.8s)
 # ---------------------------------------------------------------------------
 u=$(schreib u2a 'polls - one wallet, one vote')
 ffmpeg -v error -y -ss 2.4 -to 5.2 -i "$ROH/2-abstimmen.webm" \
@@ -100,8 +99,8 @@ ffmpeg -v error -y -ss 5.2 -to 8.8 -i "$ROH/2-abstimmen.webm" \
   -vf "$(unterzeile $u)" -an -c:v libx264 -pix_fmt yuv420p -r 30 "$ARB/02b.mp4"
 
 # ---------------------------------------------------------------------------
-# 3. Posteingang  (Rohclip 3-posteingang.webm; Posteingang ab 6.2s)
-#    Durchgehend als Demo gekennzeichnet.
+# 3. Inbox  (raw clip 3-posteingang.webm; inbox starts at 6.2s)
+#    Labeled as demo throughout.
 # ---------------------------------------------------------------------------
 demo=$(schreib demo 'demo data')
 BADGE="drawtext=fontfile=$FONT:textfile=$demo:fontsize=30:fontcolor=0xffd479\
@@ -116,7 +115,7 @@ ffmpeg -v error -y -ss 11.2 -to 15.4 -i "$ROH/3-posteingang.webm" \
   -vf "$(unterzeile $u),$BADGE" -an -c:v libx264 -pix_fmt yuv420p -r 30 "$ARB/03b.mp4"
 
 # ---------------------------------------------------------------------------
-# 4. Abspann
+# 4. Outro
 # ---------------------------------------------------------------------------
 e1=$(schreib e1 'sized.gg')
 e2=$(schreib e2 'open source  -  github.com/sizedgg/sized')
@@ -126,7 +125,7 @@ drawtext=fontfile=$FONT_R:textfile=$e2:fontsize=34:fontcolor=0x8a8a95:x=(w-text_
   -c:v libx264 -pix_fmt yuv420p -r 30 "$ARB/04-abspann.mp4"
 
 # ---------------------------------------------------------------------------
-# Zusammensetzen
+# Assembling
 # ---------------------------------------------------------------------------
 : > "$ARB/liste.txt"
 for f in 00-titel 01a 01b 01c 01d 02a 02b 03a 03b 04-abspann; do

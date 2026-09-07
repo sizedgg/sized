@@ -1,10 +1,10 @@
 /**
- * Lokaler Nachbau des Supabase-Stacks, um das Frontend ohne Cloud-Projekt zu
- * testen: echtes Postgres + echtes PostgREST (also echte RLS) und eine
- * Node-Nachbildung der beiden Edge Functions im Mock-Modus.
+ * A local rebuild of the Supabase stack, to test the frontend without a
+ * cloud project: real Postgres + real PostgREST (so real RLS) and a Node
+ * reimplementation of the two Edge Functions in mock mode.
  *
- * Nicht enthalten: Realtime. Live-Updates funktionieren erst gegen ein echtes
- * Supabase-Projekt; die Oberfläche lädt hier nach jeder Aktion neu.
+ * Not included: Realtime. Live updates only work against a real Supabase
+ * project; here the interface reloads after every action instead.
  *
  *   PGURL=postgres://postgres:test@localhost/ansem_dev node scripts/dev-stack.mjs
  */
@@ -30,7 +30,7 @@ const PGRST_PORT = 4001;
 const db = new pg.Pool({ connectionString: PGURL });
 
 // ---------------------------------------------------------------------------
-// Mock-Chain
+// Mock chain
 // ---------------------------------------------------------------------------
 
 const MOCK_PRICE = 0.0042;
@@ -53,7 +53,7 @@ async function refreshWallet(wallet) {
 }
 
 // ---------------------------------------------------------------------------
-// Edge Functions (Node-Nachbildung)
+// Edge Functions (Node reimplementation)
 // ---------------------------------------------------------------------------
 
 async function fnVerify(body, _req) {
@@ -146,7 +146,7 @@ async function fnRefreshHoldings(_body, req) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP: statische Dateien, Function-Routen, PostgREST-Proxy
+// HTTP: static files, function routes, PostgREST proxy
 // ---------------------------------------------------------------------------
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
@@ -159,7 +159,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Konfiguration für den Browser überschreiben
+  // Override the config for the browser
   if (url.pathname === '/config.js') {
     res.writeHead(200, { 'content-type': 'text/javascript' }).end(
       `export const SUPABASE_URL = 'http://localhost:${PORT}';\n` +
@@ -197,7 +197,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Realtime gibt es lokal nicht – sauber ablehnen statt endlos retryen.
+  // Realtime doesn't exist locally - reject cleanly instead of retrying
+  // forever.
   if (url.pathname.startsWith('/realtime/')) {
     res.writeHead(501).end('Realtime nur gegen ein echtes Supabase-Projekt');
     return;
@@ -209,10 +210,10 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404).end('nicht gefunden');
     return;
   }
-  // Kein Zwischenspeichern beim Entwickeln. Ohne Cache-Control entscheidet der
-  // Browser selbst, wie lange er eine Antwort behält – und tut das großzügig.
-  // Genau das führt zu dem Fall, in dem man eine Datei ändert, neu lädt und
-  // trotzdem die alte Seite sieht.
+  // No caching while developing. Without Cache-Control, the browser decides
+  // for itself how long to keep a response - and does so generously. That's
+  // exactly what leads to the case where you change a file, reload, and
+  // still see the old page.
   res.writeHead(200, {
     'content-type': MIME[path.extname(abs)] || 'application/octet-stream',
     'cache-control': 'no-store, must-revalidate',
@@ -233,7 +234,7 @@ const readRaw = (req) => new Promise((r) => {
 const readJson = async (req) => { try { return JSON.parse((await readRaw(req)).toString() || '{}'); } catch { return {}; } };
 
 // ---------------------------------------------------------------------------
-// Start
+// Startup
 // ---------------------------------------------------------------------------
 
 const pgrst = spawn(PGRST_BIN, [], {

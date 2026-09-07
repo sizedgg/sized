@@ -1,16 +1,16 @@
 -- ============================================================================
--- Chat-Regeln nachgeschärft
+-- Chat rules tightened
 --
---  * 6 Nachrichten pro Minute statt 10
---  * keine zweimal hintereinander identische Nachricht derselben Wallet
+--  * 6 messages per minute instead of 10
+--  * no identical message twice in a row from the same wallet
 --
--- Zur Wiederholungssperre: Verglichen wird normalisiert – Groß- und
--- Kleinschreibung, führende und mehrfache Leerzeichen zählen nicht. Sonst
--- ließe sich die Sperre mit einem angehängten Leerzeichen aushebeln.
+-- On the repeat block: the comparison is normalized - case, leading and
+-- repeated whitespace don't count. Otherwise the block could be beaten with
+-- a trailing space.
 --
--- Und sie gilt nur eine Stunde zurück. Ohne dieses Fenster wäre "gm" nach dem
--- ersten Mal für immer gesperrt, solange dazwischen nichts anderes kommt – in
--- einem Krypto-Chat wäre das die falsche Sorte Streng.
+-- And it only looks back one hour. Without that window, "gm" would be
+-- blocked forever after the first time, as long as nothing else came in
+-- between - in a crypto chat that would be the wrong kind of strict.
 -- ============================================================================
 
 create or replace function app.rate_limit_messages()
@@ -43,7 +43,7 @@ begin
     raise exception 'Message limit reached - try again later';
   end if;
 
-  -- Die zuletzt gesendete Nachricht dieser Wallet innerhalb der letzten Stunde
+  -- The last message this wallet sent within the last hour
   select regexp_replace(lower(btrim(body)), '\s+', ' ', 'g')
   into last_body
   from public.messages

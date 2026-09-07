@@ -1,25 +1,25 @@
 // ============================================================================
-// Farbvorschlaege: dieselbe Seite, sechs Paletten.
+// Color proposals: the same page, six palettes.
 //
-// Warum nicht Farbquadrate, sondern die ganze Seite: Eine Palette entscheidet
-// sich nicht am einzelnen Ton, sondern daran, wie zwanzig Betraege
-// untereinander aussehen und ob der Balken einer fuehrenden Antwort die Zeile
-// ueberstrahlt. Genau das war schon zweimal der Grund, eine Farbe zu aendern,
-// die fuer sich genommen richtig aussah.
+// Why not color swatches but the whole page: a palette isn't judged on a
+// single tone, it's judged on how twenty amounts look stacked on top of each
+// other and whether the bar of a leading answer washes out the row. That's
+// exactly been the reason, twice now, to change a color that looked right on
+// its own.
 //
-// Gebaut wird mit der ECHTEN index.html und dem echten Blatt; ueberschrieben
-// werden nur die Variablen in :root. Damit bleibt eine Probe folgenlos – im
-// Blatt aendert sich nichts, bis eine Palette gewaehlt ist.
+// Built with the REAL index.html and the real stylesheet; only the variables
+// in :root get overridden. That way a trial stays without consequence -
+// nothing changes in the stylesheet until a palette is chosen.
 //
-// Der Beispielinhalt kommt woertlich aus preview-mobile.mjs. Eine zweite Kopie
-// der Aufbauanweisungen waere die uebliche Falle: Sie laeuft irgendwann neben
-// der Seite her, und dann vergleicht man Farben an einer Oberflaeche, die es
-// so nicht mehr gibt.
+// The sample content comes verbatim from preview-mobile.mjs. A second copy
+// of the setup instructions would be the usual trap: it eventually drifts
+// alongside the real page, and then you're comparing colors on an interface
+// that no longer looks like that.
 //
-// Zu jeder Palette werden die Kontraste GERECHNET und ausgegeben – eine Farbe,
-// die gut aussieht und die Stimmenzahl auf dem Balken verschwinden laesst, ist
-// keine Alternative, sondern ein Rueckschritt. Die Grenzen stehen in
-// styles.css bei den jeweiligen Variablen.
+// For every palette, the contrasts are COMPUTED and printed - a color that
+// looks good and makes the vote count on the bar disappear isn't an
+// alternative, it's a regression. The thresholds are in styles.css next to
+// the respective variables.
 //
 //   node scripts/vorschau-farben.mjs
 // ============================================================================
@@ -34,24 +34,25 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const outDir = path.join(root, 'preview', 'farben');
 fs.mkdirSync(outDir, { recursive: true });
 
-// --- Der Beispielinhalt, woertlich aus preview-mobile.mjs -------------------
+// --- The sample content, verbatim from preview-mobile.mjs -------------------
 const vorschau = fs.readFileSync(path.join(root, 'scripts', 'preview-mobile.mjs'), 'utf8');
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = vorschau.indexOf(von);
   const b = vorschau.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in preview-mobile.mjs: ${von}`);
   return vorschau.slice(a, b);
 };
-// Beide Bloecke enden auf die schliessende Backtick-Zeile.
-const FIXTURE = schneide('const FIXTURE = `', '\n`;\n') + '\n`;\n';
-const ADMIN_FIXTURE = schneide('const ADMIN_FIXTURE = `', '\n`;\n') + '\n`;\n';
+// Both blocks end at the closing backtick line.
+const FIXTURE = cut('const FIXTURE = `', '\n`;\n') + '\n`;\n';
+const ADMIN_FIXTURE = cut('const ADMIN_FIXTURE = `', '\n`;\n') + '\n`;\n';
 
 // ---------------------------------------------------------------------------
-// Die Paletten
+// The palettes
 //
-// Jede aendert NUR :root-Variablen. Was eine Farbe bedeutet, bleibt in allen
-// gleich: neutral ist Handlung, Gold ist Ansem, Rot ist ein Problem. Wer das
-// verschiebt, verschiebt nicht die Farbe, sondern die Sprache der Seite.
+// Each only changes :root variables. What a color means stays the same
+// across all of them: neutral is action, gold is Ansem, red is a problem.
+// Anyone who shifts that isn't shifting the color, they're shifting the
+// page's language.
 // ---------------------------------------------------------------------------
 const PALETTEN = [
   {
@@ -117,10 +118,10 @@ const PALETTEN = [
       '--accent': '#cfe0ff', '--accent-rgb': '207, 224, 255',
       '--accent-fill': '#7d9bd0', '--worth': '#b3c6e8', '--votes': '#c9d7ef',
       '--fokus': '#8e9cb8',
-      // #3b6fb5 stand hier zuerst – ein helleres, kraeftigeres Blau, das zur
-      // Ansage "eine Farbe, konsequent" gepasst haette. Gerechnet fiel die
-      // Stimmenzahl darauf auf 3,5:1 und der Text auf 4,3:1, beides unter der
-      // Grenze. #3457a2 ist der hellste Wert, der beide noch traegt.
+      // #3b6fb5 stood here first - a brighter, bolder blue that would have
+      // matched the claim "one color, consistently". Computed, the vote
+      // count on it came out to 3.5:1 and the text to 4.3:1, both under the
+      // threshold. #3457a2 is the brightest value that still carries both.
       '--fuellung': '#2a3242', '--fuellung-spitze': '#3457a2',
     },
   },
@@ -139,7 +140,7 @@ const PALETTEN = [
 ];
 
 // ---------------------------------------------------------------------------
-// Kontrast
+// Contrast
 // ---------------------------------------------------------------------------
 const kanal = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const leucht = (hex) => {
@@ -152,22 +153,22 @@ const kon = (a, b) => {
   return (x + 0.05) / (y + 0.05);
 };
 
-// Die Ausgangswerte aus dem echten Blatt lesen, nicht hier noch einmal
-// hinschreiben: Sonst rechnet die Probe gegen eine Palette, die es im Blatt
-// laengst nicht mehr gibt.
+// Read the baseline values from the real stylesheet instead of writing them
+// out again here: otherwise the trial would compute against a palette that
+// no longer exists in the stylesheet.
 const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const wurzel = css.slice(css.indexOf(':root {'), css.indexOf('\n}', css.indexOf(':root {')));
 const grundwerte = Object.fromEntries(
   [...wurzel.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/gi)].map((m) => [m[1], m[2]]));
 
 /**
- * Die Stellen, an denen eine Farbentscheidung schiefgehen kann.
+ * The spots where a color decision can go wrong.
  *
- * Nicht alle Paarungen der Palette – nur die, die beim Bauen schon einmal
- * knapp waren oder wo eine Zahl unlesbar wurde. Jede traegt ihre Grenze mit,
- * und die Grenzen stehen so auch in styles.css.
+ * Not every pairing in the palette - only the ones that have already come
+ * close during development or where a number became unreadable. Each one
+ * carries its own threshold, and the thresholds match what's in styles.css.
  */
-const PRUEFPUNKTE = [
+const CHECKPOINTS = [
   ['Text auf Grund',            '--text',   '--bg',               7.0],
   ['Nebentext auf Grund',       '--dim',    '--bg',               4.5],
   ['Betrag auf Grund',          '--worth',  '--bg',               4.5],
@@ -181,17 +182,17 @@ const PRUEFPUNKTE = [
 const wert = (p, name) => p.vars[name] ?? grundwerte[name];
 
 // ---------------------------------------------------------------------------
-// Die Seite
+// The page
 // ---------------------------------------------------------------------------
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const server = http.createServer((req, res) => {
-  const datei = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  const abs = path.join(root, 'public', path.normalize(datei).replace(/^(\.\.[/\\])+/, ''));
+  const file = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+  const abs = path.join(root, 'public', path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
   if (!abs.startsWith(path.join(root, 'public')) || !fs.existsSync(abs)) {
     return res.writeHead(404).end('');
   }
-  // app.js wird ersetzt: Die echte Anwendung wuerde sich anmelden wollen.
-  if (datei === '/app.js') {
+  // app.js gets replaced: the real app would try to log in.
+  if (file === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('/* Probe */');
   }
   res.writeHead(200, { 'content-type': MIME[path.extname(abs)] || 'application/octet-stream' })
@@ -203,9 +204,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
 
-// Zwei Ansichten, und beide werden gebraucht: In den Abstimmungen entscheidet
-// sich der Balken, in den DMs die Sprechblase. Eine Palette kann in einer von
-// beiden gut aussehen und in der anderen nicht.
+// Two views, and both are needed: in the polls, the bar makes the
+// decision, in the DMs, the message bubble does. A palette can look good in
+// one of the two and not in the other.
 const ANSICHTEN = [
   ['polls', `document.querySelector('#pane-polls').hidden = false;`],
   ['dms', `document.querySelectorAll('.tab')[1].classList.add('is-active');
@@ -220,36 +221,36 @@ console.log('\nFarbvorschlaege\n');
 for (const p of PALETTEN) {
   const regeln = Object.entries(p.vars).map(([k, v]) => `${k}: ${v};`).join(' ');
   for (const [ansicht, aufbau] of ANSICHTEN) {
-    const seite = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-    await seite.goto(base, { waitUntil: 'domcontentloaded' });
-    // Erst die beiden Bloecke DEKLARIEREN, dann ihren Inhalt ausfuehren.
-    // Ausgeschnitten ist der Quelltext samt "const FIXTURE = `…`;" – wer den
-    // nur einfuegt, hat zwei Zeichenketten angelegt und nichts getan. Genau
-    // das ist beim ersten Versuch passiert: sechs leere Seiten in sechs
-    // Farben. Der Inhalt ist eine Vorlage mit eigenen ${}-Stellen, muss also
-    // als solche ausgewertet werden – daher eval und kein Einfuegen.
-    await seite.addScriptTag({
+    const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+    await page.goto(base, { waitUntil: 'domcontentloaded' });
+    // First DECLARE both blocks, then execute their contents. What's
+    // extracted is the source including "const FIXTURE = `…`;" - anyone who
+    // just inserts that has created two strings and done nothing. That's
+    // exactly what happened on the first attempt: six empty pages in six
+    // colors. The content is a template with its own ${} placeholders, so it
+    // has to be evaluated as one - hence eval, not insertion.
+    await page.addScriptTag({
       content: `${FIXTURE}${ADMIN_FIXTURE}
         eval(FIXTURE + ADMIN_FIXTURE + ${JSON.stringify(aufbau)});`,
     });
-    if (regeln) await seite.addStyleTag({ content: `:root { ${regeln} }` });
-    await seite.waitForTimeout(200);
-    await seite.screenshot({ path: path.join(outDir, `${p.nr}-${p.name}-${ansicht}.png`) });
-    await seite.close();
+    if (regeln) await page.addStyleTag({ content: `:root { ${regeln} }` });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(outDir, `${p.nr}-${p.name}-${ansicht}.png`) });
+    await page.close();
   }
 
-  // Und die Zahlen dazu. Eine Palette, die eine Grenze reisst, ist keine
-  // Geschmacksfrage mehr.
-  const zeilen = PRUEFPUNKTE.map(([was, a, b, grenze]) => {
+  // And the numbers to go with it. A palette that breaks a threshold isn't
+  // a matter of taste anymore.
+  const lines = CHECKPOINTS.map(([was, a, b, grenze]) => {
     const v = kon(wert(p, a), wert(p, b));
     return { was, v, grenze, ok: v >= grenze };
   });
-  const durch = zeilen.filter((z) => !z.ok);
+  const durch = lines.filter((z) => !z.ok);
   console.log(`${p.nr}. ${p.titel}`);
   console.log(`   ${p.was.replace(/\s+/g, ' ')}`);
-  console.log('   ' + zeilen.map((z) => `${z.was} ${z.v.toFixed(1)}:1${z.ok ? '' : ' ✗'}`).join('  ·  '));
+  console.log('   ' + lines.map((z) => `${z.was} ${z.v.toFixed(1)}:1${z.ok ? '' : ' ✗'}`).join('  ·  '));
   if (durch.length) {
-    console.log(`   ACHTUNG: ${durch.length} unter der Grenze – `
+    console.log(`   ACHTUNG: ${durch.length} under der Grenze – `
       + durch.map((z) => `${z.was} braucht ${z.grenze}:1`).join(', '));
   }
   console.log('');

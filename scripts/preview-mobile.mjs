@@ -1,14 +1,14 @@
 /**
- * Bilder der Oberfläche in echten Telefongrößen – ohne Backend.
+ * Images of the UI at real phone sizes - without a backend.
  *
- * Die App braucht sonst eine bezahlte Verifikation, eine Datenbank und
- * Realtime, nur um überhaupt etwas anzuzeigen. Für die Frage "sieht und
- * bedient sich das auf dem Handy gut?" ist das alles nicht nötig: Hier wird
- * dieselbe HTML-Struktur eingesetzt, die app.js erzeugt, und dann fotografiert.
+ * Otherwise the app needs a paid verification, a database, and Realtime
+ * just to show anything at all. None of that is needed for the question
+ * "does this look and work well on a phone?": the same HTML structure
+ * that app.js produces is inserted here and then photographed.
  *
- * Zusätzlich werden zwei Dinge gemessen, die man auf Bildern leicht übersieht:
- *   * waagerechtes Überlaufen (die Seite lässt sich seitlich schieben)
- *   * zu kleine Tippziele (Daumen brauchen ~44 px)
+ * Two things are also measured that are easy to miss in images:
+ *   * horizontal overflow (the page can be scrolled sideways)
+ *   * tap targets that are too small (thumbs need ~44 px)
  *
  *   node scripts/preview-mobile.mjs
  */
@@ -20,37 +20,36 @@ import { chromium } from 'playwright';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // ---------------------------------------------------------------------------
-// Die Abstimmungen kommen WÖRTLICH aus app.js
+// The polls come VERBATIM from app.js
 // ---------------------------------------------------------------------------
 //
-// Hier stand eine von Hand geschriebene Nachbildung: "191 votes", ein blauer
-// Balken auf einer OFFENEN Abstimmung, eine Spalte mit Stimmenzahlen. Nichts
-// davon gab es zu diesem Zeitpunkt noch in der App – die Prozentangaben waren
-// entfernt, die Stimmenzahl auch, und Blau erscheint erst, wenn eine
-// Abstimmung beendet ist.
+// A hand-written imitation used to stand here: "191 votes", a blue bar on
+// an OPEN poll, a column of vote counts. None of that still existed in
+// the app at that point - the percentage figures were removed, so was
+// the vote count, and blue only appears once a poll has closed.
 //
-// Wir hätten also Bilder von einer Oberfläche angesehen, die es nicht gibt,
-// und Entscheidungen daran getroffen. Deshalb wird pollHtml() jetzt Zeichen
-// für Zeichen aus app.js herausgeschnitten und hier ausgeführt.
-const appJsQuelle = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-const schneideApp = (von, bis) => {
-  const a = appJsQuelle.indexOf(von);
-  const b = appJsQuelle.indexOf(bis, a);
+// So we would have been looking at images of a UI that doesn't exist and
+// making decisions based on it. That's why pollHtml() is now cut out of
+// app.js character for character and run here.
+const appJsSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+const cutApp = (von, bis) => {
+  const a = appJsSource.indexOf(von);
+  const b = appJsSource.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
-  return appJsQuelle.slice(a, b);
+  return appJsSource.slice(a, b);
 };
 const POLL_CODE = [
-  schneideApp('const esc = (s) =>', '\n\n'),
-  schneideApp('const nfGanz =', 'const ganzeZahl'),
-  schneideApp('const ganzeZahl =', '\n'),
-  schneideApp('const LINK_SVG =', '\n/**\n * Die Adresse einer einzelnen'),
-  schneideApp('function fristText(closesAt)', '\n// Unter einer Stunde'),
-  schneideApp('const BALD_MS =', '\n/**\n * Der Zeiger'),
-  schneideApp('const fuehrenderAnteil =', '\nasync function zeichnePoll'),
-  schneideApp('function pollHtml(p) {', '\n/**\n * Eine Abstimmung löschen'),
+  cutApp('const esc = (s) =>', '\n\n'),
+  cutApp('const nfGanz =', 'const wholeNumber'),
+  cutApp('const wholeNumber =', '\n'),
+  cutApp('const LINK_SVG =', 'const pollLink = (id) => `${location.origin}/p/${id}`;'),
+  cutApp('function fristText(closesAt)', 'const BALD_MS = 60 * 60 * 1000;'),
+  cutApp('const BALD_MS =', 'let fristT = null;'),
+  cutApp('const leadingShare =', '\nasync function drawPoll'),
+  cutApp('function pollHtml(p) {', 'async function deletePoll(id) {'),
 ].join('\n');
 
-// Dieselbe Form, die loadPolls() aus der Datenbank baut.
+// The same shape loadPolls() builds from the database.
 const POLL_DATEN = [
   { id: 1, closed: false, myOptionId: 1, totalUsd: 781420,
     closesAt: new Date(Date.now() + 29 * 3600e3).toISOString(),
@@ -72,54 +71,57 @@ const POLL_DATEN = [
 const outDir = path.join(root, 'preview');
 fs.mkdirSync(outDir, { recursive: true });
 
-// Echte Geräte, bewusst inklusive eines kleinen alten Telefons: Wer dort
-// zurechtkommt, kommt überall zurecht.
+// Real devices, deliberately including a small old phone: whoever works
+// fine on that works fine everywhere.
 //
-// Farbprobe: Mit ACCENT=#eceff5 wird nur der Schreibtisch gezeichnet, dafuer
-// mit ausgetauschter Akzentfarbe und einem Praefix im Dateinamen. Damit laesst
-// sich eine Farbentscheidung am fertigen Bild treffen statt am Farbquadrat –
-// und die normalen Vorschaubilder werden dabei nicht ueberschrieben.
+// Color trial: with ACCENT=#eceff5 only the desktop is rendered, but with
+// the accent color swapped out and a prefix on the filename. That way a
+// color decision can be made on the finished image instead of on a color
+// swatch - and the normal preview images don't get overwritten in the
+// process.
 //
 //   ACCENT='#eceff5' ACCENT_NAME=weiss node scripts/preview-mobile.mjs
 const ACCENT = process.env.ACCENT || null;
 const ACCENT_NAME = process.env.ACCENT_NAME || 'accent';
-// Freie Probe: beliebiges CSS oben drauf, sonst dieselbe Mechanik wie ACCENT.
-// Damit laesst sich eine Alternative am fertigen Bild vergleichen, ohne das
-// Stylesheet anzufassen und wieder zurueckdrehen zu muessen.
+// Free-form trial: arbitrary CSS layered on top, otherwise the same
+// mechanism as ACCENT. That way an alternative can be compared on the
+// finished image without touching the stylesheet and having to revert
+// it again.
 //
 //   PROBE_CSS='.msg .body { color: var(--dim); }' PROBE_NAME=heller \
 //     node scripts/preview-mobile.mjs
 const PROBE_CSS = process.env.PROBE_CSS || null;
 const PROBE_NAME = process.env.PROBE_NAME || 'probe';
 
-const ALLE_GERAETE = [
+const ALL_DEVICES = [
   { name: 'iphone-se', width: 375, height: 667, dpr: 2 },
   { name: 'iphone-15', width: 393, height: 852, dpr: 3 },
   { name: 'pixel-8', width: 412, height: 915, dpr: 2.6 },
   { name: 'ipad-mini', width: 744, height: 1133, dpr: 2 },
-  // Der Schreibtisch gehoert mit in die Reihe: Aenderungen fuer das Handy
-  // duerfen die zweispaltige Ansicht dort nicht kaputt machen.
+  // Desktop belongs in the lineup too: changes made for the phone must
+  // not break the two-column view there.
   { name: 'desktop', width: 1280, height: 900, dpr: 1 },
 ];
 
 const DEVICES = (ACCENT || PROBE_CSS)
-  ? ALLE_GERAETE.filter((g) => g.name === 'desktop')
-  : ALLE_GERAETE;
+  ? ALL_DEVICES.filter((g) => g.name === 'desktop')
+  : ALL_DEVICES;
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 
-// app.js wird bewusst NICHT geladen – es würde sofort Supabase anrufen.
-// gateText() woertlich aus app.js – nicht abgetippt.
+// app.js is deliberately NOT loaded - it would call Supabase right away.
+// gateText() verbatim from app.js - not typed out by hand.
 //
-// Hier stand der Sperrhinweis als Zeichenkette im Skript, und als der Satz in
-// app.js kuerzer wurde, zeigte die Vorschau weiter die alte Fassung. Eine
-// Vorschau, die etwas anderes zeigt als die Seite, ist schlimmer als keine:
-// Man sieht hin, findet es in Ordnung, und die Seite sagt etwas anderes.
-const gateTextQuelle = (() => {
-  const a = appJsQuelle.indexOf('function gateText(min, was) {');
-  const b = appJsQuelle.indexOf('\n}', a);
+// The gate message used to sit here as a string literal in the script,
+// and when the sentence in app.js got shorter, the preview kept showing
+// the old version. A preview that shows something different from the
+// page is worse than none: you look at it, decide it's fine, and the
+// page says something else.
+const gateTextSource = (() => {
+  const a = appJsSource.indexOf('function gateText(min, was) {');
+  const b = appJsSource.indexOf('\n}', a);
   if (a < 0 || b < 0) throw new Error('gateText steht nicht mehr so in app.js');
-  return appJsQuelle.slice(a, b + 2);
+  return appJsSource.slice(a, b + 2);
 })();
 
 const server = http.createServer((req, res) => {
@@ -129,13 +131,13 @@ const server = http.createServer((req, res) => {
     res.writeHead(404).end('nicht gefunden');
     return;
   }
-  // app.js wird bewusst durch eine leere Datei ersetzt: Diese Vorschau setzt
-  // die Zustände selbst über Fixtures, und die echte Anwendung würde dabei
-  // versuchen, sich anzumelden und Daten zu laden.
+  // app.js is deliberately replaced with an empty file: this preview
+  // sets its own states via fixtures, and the real app would otherwise
+  // try to log in and load data.
   //
-  // Der Preis ist, dass hier KEINE JavaScript-Fehler auffallen können – die
-  // Anwendung läuft ja gar nicht. Dafür ist test-pwa.mjs zuständig, das die
-  // Seite echt lädt.
+  // The price is that NO JavaScript errors can show up here - the app
+  // isn't actually running. test-pwa.mjs is responsible for that, since
+  // it loads the page for real.
   if (file === '/app.js') {
     res.writeHead(200, { 'content-type': 'text/javascript' }).end('/* im Vorschaumodus aus */');
     return;
@@ -148,22 +150,22 @@ await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 // ---------------------------------------------------------------------------
-// Beispielinhalte – so realistisch wie möglich, inklusive der unangenehmen
-// Fälle: sehr lange Wörter, große Zahlen, viele Nachrichten.
+// Sample content - as realistic as possible, including the unpleasant
+// cases: very long words, large numbers, many messages.
 // ---------------------------------------------------------------------------
 
 const FIXTURE = `
   document.querySelector('#login').hidden = true;
   document.querySelector('#app').hidden = false;
-  // Bei allen ausser Ansem stehen oben rechts die drei Zeichen in der eigenen
-  // Farbe – dieselbe Kennung wie in den DMs. Genau die Form, die renderMe()
-  // baut.
+  // For everyone except Ansem, the three characters sit top right in
+  // their own color - the same identifier as in the DMs. Exactly the
+  // shape renderMe() builds.
   document.querySelector('#me-handle').outerHTML =
     '<span id="me-handle" class="handle h t0">7xK</span>';
   document.querySelector('#me-holdings').textContent = '$5,208';
   document.querySelector('#dm-min-unit').textContent = 'in $ANSEM';
 
-  // Die Abstimmungen aus der echten pollHtml() – siehe POLL_CODE oben.
+  // The polls from the real pollHtml() - see POLL_CODE above.
   const state = { cfg: { symbol: 'ANSEM' }, me: { isAdmin: false, usd: 3 } };
   ${POLL_CODE}
   document.querySelector('#poll-list').innerHTML =
@@ -188,12 +190,12 @@ const ADMIN_FIXTURE = `
   document.querySelector('#dm-user').hidden = true;
   document.querySelector('#dm-admin').hidden = false;
   document.querySelector('#poll-admin').hidden = false;
-  // Ein drittes Antwortfeld, damit im Bild auch "[optional]" steht - die
-  // ersten beiden sind Pflicht und tragen es nicht.
+  // A third answer field, so "[optional]" also shows up in the image -
+  // the first two are required and don't carry it.
   document.querySelector('#poll-options').insertAdjacentHTML('beforeend',
     '<input class="poll-option" type="text" placeholder="Option 3 [optional]">');
-  // Ansem sieht in jeder Abstimmung zusaetzlich den Loeschknopf. Der zweite
-  // bekommt ihn scharf gestellt, damit im Bild beide Zustaende stehen.
+  // Ansem also sees the delete button in every poll. The second one gets
+  // it armed, so both states appear in the image.
   document.querySelectorAll('.poll-tools').forEach((w, i) => {
     w.insertAdjacentHTML('beforeend',
       '<button class="icon-btn poll-delete" title="Delete this poll">'
@@ -202,25 +204,25 @@ const ADMIN_FIXTURE = `
       + '<path d="M4 6.5h16"/><path d="M9.5 6.5V4.5h5v2"/>'
       + '<path d="M6.5 6.5l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12"/>'
       + '<path d="M10.5 10v6"/><path d="M13.5 10v6"/></svg></button>');
-    // Beim zweiten steht statt des Korbs schon das Haekchen – so zeigt das
-    // Bild beide Zustaende nebeneinander.
+    // For the second one, the checkmark already stands in for the trash
+    // can - that way the image shows both states side by side.
     if (i === 1) w.querySelector('.poll-delete').innerHTML =
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
       + 'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
       + '<path d="M4.5 12.5l5 5 10-11"/></svg>';
   });
 
-  // Ansems Kopfzeile: an der Stelle der Adresse steht bei ihm sein Profilbild
-  // (das legt das Blatt ueber .admin-name), der Betrag daneben wie bei allen
-  // anderen.
-  // Bei ihm das Profilbild, bei allen anderen die eigene Adresse. Der Hinweis
-  // daneben braucht einen Zeiger und ist auf dem Handy deshalb nie zu sehen –
-  // eine Vorlesestimme bekommt ihn ueber aria-describedby.
+  // Ansem's header: in place of the address, his avatar sits there
+  // (the stylesheet applies that via .admin-name), the amount next to it
+  // like everyone else.
+  // His avatar for him, everyone else's own address for them. The hint
+  // next to it needs a cursor and is therefore never visible on a
+  // phone - a screen reader gets it via aria-describedby.
   document.querySelector('#me-handle').outerHTML =
     '<span id="me-handle" class="handle h admin-name" aria-describedby="me-info">'
     + '<span class="kuerzel">4bo</span></span>';
   document.querySelector('#me-holdings').textContent = '$14,204,880';
-  // Nur Ansem sieht "DMs" – bei allen anderen bleibt das "s" unsichtbar.
+  // Only Ansem sees "DMs" - for everyone else the "s" stays invisible.
   document.querySelector('[data-tab="dms"]').classList.add('zeigt-s');
 
   const threads = [
@@ -240,7 +242,7 @@ const ADMIN_FIXTURE = `
     '<span class="addr dim">bH2kQ9vX1mNpL4rT7wYzA3cF6hJ8dS2gB5nM0qE</span>';
   document.querySelector('#admin-thread').innerHTML =
     document.querySelector('#dm-thread').innerHTML;
-  // Eine Antwort mit Zitat, wie sie nach der DM-Antwort-Migration aussieht.
+  // A reply with a quote, the way it looks after the DM-reply migration.
   document.querySelector('#admin-thread').insertAdjacentHTML('beforeend', \`
     <div class="dm-row mine is-active" data-id="9">
       <div class="msg dm mine has-quote">
@@ -255,22 +257,22 @@ const ADMIN_FIXTURE = `
   document.querySelector('#admin-reply-bar').hidden = false;
   document.querySelector('#admin-reply-bar-text').textContent = 'Is the unlock linear or cliff based?';
   document.querySelector('#admin-dm-form').hidden = false;
-  // Ansems Regler für die DM-Schwelle. Im echten Betrieb blendet ihn
-  // renderDmMin ein, sobald die Spalte in app_config existiert.
+  // Ansem's control for the DM threshold. In real operation, renderDmMin
+  // shows it as soon as the column exists in app_config.
   document.querySelector('#dm-min-box').hidden = false;
   document.querySelector('#dm-min-input').value = '10';
   document.querySelector('#dm-min-unit').textContent = 'in $ANSEM';
 `;
 
 // ---------------------------------------------------------------------------
-// Messungen, die auf einem Bild leicht untergehen
+// Measurements that are easy to miss on an image
 // ---------------------------------------------------------------------------
 
 const AUDIT = `((istHandy) => {
   const problems = [];
 
-  // 1. Waagerechtes Überlaufen: Die Seite darf sich seitlich nicht schieben
-  //    lassen. Auf dem Handy ist das der auffälligste Fehler überhaupt.
+  // 1. Horizontal overflow: the page must not be scrollable sideways.
+  //    On a phone this is the most conspicuous bug there is.
   const de = document.documentElement;
   if (de.scrollWidth > de.clientWidth + 1) {
     const wide = [...document.querySelectorAll('body *')].filter((el) => {
@@ -285,26 +287,29 @@ const AUDIT = `((istHandy) => {
     });
     problems.push({
       kind: 'ueberlauf',
-      detail: \`Seite \${de.scrollWidth}px breit bei \${de.clientWidth}px Fenster\`,
+      detail: \`Seite \${de.scrollWidth}px wide bei \${de.clientWidth}px Fenster\`,
       culprits: wide,
     });
   }
 
-  // Tippziele und Mindestschriftgrößen sind Handy-Regeln. Am Schreibtisch mit
-  // Maus gelten andere, und dort daran zu messen erzeugt nur Rauschen.
+  // Tap targets and minimum font sizes are phone rules. Different ones
+  // apply on desktop with a mouse, and measuring against them there just
+  // creates noise.
   if (!istHandy) return problems;
 
-  // 2. Tippziele. Apple und Google nennen beide rund 44 px als Mindestmaß.
+  // 2. Tap targets. Apple and Google both name around 44 px as the
+  //    minimum size.
   //
-  // Gemessen wird nicht der Kasten, sondern was der Daumen wirklich trifft.
-  // Das ist nicht dasselbe: Ein absolut gesetztes ::before mit negativem inset
-  // vergroessert die Trefferflaeche, ohne das Layout anzufassen – genau das
-  // will man bei einem Knopf, der auf einer Linie mit einer Ueberschrift steht
-  // und deshalb nicht wachsen darf. Wer nur getBoundingClientRect() liest,
-  // meldet den Knopf als zu klein, obwohl er bequem zu treffen ist.
+  // What's measured isn't the box, but what the thumb actually hits.
+  // That's not the same thing: an absolutely positioned ::before with a
+  // negative inset enlarges the hit area without touching the layout -
+  // exactly what you want for a button that sits on the same line as a
+  // heading and therefore can't grow. Reading only
+  // getBoundingClientRect() reports the button as too small even though
+  // it's comfortable to hit.
   //
-  // document.elementFromPoint loest ein Pseudoelement auf sein Element auf,
-  // also verraet ein Tastversuch ueber und unter der Mitte die echte Hoehe.
+  // document.elementFromPoint resolves a pseudo-element to its element,
+  // so probing above and below the center reveals the real height.
   const MIN = 44;
   const small = [];
   const trifft = (el, x, y) => {
@@ -316,21 +321,22 @@ const AUDIT = `((istHandy) => {
     if (el.closest('[hidden]') || el.hidden) continue;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
-    // Was nicht anklickbar ist, ist auch kein Tippziel. Betrifft Knöpfe, die
-    // erst beim Schweben oder Antippen scharf werden.
+    // Whatever isn't clickable isn't a tap target either. Applies to
+    // buttons that only become active on hover or tap.
     const cs = getComputedStyle(el);
     if (cs.pointerEvents === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
     if (r.height >= MIN - 0.5) continue;
 
-    // Von der Mitte aus nach oben und unten tasten, hoechstens bis MIN – mehr
-    // muss niemand wissen, und der Schritt kostet sonst Zeit auf jeder Seite.
+    // Probe outward from the center, up and down, at most to MIN - nobody
+    // needs to know more, and the step would otherwise cost time on
+    // every page.
     const mx = Math.round(r.left + r.width / 2);
     const my = Math.round(r.top + r.height / 2);
-    let oben = 0;
-    let unten = 0;
-    while (oben < MIN && trifft(el, mx, my - oben - 1)) oben += 1;
-    while (unten < MIN && trifft(el, mx, my + unten + 1)) unten += 1;
-    const treffer = oben + unten + 1;
+    let peek = 0;
+    let bottom = 0;
+    while (peek < MIN && trifft(el, mx, my - peek - 1)) peek += 1;
+    while (bottom < MIN && trifft(el, mx, my + bottom + 1)) bottom += 1;
+    const treffer = peek + bottom + 1;
     if (treffer < MIN - 0.5) {
       small.push({
         el: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '')
@@ -342,28 +348,29 @@ const AUDIT = `((istHandy) => {
       });
     }
   }
-  if (small.length) problems.push({ kind: 'tippziel', detail: \`\${small.length} unter \${MIN}px\`, culprits: small });
+  if (small.length) problems.push({ kind: 'tippziel', detail: \`\${small.length} under \${MIN}px\`, culprits: small });
 
-  // 3. Schriftgrößen unter 11px sind auf dem Handy kaum lesbar. Nebenangaben
-  //    wie Uhrzeiten dürfen darüber klein bleiben – Fließtext nicht.
+  // 3. Font sizes under 11px are barely readable on a phone. Secondary
+  //    details like timestamps may stay small - body text may not.
   const tiny = new Set();
   for (const el of document.querySelectorAll('body *')) {
     if (!el.textContent.trim() || el.children.length) continue;
-    // Unsichtbares nicht mitzählen – sonst meldet jeder Bildschirm die
-    // Schriftgrößen des ausgeblendeten Logins und die Liste wird wertlos.
+    // Don't count invisible elements - otherwise every screen would
+    // report the font sizes of the hidden login and the list becomes
+    // worthless.
     if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
     const fs = parseFloat(getComputedStyle(el).fontSize);
     if (fs < 11) tiny.add(\`\${el.className || el.tagName.toLowerCase()} (\${fs.toFixed(1)}px)\`);
   }
-  if (tiny.size) problems.push({ kind: 'schrift', detail: \`\${tiny.size} Stellen unter 11px\`, culprits: [...tiny].slice(0, 8) });
+  if (tiny.size) problems.push({ kind: 'font', detail: \`\${tiny.size} Stellen under 11px\`, culprits: [...tiny].slice(0, 8) });
 
   return problems;
 })`;
 
 // ---------------------------------------------------------------------------
 
-// Der vorinstallierte Chromium liegt an einem festen Ort; Playwright sucht
-// sonst nach einer Version, die es hier nicht gibt.
+// The preinstalled Chromium lives at a fixed location; otherwise
+// Playwright looks for a version that doesn't exist here.
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(
   fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
@@ -387,23 +394,23 @@ for (const d of DEVICES) {
        document.querySelectorAll('.tab')[0].classList.remove('is-active');
        document.querySelector('#pane-polls').hidden = true;
        document.querySelector('#pane-dms').hidden = false;`],
-    // Zu wenig gehalten, um Ansem zu schreiben.
+    // Not holding enough to message Ansem.
     ['dms-gated', FIXTURE + `document.querySelectorAll('.tab')[1].classList.add('is-active');
        document.querySelectorAll('.tab')[0].classList.remove('is-active');
        document.querySelector('#pane-polls').hidden = true;
        document.querySelector('#pane-dms').hidden = false;
        document.querySelector('#dm-form').classList.add('locked');
        document.querySelector('#dm-gate').hidden = false;
-       // esc und state kommen schon aus FIXTURE – hier nur noch, was fehlt.
-       ${gateTextQuelle}
+       // esc and state already come from FIXTURE - only what's missing goes here.
+       ${gateTextSource}
        const fmtUsd = (n) => '$' + Math.round(Number(n)).toLocaleString('en-US');
        document.querySelector('#dm-gate-text').innerHTML =
          gateText(10, 'to message Ansem');`],
     ['polls-ansem', FIXTURE + ADMIN_FIXTURE + `document.querySelector('#pane-polls').hidden = false;`],
-    // Der aufgeklappte Anlegekasten. Er gehoert eigens ins Bild, seit die
-    // Laufzeit darin steht: drei Auswahlfelder nebeneinander sind auf 375 px
-    // die engste Stelle der ganzen Seite, und zugeklappt sieht man davon
-    // nichts.
+    // The expanded creation box. It earns its own image since the
+    // duration fields moved into it: three select fields side by side
+    // are the tightest spot on the whole page at 375 px, and collapsed
+    // you don't see any of that.
     ['polls-ansem-offen', FIXTURE + ADMIN_FIXTURE + `
        document.querySelector('#pane-polls').hidden = false;
        document.querySelector('#poll-admin').classList.add('offen');
@@ -412,8 +419,8 @@ for (const d of DEVICES) {
        document.querySelectorAll('.tab')[0].classList.remove('is-active');
        document.querySelector('#pane-polls').hidden = true;
        document.querySelector('#pane-dms').hidden = false;`],
-    // Der geöffnete Faden: Auf dem Handy ersetzt er die Liste, am Schreibtisch
-    // steht er daneben. Beide Zustände gehören ins Bild.
+    // The open thread: on a phone it replaces the list, on desktop it
+    // sits next to it. Both states belong in the image.
     ['dms-ansem-thread', FIXTURE + ADMIN_FIXTURE + `document.querySelectorAll('.tab')[1].classList.add('is-active');
        document.querySelectorAll('.tab')[0].classList.remove('is-active');
        document.querySelector('#pane-polls').hidden = true;
@@ -424,18 +431,20 @@ for (const d of DEVICES) {
   for (const [view, fixture] of views) {
     await page.goto(base, { waitUntil: 'domcontentloaded' });
 
-    // Die Akzentfarbe wird nur ueberschrieben, nicht im Stylesheet geaendert –
-    // die Probe soll nichts hinterlassen. Ansems Name bekommt dabei Gold: Er
-    // haengt heute am Akzent, und in einem neutralen Akzent wuerde aus dem
-    // Auffaelligsten gewoehnlicher Text. Gold ist im Farbkommentar
-    // ohnehin schon fuer ihn reserviert.
+    // The accent color is only overridden, not changed in the
+    // stylesheet - the trial shouldn't leave anything behind. Ansem's
+    // name gets gold in the process: today it's tied to the accent, and
+    // with a neutral accent the most eye-catching element would turn
+    // into ordinary text. Gold is already reserved for him in the color
+    // comment anyway.
     if (ACCENT) {
-      // Auch --accent-rgb setzen, sonst blieben alle halbdurchsichtigen
-      // Stellen gruen: eigene DM-Blase, Aufleuchten, Balken im Poll.
-      const kanaele = ACCENT.replace('#', '').match(/../g)
+      // Also set --accent-rgb, otherwise every semi-transparent spot
+      // would stay green: your own DM bubble, the flash highlight, the
+      // poll bar.
+      const channels = ACCENT.replace('#', '').match(/../g)
         .map((h) => parseInt(h, 16)).join(', ');
       await page.addStyleTag({ content:
-        `:root { --accent: ${ACCENT}; --accent-rgb: ${kanaele}; }\n` +
+        `:root { --accent: ${ACCENT}; --accent-rgb: ${channels}; }\n` +
         `.admin-name { color: var(--accent); }` });
     }
     if (PROBE_CSS) await page.addStyleTag({ content: PROBE_CSS });
@@ -447,7 +456,7 @@ for (const d of DEVICES) {
         document.querySelector('#btn-install').hidden = ${view === 'install-ios'};
       `);
     } else if (view === 'login') {
-      // Der Zahlschritt ist der Bildschirm, auf dem Leute wirklich hängen.
+      // The payment step is the screen where people really get stuck.
       await page.evaluate(`
         document.querySelector('#step-address').hidden = true;
         document.querySelector('#step-pay').hidden = false;
@@ -475,9 +484,10 @@ for (const d of DEVICES) {
         for (const c of p.culprits) {
           console.log(`      - ${typeof c === 'string' ? c
             : `${c.el} "${c.text}" ${c.h}px`
-              // Wenn die Trefferflaeche groesser ist als der Kasten, gehoert
-              // beides in die Meldung: Sonst sucht man den Fehler im Layout,
-              // obwohl er in der Flaeche steckt (oder umgekehrt).
+              // If the hit area is larger than the box, both belong in
+              // the report: otherwise you'd look for the bug in the
+              // layout when it's actually in the hit area (or the other
+              // way around).
               + (c.treffer !== undefined && c.treffer !== c.h
                 ? ` (Trefferflaeche ${c.treffer}px)` : '')}`);
         }

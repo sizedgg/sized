@@ -1,31 +1,31 @@
 // ============================================================================
-// Wie Chat und DMs mit echtem Andrang aussehen.
+// What chat and DMs look like under real load.
 //
-// Der Zweck ist nicht "sieht huebsch aus", sondern: Was passiert, wenn die
-// Listen voll sind? Leere Ansichten verzeihen alles. Erst bei fuenfundzwanzig
-// Zeilen sieht man, ob die Betraege untereinander stehen, ob ein Zitat ueber
-// mehrere Zeilen den Rhythmus zerreisst, und ob ein Posteingang mit vielen
-// Gespraechen noch zu ueberblicken ist.
+// The point isn't "looks nice", it's: what happens when the lists are
+// full? Empty views forgive everything. Only at twenty-five rows do you
+// see whether the amounts line up in a column, whether a quote spanning
+// several lines tears up the rhythm, and whether an inbox with many
+// conversations is still easy to scan.
 //
-// Deshalb steht in den Daten unten ausdruecklich das Unangenehme und nicht das
-// Vorzeigbare:
+// So the data below deliberately includes the awkward stuff, not the
+// presentable stuff:
 //
-//   * Betraege ueber den ganzen Bereich – <$1 bis $12.4M –, damit man sieht,
-//     ob die Spalte bei "$1.2K" und "$12.4M" gleich breit bleibt.
-//   * Eine Nachricht ohne ein einziges Leerzeichen (ein langer Link), die
-//     jede Spalte sprengt, die nicht umbrechen kann.
-//   * Ein Zitat, das gekuerzt werden muss, und eines, dessen Original weg ist.
-//   * Zwei Leute mit demselben Kuerzel "7xK" – genau der Fall, fuer den es die
-//     vier Farbtoene ueberhaupt gibt.
-//   * Eine sehr lange Nachricht, die entscheidet, ob eine Chatzeile noch als
-//     Zeile liest oder zu einem Absatz mit einem Namen davor wird.
-//   * Im Posteingang: ungelesene und gelesene Gespraeche gemischt, und ein
-//     Gespraech, das ueber mehrere Tage laeuft – also mit Datumstrennern.
+//   * Amounts across the whole range - <$1 to $12.4M - so you can see
+//     whether the column stays the same width at "$1.2K" and "$12.4M".
+//   * A message with not a single space in it (a long link), which
+//     breaks any column that can't wrap.
+//   * A quote that has to be truncated, and one whose original is gone.
+//   * Two people with the same handle "7xK" - exactly the case the four
+//     color tones exist for in the first place.
+//   * A very long message that decides whether a chat row still reads as
+//     a row or turns into a paragraph with a name stuck in front of it.
+//   * In the inbox: unread and read conversations mixed together, and a
+//     conversation that spans several days - so it needs date separators.
 //
-// Es wird nichts nachgebaut: Markup und Hilfsfunktionen kommen woertlich aus
-// app.js, das Blatt aus styles.css, die Geruoste aus index.html.
+// Nothing is rebuilt by hand: markup and helper functions come verbatim
+// from app.js, the sheet from styles.css, the scaffolding from index.html.
 //
-// Erzeugt preview/voll-*.png
+// Generates preview/voll-*.png
 //   node scripts/vorschau-voll.mjs
 // ============================================================================
 
@@ -40,40 +40,39 @@ const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-const stueck = (von, bis) => {
+const piece = (von, bis) => {
   const a = html.indexOf(von);
   const b = html.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in index.html: ${von}`);
   return html.slice(a, b + bis.length);
 };
 
-const zahlen = schneide('const nfCompact =', '/* Ausgeschrieben statt');
-const kurz = schneide('const STUFEN =', '\n/**\n * Datumstrenner');
-const tage = schneide('const tagBeginn =', 'const handleOf');
-const namen = schneide('const handleOf =', '\nconst esc =');
-const escFn = schneide('const esc = (s) =>', '\n\n');
-const linkify = schneide('const LINK_MUSTER =', '\nfunction toast(');
-const chatBau = schneide('const istAdmin =', '\nfunction appendMessage');
-const dmBau = schneide('function dmQuoteHtml(row)', '\n// ------');
-// Die Posteingangsliste woertlich statt nachgetippt. Beim ersten Versuch hatte
-// ich die Zeile hier von Hand nachgebaut – und prompt standen "$86400" und
-// "$0.4" darin statt "$86.4K" und "<$1", weil die echte Fassung fmtUsd benutzt
-// und meine Abschrift nicht. Ein Vorschaubild, das das Produkt schlechter
-// aussehen laesst, als es ist, ist genauso falsch wie eines, das es schoener
-// macht.
-const threadBau = schneide('function renderThreads()', '\nfunction dmQuoteHtml(row)');
+const numbers = cut('const nfCompact =', 'const nfGanz = new Intl.NumberFormat(\'en-US\', { maximumFractionDigits: 0 });');
+const short = cut('const TIERS =', 'const tagBeginn = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();');
+const tage = cut('const tagBeginn =', 'const handleOf');
+const namen = cut('const handleOf =', '\nconst esc =');
+const escFn = cut('const esc = (s) =>', '\n\n');
+const linkify = cut('const LINK_MUSTER =', '\nfunction toast(');
+const chatBau = cut('const istAdmin =', '\nfunction appendMessage');
+const dmBau = cut('function dmQuoteHtml(row)', '\n// ------');
+// The inbox list verbatim instead of retyped. On the first attempt I
+// rebuilt this row by hand - and sure enough it showed "$86400" and "$0.4"
+// instead of "$86.4K" and "<$1", because the real version uses fmtUsd and
+// my copy didn't. A preview image that makes the product look worse than
+// it is, is just as wrong as one that makes it look better.
+const threadBau = cut('function renderThreads()', '\nfunction dmQuoteHtml(row)');
 
-const chatGeruest = stueck('<main id="pane-chat"', '</main>');
-const dmGeruest = stueck('<main id="pane-dms"', '</main>');
+const chatScaffold = piece('<main id="pane-chat"', '</main>');
+const dmScaffold = piece('<main id="pane-dms"', '</main>');
 
 // ---------------------------------------------------------------------------
-// Die Daten. Absichtlich unbequem – siehe Kopf.
+// The data. Deliberately uncomfortable - see the header above.
 // ---------------------------------------------------------------------------
 const W = {
   ansem: '4boaBdaCkqtgPmWV4JzwJ81azM9XTNhgVPqCZW7b7Kyo',
@@ -150,24 +149,24 @@ const DM = [
 ];
 
 // ---------------------------------------------------------------------------
-// Das Blatt steht hier in einem <style> und nicht als Datei – relative
-// Adressen darin (Ansems Profilbild) zeigen deshalb auf die SEITE. Ohne diese
-// zwei Zeilen laedt das Bild nicht, und die Vorschau zeigte einen leeren Kreis
-// als waere das der Entwurf.
+// The sheet sits here in a <style> tag and not as a file - relative
+// addresses inside it (Ansem's profile picture) therefore point at the
+// SITE. Without these two lines the image wouldn't load, and the preview
+// would show an empty circle as if that were the design.
 const server = http.createServer((q, res) => {
-  const datei = path.join(root, 'public', decodeURIComponent(q.url.split('?')[0]));
-  if (q.url !== '/' && datei.startsWith(path.join(root, 'public')) && fs.existsSync(datei)
-      && fs.statSync(datei).isFile()) {
-    const typ = datei.endsWith('.jpg') ? 'image/jpeg'
-      : datei.endsWith('.png') ? 'image/png' : 'application/octet-stream';
-    return res.writeHead(200, { 'content-type': typ }).end(fs.readFileSync(datei));
+  const file = path.join(root, 'public', decodeURIComponent(q.url.split('?')[0]));
+  if (q.url !== '/' && file.startsWith(path.join(root, 'public')) && fs.existsSync(file)
+      && fs.statSync(file).isFile()) {
+    const typ = file.endsWith('.jpg') ? 'image/jpeg'
+      : file.endsWith('.png') ? 'image/png' : 'application/octet-stream';
+    return res.writeHead(200, { 'content-type': typ }).end(fs.readFileSync(file));
   }
   res.writeHead(200, { 'content-type': 'text/html' })
      .end(`<!doctype html><meta charset="utf-8"><style>${css}</style>
        <body style="margin:0">
        <div id="app" style="display:flex;flex-direction:column;height:100vh;
             background:var(--bg);padding:14px;box-sizing:border-box">
-         ${chatGeruest}${dmGeruest}
+         ${chatScaffold}${dmScaffold}
        </div>`);
 });
 await new Promise((r) => server.listen(0, r));
@@ -177,7 +176,7 @@ const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: 
 const ausgabe = path.join(root, 'preview');
 fs.mkdirSync(ausgabe, { recursive: true });
 
-const grundgeruest = (admin) => `
+const baseScaffold = (admin) => `
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const state = {
@@ -188,8 +187,8 @@ const grundgeruest = (admin) => `
   };
   const toast = () => {};
   ${escFn}
-  ${zahlen}
-  ${kurz}
+  ${numbers}
+  ${short}
   ${tage}
   ${namen}
   ${linkify}
@@ -203,24 +202,24 @@ const grundgeruest = (admin) => `
   window.renderThreads = renderThreads;
   window.state = state;`;
 
-async function schuss(datei, breite, admin, aufbau) {
-  const seite = await browser.newPage({
-    viewport: { width: breite, height: breite < 500 ? 780 : 900 }, deviceScaleFactor: 2,
+async function shoot(file, width, admin, aufbau) {
+  const page = await browser.newPage({
+    viewport: { width: width, height: width < 500 ? 780 : 900 }, deviceScaleFactor: 2,
   });
-  await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-  await seite.addScriptTag({ content: grundgeruest(admin) });
-  await seite.evaluate(aufbau, { CHAT, THREADS, DM, W });
-  await seite.mouse.move(0, 0);
-  await seite.waitForTimeout(350);
-  await seite.locator('#app').screenshot({ path: path.join(ausgabe, datei) });
-  await seite.close();
-  console.log(`  ${path.join(ausgabe, datei)}`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.addScriptTag({ content: baseScaffold(admin) });
+  await page.evaluate(aufbau, { CHAT, THREADS, DM, W });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(350);
+  await page.locator('#app').screenshot({ path: path.join(ausgabe, file) });
+  await page.close();
+  console.log(`  ${path.join(ausgabe, file)}`);
 }
 
 const chatAufbau = ({ CHAT }) => {
   document.querySelector('#pane-dms').hidden = true;
   document.querySelector('#pane-chat').hidden = false;
-  // Die Zitate kommen aus derselben Quelle wie in der echten Seite.
+  // The quotes come from the same source as on the real site.
   for (const m of CHAT) window.state.quoted.set(m.id, m);
   document.querySelector('#chat-list').innerHTML = CHAT.map(window.msgHtml).join('');
   document.querySelector('#chat-list').scrollTop = 1e6;
@@ -238,26 +237,26 @@ const dmAufbau = ({ DM }) => {
   document.querySelector('#dm-thread').scrollTop = 1e6;
 };
 
-const posteingangAufbau = ({ DM, THREADS }) => {
+const inboxSetup = ({ DM, THREADS }) => {
   document.querySelector('#pane-chat').hidden = true;
   document.querySelector('#pane-dms').hidden = false;
   document.querySelector('#dm-user').hidden = true;
   document.querySelector('#dm-admin').hidden = false;
   window.state.dmMessages = DM;
   window.state.dmThreads = THREADS;
-  // Die echte Funktion, nicht eine Abschrift davon.
+  // The real function, not a transcription of it.
   window.renderThreads();
   document.querySelector('#admin-thread').innerHTML = window.dmListeHtml(DM);
   document.querySelector('#admin-thread').scrollTop = 1e6;
-  const kopf = document.querySelector('#admin-thread-who');
-  if (kopf) kopf.textContent = THREADS[0].wallet.slice(0, 3);
+  const header = document.querySelector('#admin-thread-who');
+  if (header) header.textContent = THREADS[0].wallet.slice(0, 3);
 };
 
-await schuss('voll-chat.png', 900, false, chatAufbau);
-await schuss('voll-chat-handy.png', 390, false, chatAufbau);
-await schuss('voll-dm-nutzer.png', 900, false, dmAufbau);
-await schuss('voll-dm-nutzer-handy.png', 390, false, dmAufbau);
-await schuss('voll-dm-posteingang.png', 1100, true, posteingangAufbau);
+await shoot('voll-chat.png', 900, false, chatAufbau);
+await shoot('voll-chat-handy.png', 390, false, chatAufbau);
+await shoot('voll-dm-nutzer.png', 900, false, dmAufbau);
+await shoot('voll-dm-nutzer-handy.png', 390, false, dmAufbau);
+await shoot('voll-dm-posteingang.png', 1100, true, inboxSetup);
 
 await browser.close();
 server.close();

@@ -1,9 +1,9 @@
 /**
- * Minimales HS256-JWT, signiert mit dem Supabase-JWT-Secret.
+ * Minimal HS256 JWT, signed with the Supabase JWT secret.
  *
- * Damit akzeptieren PostgREST und Realtime das Token wie ein reguläres
- * Supabase-Auth-Token – nur dass die Identität hier nicht E-Mail oder OAuth
- * ist, sondern die per Zahlung nachgewiesene Wallet im Claim "wallet".
+ * This makes PostgREST and Realtime accept the token like a regular
+ * Supabase auth token - except the identity here is not email or OAuth,
+ * but the wallet proven by payment, in the "wallet" claim.
  */
 
 const enc = new TextEncoder();
@@ -18,9 +18,9 @@ export interface WalletClaims {
   isAdmin: boolean;
   ttlSeconds: number;
   /**
-   * Zeitpunkt der ersten Anmeldung (Unix-Sekunden). Bleibt über alle
-   * Verlängerungen hinweg gleich und begrenzt so, wie lange eine Wallet ohne
-   * neue Zahlung im Umlauf bleiben kann.
+   * Time of the first login (Unix seconds). Stays the same across all
+   * renewals, and so limits how long a wallet can stay in circulation
+   * without a new payment.
    */
   origIat?: number;
 }
@@ -29,13 +29,13 @@ export async function signWalletJwt(secret: string, claims: WalletClaims): Promi
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'HS256', typ: 'JWT' };
   const payload = {
-    // Von Supabase erwartete Felder
+    // Fields Supabase expects
     aud: 'authenticated',
     role: 'authenticated',
     sub: claims.wallet,
     iat: now,
     exp: now + claims.ttlSeconds,
-    // Eigene Felder – `wallet` wird in den RLS-Policies ausgewertet
+    // Our own fields - `wallet` is evaluated in the RLS policies
     wallet: claims.wallet,
     is_admin: claims.isAdmin,
     oiat: claims.origIat ?? now,
@@ -56,9 +56,9 @@ const fromB64url = (s: string): Uint8Array => {
 };
 
 /**
- * Prüft Signatur und Ablauf und gibt die Wallet zurück – oder null.
- * Nie den Payload ohne diese Prüfung verwenden: er ist nur Base64, nicht
- * verschlüsselt, und lässt sich sonst beliebig fälschen.
+ * Checks signature and expiry and returns the wallet - or null.
+ * Never use the payload without this check: it is only base64, not
+ * encrypted, and can otherwise be forged at will.
  */
 export async function verifyWalletJwt(
   secret: string,

@@ -1,67 +1,67 @@
 -- ============================================================================
--- DMs werden angestupst, nicht an alle gemeldet
+-- DMs get a nudge, not a broadcast to everyone
 -- ============================================================================
 --
--- Das Problem
+-- The problem
 --
--- Bisher hörte jeder offene Browser über `postgres_changes` an public.dms mit.
--- Supabase prüft bei dieser Art Kanal die Rechte EINZELN, für jeden Zuhörer,
--- bei jeder Änderung. Aus deren Doku:
+-- Until now every open browser listened to public.dms via `postgres_changes`.
+-- For this kind of channel, Supabase checks permissions INDIVIDUALLY, for
+-- every listener, on every change. From their docs:
 --
 --   "Postgres Changes authorizes every event against each subscriber. When you
 --    make a single change to a table with 100 subscribed users, Realtime
 --    performs 100 authorization checks — one per user."
 --
--- Eine einzige DM an Ansem löst bei 3.000 offenen Seiten also 3.000
--- Rechteprüfungen aus. Bei 50 DMs pro Minute sind das rund 2.500 Prüfungen
--- pro Sekunde. Und dieselbe Seite nennt genau unsere Zielgröße als Grenze:
--- über ~3.000 gleichzeitige Zuhörer soll man auf Broadcast wechseln.
+-- So a single DM to Ansem with 3,000 open tabs triggers 3,000 permission
+-- checks. At 50 DMs a minute that's around 2,500 checks a second. And the
+-- same page names exactly our target size as the threshold: above ~3,000
+-- concurrent listeners you're supposed to switch to broadcast.
 --
--- Der Satz, auf den es ankommt:
+-- The sentence that matters:
 --
 --   "changes are also processed on a single thread to preserve their order,
 --    which means larger compute add-ons don't meaningfully increase Postgres
 --    Changes throughput."
 --
--- Ein größerer Server hilft hier also NICHT. Das ist ein Umbau oder nichts.
+-- So a bigger server does NOT help here. This is a rebuild or nothing.
 --
 -- ----------------------------------------------------------------------------
--- Die Lösung
+-- The solution
 --
--- Ein Trigger schickt bei jeder neuen DM zwei Broadcasts:
+-- A trigger sends two broadcasts for every new DM:
 --
---   dm:<wallet>   -> an den Eigentümer des Threads    (1 Zuhörer)
---   dm:admin      -> an Ansems Posteingang            (1 Zuhörer)
+--   dm:<wallet>   -> to the owner of the thread     (1 listener)
+--   dm:admin      -> to Ansem's inbox                (1 listener)
 --
--- Zwei Zustellungen statt 3.000 Prüfungen. Die Rechte werden EINMAL beim
--- Betreten des Kanals geprüft, nicht bei jeder Nachricht.
---
--- ----------------------------------------------------------------------------
--- Warum der Broadcast KEINEN Inhalt trägt
---
--- Er enthält nur die Thread-Adresse und einen Zeitstempel – kein `body`, keine
--- Beträge, nichts. Der Browser weiss dadurch nur "in deinem Thread hat sich
--- etwas getan" und lädt danach ganz normal über die Datenbank nach, wo die
--- bestehende RLS von public.dms greift wie immer.
---
--- Das ist Absicht und der Grund, warum ich mich bei dieser Bauweise wohlfühle:
--- Selbst wenn die Zugangsregel weiter unten falsch wäre und jemand einen
--- fremden Kanal beträte, bekäme er nichts zu lesen ausser der Information,
--- dass irgendwo eine Nachricht liegt. Der Inhalt läuft weiter ausschliesslich
--- über den Weg, der seit dem ersten Tag geprüft ist.
+-- Two deliveries instead of 3,000 checks. Permissions are checked ONCE, when
+-- joining the channel, not on every message.
 --
 -- ----------------------------------------------------------------------------
--- Nur empfangen, nicht senden
+-- Why the broadcast carries NO content
 --
--- Weiter unten steht eine Regel für `select` und ausdrücklich KEINE für
--- `insert`. select heisst empfangen, insert heisst senden. Ohne insert-Regel
--- kann kein Browser selbst einen Stups losschicken – niemand kann Ansem ein
--- Klingeln vortäuschen oder fremde Browser zu Abfragen treiben. Gesendet wird
--- ausschliesslich vom Trigger unten, und der läuft in der Datenbank.
+-- It contains only the thread address and a timestamp - no `body`, no
+-- amounts, nothing. That way the browser only knows "something happened in
+-- your thread" and then loads normally from the database, where the
+-- existing RLS on public.dms applies as always.
+--
+-- That's deliberate, and the reason I'm comfortable with this design: even
+-- if the access rule further down were wrong and someone entered a
+-- stranger's channel, they'd get nothing to read except the fact that a
+-- message exists somewhere. The content still goes exclusively through the
+-- path that's been checked since day one.
+--
+-- ----------------------------------------------------------------------------
+-- Receive only, never send
+--
+-- Further down there's a rule for `select` and deliberately NONE for
+-- `insert`. select means receive, insert means send. Without an insert
+-- rule, no browser can send a nudge itself - nobody can fake a ping to
+-- Ansem or drive other browsers into extra queries. Sending happens
+-- exclusively from the trigger below, which runs inside the database.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- 1. Der Stups
+-- 1. The nudge
 -- ----------------------------------------------------------------------------
 
 create or replace function app.dm_stups()
@@ -72,7 +72,7 @@ set search_path = public, pg_temp
 as $$
 declare nutzlast jsonb;
 begin
-  -- Bewusst ohne Inhalt: nur wessen Thread und wann. Siehe oben.
+  -- Deliberately without content: only whose thread and when. See above.
   nutzlast := jsonb_build_object(
     'wallet', new.wallet,
     'at',     extract(epoch from new.created_at)
@@ -92,20 +92,20 @@ create trigger trg_dms_stups
   for each row execute function app.dm_stups();
 
 -- ----------------------------------------------------------------------------
--- 2. Wer welchen Kanal betreten darf
+-- 2. Who may enter which channel
 -- ----------------------------------------------------------------------------
 --
--- Die Doku zeigt als Beispiel `using (true)` – "authenticated users can receive
--- broadcasts". Das wäre hier ein Loch: Damit könnte jeder Angemeldete den
--- Kanal dm:<fremde-adresse> betreten und mitbekommen, wann diese Person mit
--- Ansem schreibt. Kein Inhalt, aber ein Bewegungsprofil.
+-- The docs show `using (true)` as an example - "authenticated users can
+-- receive broadcasts". That would be a hole here: it would let any signed-in
+-- user enter the channel dm:<someone-elses-address> and learn when that
+-- person is writing to Ansem. No content, but a movement profile.
 --
--- Also eng: die eigene Adresse, und dm:admin nur für Ansem. app.is_admin()
--- vergleicht dabei wie überall die Wallet aus dem Anmeldeausweis gegen
--- app_config.admin_wallet – es glaubt keinem is_admin-Feld im Ausweis.
+-- So kept tight: your own address, and dm:admin only for Ansem. app.is_admin()
+-- compares, as everywhere, the wallet from the login token against
+-- app_config.admin_wallet - it trusts no is_admin field in the token itself.
 --
--- Ist keine Wallet im Ausweis, ergibt 'dm:' || null den Wert null, und der
--- Vergleich ist niemals wahr. Also kommt niemand ohne Anmeldung hinein.
+-- If there's no wallet in the token, 'dm:' || null evaluates to null, and
+-- the comparison is never true. So nobody gets in without being signed in.
 -- ----------------------------------------------------------------------------
 
 do $$
@@ -130,18 +130,19 @@ begin
 end $$;
 
 -- ----------------------------------------------------------------------------
--- 3. public.dms verlässt die Live-Zustellung
+-- 3. public.dms drops out of live delivery
 -- ----------------------------------------------------------------------------
 --
--- Sonst liefe beides nebeneinander: der Stups UND die alte Meldung an jeden
--- Zuhörer. Die teure Hälfte muss weg, sonst war der Umbau umsonst.
+-- Otherwise both would run side by side: the nudge AND the old broadcast to
+-- every listener. The expensive half has to go, or the rebuild was for
+-- nothing.
 --
--- ACHTUNG für später: Wer in public/app.js je wieder einen postgres_changes-
--- Kanal auf `dms` einbaut, muss die Tabelle hier erneut aufnehmen. Sonst kommt
--- nichts an, ohne Fehler und ohne Warnung.
+-- WATCH OUT later: whoever ever adds a postgres_changes channel on `dms`
+-- back into public/app.js has to re-add the table here too. Otherwise
+-- nothing arrives, with no error and no warning.
 --
--- replica identity full bleibt stehen – kostet nichts, solange die Tabelle
--- nicht veröffentlicht ist, und wäre der stille Fallstrick beim Zurückbauen.
+-- replica identity full stays in place - it costs nothing as long as the
+-- table isn't published, and would be the silent trap when reverting this.
 -- ----------------------------------------------------------------------------
 
 do $$

@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='29 16 42 64' fill='%23eceff5'><rect x='29' y='54' width='18' height='26' rx='9'/><rect x='53' y='16' width='18' height='64' rx='9'/></svg>">
 
-<!-- Startbildschirm -->
+<!-- Home screen -->
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
 <meta name="theme-color" content="#0a0b0f">
@@ -19,18 +19,18 @@
 <body>
 
 <!-- ========================= LOGIN =========================
-     Beim Laden ist WEDER dieser Bildschirm NOCH die App sichtbar.
+     While loading, NEITHER this screen NOR the app is visible.
 
-     Der Grund ist der Weg von einem geteilten Abstimmungslink: Wer angemeldet
-     ist, sah frueher fuer den Bruchteil einer Sekunde den Login, dann die
-     leere Abstimmungsliste und erst dann die Abstimmung. Drei Bilder fuer eine
-     Bewegung, und keins davon war gemeint.
+     The reason is the path from a shared poll link: someone already signed in
+     used to see, for a fraction of a second, the login, then the empty poll
+     list, and only then the poll. Three images for one transition, and none
+     of them was intended.
 
-     Also entscheidet erst das Skript, was gezeigt wird, und zeigt genau eines.
-     Bis dahin ist die Seite dunkel – dieselbe Farbe wie beides, man sieht also
-     nichts blitzen.
+     So the script decides first what to show, and shows exactly one thing.
+     Until then the page is dark - the same color as either state, so nothing
+     flashes.
 
-     Ohne JavaScript bliebe die Seite leer, deshalb das noscript darunter. -->
+     Without JavaScript the page would stay empty, hence the noscript below. -->
 <noscript>
   <section class="login">
     <div class="login-card">
@@ -40,25 +40,25 @@
   </section>
 </noscript>
 
-<!-- ========================= NOCH ZU =========================
-     Was ein Besucher sieht, solange app_config.open_to_public auf false
-     steht. Der Schalter gilt fuer beides: Er entscheidet hier, was zu sehen
-     ist, und in der Function, wer ueberhaupt hereinkommt. Eine Zeile SQL
-     macht die Seite auf und wieder zu, ohne dass etwas hochgeladen wird.
+<!-- ========================= NOT OPEN YET =========================
+     What a visitor sees while app_config.open_to_public is false. The
+     switch governs both sides: it decides here what is shown, and in the
+     Function, who gets in at all. One line of SQL opens and closes the
+     page, without deploying anything.
 
-     Wichtig zum Verstaendnis: Dieser Bildschirm ist eine FASSADE, keine
-     Sperre. Wer ihn umgeht – ueber die Konsole, mit einem alten Lesezeichen,
-     wie auch immer –, kommt an den Login und dort keinen Schritt weiter: Die
-     Function laesst nur admin_wallet und test_wallet durch, und das
-     entscheidet der Server. Deshalb darf der Knopf darunter auch offen
-     dastehen; er verbirgt nichts, er spart nur einen Umweg. -->
+     Important to understand: this screen is a FACADE, not a lock. Anyone who
+     bypasses it - through the console, an old bookmark, whatever - reaches
+     the login and gets no further from there: the Function only lets
+     admin_wallet and test_wallet through, and the server decides that.
+     That's why the button below is allowed to stand there in the open; it
+     hides nothing, it only saves a detour. -->
 <section id="soon" class="login" hidden>
   <div class="login-card">
     <div class="brand"><span class="brand-mark"><svg viewBox="29 16 42 64" fill="currentColor" aria-hidden="true"><rect x="29" y="54" width="18" height="26" rx="9"/><rect x="53" y="16" width="18" height="64" rx="9"/></svg></span>SIZED</div>
     <p class="lede">Launching soon.</p>
   </div>
-  <!-- Unter der Karte und bewusst klein: Er gehoert nicht zur Seite, er ist
-       eine Abkuerzung fuer die paar Leute, die sie gerade bauen. -->
+  <!-- Below the card and deliberately small: it isn't part of the page, it's
+       a shortcut for the few people who are currently building it. -->
   <button id="btn-team" class="soon-link" type="button">Team access</button>
 </section>
 
@@ -66,29 +66,28 @@
   <div class="login-card">
     <div class="brand"><span class="brand-mark"><svg viewBox="29 16 42 64" fill="currentColor" aria-hidden="true"><rect x="29" y="54" width="18" height="26" rx="9"/><rect x="53" y="16" width="18" height="64" rx="9"/></svg></span>SIZED</div>
 
-    <!-- ================= STARTBILDSCHIRM =================
-         Kommt vor dem Login und nur auf dem Handy. Der Grund steht im Text und
-         ist kein Marketing: Im Browser räumt iOS gespeicherte Sitzungen nach
-         einiger Zeit ohne Besuch weg, und eine neue Anmeldung kostet hier
-         echtes Geld. Auf dem Startbildschirm gilt das nicht. -->
+    <!-- ================= HOME SCREEN =================
+         Comes before the login and only on the phone. The reason is stated
+         in the text and is not marketing: in the browser, iOS clears saved
+         sessions after some time without a visit, and a new sign-in here
+         costs real money. That doesn't apply from the home screen. -->
     <div id="step-install" class="step" hidden>
       <p class="lede">SIZED works best from your home screen.</p>
 
-      <!-- Android/Chrome: der Browser übernimmt das Einrichten selbst. -->
+      <!-- Android/Chrome: the browser handles the setup itself. -->
       <button id="btn-install" class="btn btn-primary" hidden>Add to home screen</button>
 
-      <!-- iOS: kein Knopf möglich, es geht nur von Hand.
+      <!-- iOS: no button is possible, it only works by hand.
 
-           Der Text jedes Schrittes steckt in EINEM span, und das ist keine
-           Zierde: .steps li ist ein Flex-Kasten, damit die Ziffer in ihrer
-           eigenen Spalte steht. Ohne den span würde jedes Textstück darin ein
-           eigenes Flex-Element – "Scroll down and choose" flöge von
-           "Add to Home Screen" weg, und die zweite Zeile begänne an einer
-           anderen Kante als die erste.
+           The text of each step sits in ONE span, and that's not decoration:
+           .steps li is a flex box so the digit gets its own column. Without
+           the span, every piece of text in there would become its own flex
+           item - "Scroll down and choose" would fly away from "Add to Home
+           Screen", and the second line would start at a different edge than
+           the first.
 
-           Nachgemessen: Nimmt man den span heraus, schlägt in
-           scripts/test-pwa.mjs die Prüfung "Alle Schritte beginnen an
-           derselben Kante" an. -->
+           Measured: take the span out, and in scripts/test-pwa.mjs the check
+           "All steps start at the same edge" fails. -->
       <ol id="ios-steps" class="steps" hidden>
         <li><span class="txt">Tap <span class="glyph">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -120,9 +119,9 @@
         above. The last decimals are your personal identifier — they are the
         only way the payment can be matched to you.</p>
 
-      <!-- Die ganze Zeile ist der Kopierknopf, nicht nur das Wort "Copy".
-           Auf dem Handy ist ein kleines Ziel neben einer langen Adresse die
-           häufigste Quelle für Fehlgriffe – und hier hängt Geld dran. -->
+      <!-- The whole row is the copy button, not just the word "Copy". On the
+           phone, a small target next to a long address is the most common
+           source of mistaps - and here money is on the line. -->
       <button class="pay-row copy" type="button" data-copy="#pay-amount">
         <span class="pay-label">Amount</span>
         <code id="pay-amount" class="pay-value big"></code>
@@ -151,66 +150,68 @@
 <!-- ========================= APP ========================= -->
 <div id="app" class="app" hidden>
   <header class="topbar">
-    <!-- Die Marke selbst führt zum offiziellen Account. Der steht bewusst in
-         der Kopfzeile: Wer später einen Nachbau der Seite sieht, hat hier den
-         Vergleichspunkt. rel="noopener" ist Pflicht – ohne das könnte die
-         geöffnete Seite über window.opener auf diese hier zugreifen.
+    <!-- The brand itself links to the official account. It's deliberately in
+         the header: anyone who later sees a knockoff of the page has a
+         reference point right here. rel="noopener" is mandatory - without
+         it, the opened page could reach back into this one via
+         window.opener.
 
-         Hier stand eine Runde lang ein Schild mit Ansems Bild daneben, das
-         sagen sollte, wessen Raum das ist. Es ist wieder raus. -->
+         For a while, a badge with Ansem's picture sat here beside it,
+         meant to say whose space this is. It's gone again. -->
     <a class="brand small brand-link" href="https://x.com/sizedgg"
        target="_blank" rel="noopener noreferrer"
        title="@sizedgg on X"><span class="brand-mark"><svg viewBox="29 16 42 64" fill="currentColor" aria-hidden="true"><rect x="29" y="54" width="18" height="26" rx="9"/><rect x="53" y="16" width="18" height="64" rx="9"/></svg></span>SIZED</a>
     <nav class="tabs">
       <button class="tab is-active" data-tab="polls">Polls</button>
-      <!-- "DM" für alle, "DMs" nur für Ansem – und das "s" steht als eigenes
-           Element da, damit es VERSCHWINDEN kann, ohne dass sich etwas
-           verschiebt. Es wird ausgeblendet, nicht entfernt: Sein Platz bleibt
-           stehen, also bleibt auch Polls daneben, wo es ist.
+      <!-- "DM" for everyone, "DMs" only for Ansem - and the "s" sits as its
+           own element so it can DISAPPEAR without anything shifting. It's
+           hidden, not removed: its space stays put, so Polls stays right
+           where it is next to it.
 
-           Ohne das wäre der Reiter ein Zeichen schmaler und die ganze Gruppe
-           4,5 px – Polls läge bei Ansem und einem Nutzer an verschiedenen
-           Stellen.
+           Without this, the tab would be one character narrower and the
+           whole group 4.5 px - Polls would sit in a different spot for
+           Ansem than for a regular user.
 
-           Sichtbar heisst hier visibility und nicht hidden: hidden nähme den
-           Platz mit. Für eine Vorlesestimme ist beides gleich – auch ein per
-           visibility ausgeblendetes Element wird nicht vorgelesen, ein Nutzer
-           hört also "DM" und Ansem "DMs". -->
+           "Visible" here means visibility, not hidden: hidden would take the
+           space with it. For a screen reader the two are equal - an element
+           hidden via visibility isn't read out either, so a user hears "DM"
+           and Ansem hears "DMs". -->
       <button class="tab" data-tab="dms">DM<span class="dm-s">s</span></button>
     </nav>
     <div class="me">
-      <!-- Der Kasten drumherum ist der Bezugspunkt fuer den Hinweis: Der soll
-           LINKS NEBEN dem Profilbild aufgehen und nicht links neben der ganzen
-           Gruppe. Ohne ihn suchte sich das absolut gesetzte Element die
-           naechste positionierte Ebene, und das waere die Kopfzeile. -->
+      <!-- The box wrapped around it is the anchor for the tooltip: it should
+           open LEFT OF THE AVATAR, not left of the whole group. Without it,
+           the absolutely positioned element would look for the nearest
+           positioned ancestor, and that would be the header. -->
       <span class="me-ich">
-        <!-- Was hier steht, haengt an der Rolle: bei Ansem sein Profilbild,
-             bei allen anderen die eigene Adresse. app.js baut das eine oder
-             das andere.
+        <!-- What's here depends on the role: for Ansem, his avatar; for
+             everyone else, their own address. app.js builds one or the
+             other.
 
-             Beides ein <span> und kein Knopf – hier gibt es nichts zu
-             druecken. Der Hinweis daneben kommt mit dem Zeiger und geht mit
-             ihm; das macht das Blatt allein. -->
+             Both are a <span>, not a button - there's nothing to press
+             here. The tooltip beside it appears with the pointer and leaves
+             with it; the stylesheet handles that on its own. -->
         <span id="me-handle" class="handle"></span>
-        <!-- Nur Ansem sieht ihn: sobald der Zeiger auf dem Bild steht, auf dem
-             Handy nach einem Tipp. Er beantwortet genau eine Frage – mit
-             welchem Konto bin ich hier? Bei ihm steht oben rechts ein Bild
-             statt einer Adresse, und ein Bild sagt das nicht von selbst.
+        <!-- Only Ansem sees it: as soon as the pointer is on the avatar, or
+             after a tap on the phone. It answers exactly one question -
+             which account am I here as? For him, a picture sits up top right
+             instead of an address, and a picture doesn't say that on its
+             own.
 
-             role="tooltip" und nicht "status": Es ist kein Ereignis, das
-             gemeldet wird, sondern eine Erklaerung zu dem Knopf daneben. Der
-             verweist mit aria-describedby darauf – so bekommt eine
-             Vorlesestimme den Satz auch dann, wenn er gerade nicht zu sehen
-             ist – und ohne Zeiger, also auf dem Handy, gibt es ihn ueberhaupt
-             nur auf diesem Weg. -->
+             role="tooltip" and not "status": it isn't an event being
+             reported, it's an explanation of the button next to it. That
+             button points to it with aria-describedby - so a screen reader
+             gets the sentence even when it isn't currently visible - and
+             without a pointer, i.e. on the phone, that's the only way to
+             reach it at all. -->
         <div id="me-info" class="me-info" role="tooltip">You are logged in as Ansem</div>
       </span>
       <span id="me-holdings" class="holdings worth"></span>
-      <!-- Pfeil aus der Tuer statt Ein-/Ausschalter. Zwei Gruende: Das ⏻ war ein
-           Schriftzeichen und sah auf jedem System anders aus, waehrend direkt
-           daneben ein gezeichnetes SVG steht. Und ein Ausschalter heisst
-           "Geraet aus" – hier endet eine Sitzung, die nur gegen eine neue
-           Zahlung zurueckkommt. -->
+      <!-- An arrow out the door instead of a power symbol. Two reasons: the
+           ⏻ was a text character and looked different on every system,
+           right next to a hand-drawn SVG. And a power switch means "device
+           off" - what ends here is a session that only comes back against a
+           new payment. -->
       <button id="btn-logout" class="icon-btn" title="Sign out" aria-label="Sign out">
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"
              fill="none" stroke="currentColor" stroke-width="2"
@@ -225,71 +226,73 @@
 
   <main id="pane-polls" class="pane">
     <div id="poll-admin" class="poll-admin" hidden>
-      <!-- Die Kopfzeile ist nur noch der Schalter.
-           Rechts daneben stand die Laufzeit: ein Wert in Stunden mit einem
-           Plus und einem Minus. Sie steht jetzt unten im Kasten, als Tage,
-           Stunden und Minuten – drei Kaesten passen neben eine Ueberschrift
-           nicht mehr, auf 390 px erst recht nicht.
+      <!-- The header is now just the toggle.
+           The poll length used to sit right beside it: a value in hours
+           with a plus and a minus. It now lives lower in the box, as days,
+           hours and minutes - three boxes no longer fit next to a heading,
+           least of all at 390 px.
 
-           Was dieser Umzug kostet, gehoert dazugesagt: Zugeklappt war die
-           eingestellte Laufzeit vorher zu sehen, ohne dass jemand etwas
-           anfassen musste. Jetzt nicht mehr. Dafuer faellt die halbe
-           Sonderbehandlung des zugeklappten Zustands weg – der Kasten enthaelt
-           zugeklappt genau ein Element, und das ist der Knopf. -->
+           What this move costs deserves saying: collapsed, the configured
+           poll length used to be visible without anyone touching anything.
+           Not anymore. In exchange, half the special-casing of the
+           collapsed state falls away - collapsed, the box contains exactly
+           one element, and that's the button. -->
       <div class="poll-admin-kopf">
-        <!-- Der Knopf STEHT in der Ueberschrift, statt sie zu ersetzen: Die
-             Ueberschrift bleibt eine Ueberschrift fuer alles, was das Blatt
-             der Reihe nach vorliest, und ist trotzdem der Schalter. Zwei
-             Elemente uebereinander – Ueberschrift plus Knopf daneben – waeren
-             zwei Dinge fuer eine Aufgabe. -->
+        <!-- The button SITS INSIDE the heading instead of replacing it: the
+             heading stays a heading for anything reading the page in order,
+             while still being the toggle. Two elements stacked - a heading
+             plus a button beside it - would be two things doing one job. -->
         <h3><button id="btn-poll-neu" class="poll-neu" type="button"
                     aria-expanded="false" aria-controls="poll-admin-felder"
             ><span class="zeichen" aria-hidden="true">+</span>New poll</button></h3>
-        <!-- Auf dem Handy steht hier dieser Satz statt des Schalters.
+        <!-- On the phone, this sentence stands here instead of the toggle.
              ----------------------------------------------------------------
-             Eine Abstimmung anzulegen heisst: Frage tippen, bis zu vier
-             Antworten tippen, Laufzeit setzen. Das ist Arbeit an einer
-             Tastatur, und auf einem Telefon war das Formular mit offener
-             Tastatur hoeher als der Bildschirm.
+             Creating a poll means: type a question, type up to four
+             answers, set a length. That's work at a keyboard, and on a
+             phone the form with the keyboard open was taller than the
+             screen.
 
-             Statt das Formular fuer einen Fall zu biegen, den es kaum gibt –
-             Ansem legt eine Abstimmung an, und zwar genau eine, mit Bedacht –
-             steht dort jetzt, wo es geht. Ein Satz ist ehrlicher als eine
-             Oberflaeche, die zwar reagiert, aber nicht zu bedienen ist.
+             Instead of bending the form for a case that barely exists -
+             Ansem creates a poll, exactly one, deliberately - it now just
+             says so where it can't be done. A sentence is more honest than
+             an interface that responds but can't actually be used.
 
-             Der Satz steht im Aufbau und nicht im Blatt: So liest ihn auch
-             eine Vorlesestimme, und er ist da, bevor das erste Bild
-             gezeichnet wird. -->
+             The sentence lives in the markup, not in the stylesheet: that
+             way a screen reader reads it too, and it's there before the
+             first frame is painted. -->
         <p class="poll-nur-rechner">For now, polls can only be created on desktop.</p>
       </div>
-      <!-- Zu, solange niemand eine Abstimmung anlegt. Ansem sieht diesen
-           Kasten als Einziger, und er sieht ihn immer – fuenf Zeilen ueber
-           dem, was er eigentlich ansehen will. Auf dem Handy war damit der
-           halbe Bildschirm weg, bevor die erste Abstimmung anfing. -->
+      <!-- Closed, as long as no one is creating a poll. Ansem is the only
+           one who sees this box, and he sees it always - five lines above
+           what he actually wants to look at. On the phone that used to eat
+           half the screen before the first poll even started. -->
       <div id="poll-admin-felder" hidden>
-        <!-- Der Zaehler rechts im Feld, wie bei X. Das label drumherum ist der
-             Bezugspunkt fuer seine Position und macht gleichzeitig den ganzen
-             Kasten anklickbar. aria-hidden am Zaehler, weil die Vorlesestimme
-             die Grenze schon aus maxlength kennt und "3 / 110" sonst bei jedem
-             Zeichen dazwischenredet. -->
+        <!-- The counter sits on the right inside the field, like on X. The
+             label wrapped around it is the anchor for its position and at
+             the same time makes the whole box clickable. aria-hidden on the
+             counter, because the screen reader already knows the limit from
+             maxlength, and "3 / 110" would otherwise chime in on every
+             character. -->
         <label class="zaehl-feld">
           <input id="poll-question" type="text" placeholder="Question">
           <span class="zaehler" aria-hidden="true"></span>
         </label>
-        <!-- Die ersten beiden Antworten sind Pflicht und stehen deshalb hier.
-             Ab der dritten haengt "[optional]" hinter der Zahl – das ist der
-             ganze Unterschied, und es ist der ehrlichere: Ein leeres Feld war
-             noch nie eine Antwort, es faellt beim Anlegen heraus. Vorher stand
-             dreimal dasselbe "Option N" da, und dass zwei davon Pflicht sind,
-             erfuhr man erst aus der roten Meldung.
+        <!-- The first two answers are required and therefore live here.
+             From the third on, "[optional]" hangs after the number - that's
+             the whole difference, and it's the more honest one: an empty
+             field was never an answer, it gets dropped when creating the
+             poll. Before this, the same "Option N" appeared three times,
+             and that two of them were required only came out via the red
+             error message.
 
-             Eckige Klammern und keine runden: In der Schreibmaschinenschrift
-             belegt jedes Zeichen dieselbe Zelle, und eine runde Klammer ist
-             ein schmales Zeichen darin – "(optional)" sieht dann aus wie
-             "( optional )", ohne dass im Text ein Leerzeichen steht. Die
-             eckige fuellt ihre Zelle fast ganz aus.
+             Square brackets, not round ones: in the monospace font every
+             character occupies the same cell, and a round bracket is a
+             narrow character within it - "(optional)" ends up looking like
+             "( optional )", without an actual space in the text. The square
+             one fills its cell almost completely.
 
-             Alles ab der dritten baut app.js (optionPlatzhalter). -->
+             Everything from the third one on is built by app.js
+             (optionPlatzhalter). -->
         <div id="poll-options">
           <label class="zaehl-feld">
             <input class="poll-option" type="text" placeholder="Option 1">
@@ -301,47 +304,51 @@
           </label>
         </div>
 
-        <!-- Die Laufzeit: Tage, Stunden, Minuten, jedes einzeln waehlbar.
-             Nach dem Vorbild von X, und die Uebernahme ist keine Kopie um der
-             Kopie willen: Wer eine Abstimmung anlegt, denkt in "drei Tage" oder
-             "zwei Stunden" und nicht in einer Gesamtzahl von Stunden. Vorher
-             stand hier ein einziger Wert, durch den man sich tippte.
+        <!-- Poll length: days, hours, minutes, each individually pickable.
+             Modeled on X, and the borrowing isn't a copy for its own sake:
+             someone creating a poll thinks in "three days" or "two hours",
+             not in a total hour count. Before this, there was a single
+             value here that you typed your way through.
 
-             Die Listen werden in app.js gefuellt und nicht hier – 91 <option>
-             von Hand waeren eine Zeile Inhalt und neunzig Zeilen Abschrift.
+             The lists are filled in app.js, not here - 91 <option> elements
+             by hand would be one line of content and ninety lines of
+             transcription.
 
-             Alles auf null heisst "laeuft, bis Ansem sie von Hand schliesst".
-             Dieser Zustand hing vorher als Sonderfall unter der kuerzesten
-             Laufzeit, weil er in einer Reihe irgendwo hin musste. Mit drei
-             Feldern faellt die Kruecke weg: Keine Dauer IST keine Frist. Damit
-             das niemand nur errät, steht der Satz darunter, sobald er gilt. -->
+             Everything at zero means "runs until Ansem closes it by hand".
+             This state used to hang as a special case below the shortest
+             poll length, because it had to go somewhere in a row. With
+             three separate fields, that crutch falls away: no duration IS
+             no deadline. So no one has to just guess it, the sentence below
+             appears as soon as it applies. -->
         <div class="lz-block" role="group" aria-labelledby="lz-titel">
           <span class="lz-titel" id="lz-titel">Poll length</span>
-          <!-- Eigene Auswahlfelder statt <select>, und beides war ein Grund:
+          <!-- Custom picker fields instead of <select>, and both were a
+               reason:
                ---------------------------------------------------------------
-               1. Ein <select> bekommt beim Anklicken den Fokusring der Seite.
-                  Chromium zaehlt es wie ein Textfeld als "sichtbar fokussiert",
-                  auch nach einem Mausklick – die Regel
-                  :focus-visible:not(input):not(textarea) greift damit, obwohl
-                  sie fuer Knoepfe gedacht ist. Ein <button> hat das Problem
-                  nicht: Nach einem Klick ist er NICHT focus-visible.
-               2. Die aufklappende Liste zeichnet beim <select> das
-                  Betriebssystem. Acht Eintraege bei Days, sechzig bei Minutes –
-                  drei verschieden hohe Klappen fuer drei gleich aussehende
-                  Kaesten, und daran laesst sich von hier aus nichts aendern.
+               1. A <select> picks up the page's focus ring on click.
+                  Chromium counts it, like a text field, as "visibly
+                  focused" even after a mouse click - so the rule
+                  :focus-visible:not(input):not(textarea) applies to it,
+                  even though it's meant for buttons. A <button> doesn't
+                  have that problem: after a click it is NOT focus-visible.
+               2. The dropdown list of a <select> is drawn by the operating
+                  system. Eight entries for Days, sixty for Minutes - three
+                  differently tall dropdowns under three identical-looking
+                  boxes, and there's nothing to be done about that from here.
 
-               Der Preis ist die Tastaturbedienung, die ein <select> geschenkt
-               mitbringt: Pfeile, Pos1/Ende, Enter, Escape. Die steht deshalb in
-               app.js ausgeschrieben – halb gebaut waere schlimmer als gar
-               nicht, siehe den Kommentar dort. -->
-          <!-- Gilt fuer alle drei Kaesten dieser Reihe: Der Knopf ist der GANZE
-               Kasten und nicht nur die Zahl darin. Wer auf "Days" tippt, will
-               die Tage aendern – nicht daneben. Auf 390 px sind die drei
-               Kaesten zusammen keine 300 px breit, da ist jeder Pixel, den man
-               NICHT trifft, ein Fehlversuch.
+               The price is the keyboard support a <select> brings for free:
+               arrows, Home/End, Enter, Escape. That's why it's written out
+               in full in app.js - built halfway would be worse than not at
+               all, see the comment there. -->
+          <!-- Applies to all three boxes in this row: the button is the
+               ENTIRE box, not just the number inside it. Anyone tapping
+               "Days" wants to change the days - not miss it. At 390 px, the
+               three boxes together aren't even 300 px wide, and every pixel
+               you DON'T hit there is a failed tap.
 
-               Hier stand dieser Absatz dreimal, einmal ueber jedem Kasten.
-               Dreimal derselbe Satz sagt nicht dreimal so viel. -->
+               This paragraph used to appear three times, once above each
+               box. The same sentence three times doesn't say three times
+               as much. -->
           <div class="lz-reihe">
             <div class="lz-feld">
               <button type="button" id="lz-tage" class="lz-wahl" data-wert="1"
@@ -374,15 +381,15 @@
                    aria-label="Minutes" hidden></div>
             </div>
           </div>
-          <!-- aria-live, damit eine Vorlesestimme den Satz mitbekommt: Er
-               taucht auf, ohne dass der Fokus ihn beruehrt. -->
+          <!-- aria-live, so a screen reader catches the sentence: it appears
+               without focus ever touching it. -->
           <p id="lz-hinweis" class="lz-hinweis" aria-live="polite" hidden></p>
         </div>
         <div class="row">
-          <!-- Nur noch einer. Der Gegenknopf "− Option" ist weg: Er raeumte
-               etwas auf, das ohnehin folgenlos war – ein leeres Feld wird beim
-               Anlegen verworfen. Wer eine Antwort doch nicht will, laesst sie
-               leer stehen. -->
+          <!-- Only one left. The counterpart "− Option" button is gone: it
+               cleaned up something that was inconsequential anyway - an
+               empty field gets dropped when creating the poll. Anyone who
+               doesn't want an answer just leaves it empty. -->
           <button id="btn-add-option" class="btn btn-ghost" type="button">+ Option</button>
           <button id="btn-create-poll" class="btn btn-ghost" type="button">Start poll</button>
         </div>
@@ -395,7 +402,7 @@
   <main id="pane-dms" class="pane" hidden>
     <div id="dm-user" class="dm-user rahmen gefuellt">
       <div id="dm-thread" class="scroll chat-list"></div>
-      <!-- Zeigt über der Eingabe, worauf gerade geantwortet wird. -->
+      <!-- Shows above the input what is currently being replied to. -->
       <div id="dm-reply-bar" class="reply-bar" hidden>
         <span class="reply-bar-mark" aria-hidden="true">↩</span>
         <span class="reply-bar-inner">
@@ -408,7 +415,7 @@
         <input id="dm-input" type="text" maxlength="2000" placeholder="Direct message to Ansem…" autocomplete="off">
         <button class="btn btn-primary" type="submit">Send</button>
       </form>
-      <!-- Erscheint anstelle der Eingabe, wenn der Bestand nicht reicht. -->
+      <!-- Appears in place of the input when holdings aren't enough. -->
       <div id="dm-gate" class="gate" hidden>
         <span class="lock" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
@@ -422,25 +429,27 @@
 
     <div id="dm-admin" class="dm-admin" hidden>
       <aside class="thread-list rahmen gefuellt">
-        <!-- Kopf, Schwelle und Hinweis bleiben beim Blättern stehen. Bei
-             fünfzig Gesprächen scrollt die Liste weit, und ohne das wäre
-             nach zwei Handbewegungen weder die Schwelle erreichbar noch
-             sichtbar, dass der Posteingang überhaupt gefiltert ist. -->
+        <!-- Header, threshold and hint stay put while scrolling. With fifty
+             conversations the list scrolls a long way, and without this,
+             after two swipes neither the threshold would be reachable nor
+             would it be visible that the inbox is filtered at all. -->
         <div class="thread-top-bar">
           <div class="thread-head">Inbox <span class="dim">sorted by holdings</span></div>
 
-          <!-- Nur Ansem sieht das: eine Zahl eintippen, und alles darunter
-               verschwindet.
+          <!-- Only Ansem sees this: type a number, and everything below it
+               disappears.
 
-               Die Zahl blendet nicht nur die Anzeige aus – sie hält zusätzlich
-               Leute vom Schreiben ab, und sie gilt für alle, nicht nur für
-               Ansems eigene Ansicht. Deshalb wird sie gespeichert, sobald man
-               das Feld verlässt. Ein Speichern-Knopf wäre ein Schritt, den man
-               vergisst – und dann stünde dort eine Zahl, die nicht gilt.
+               The number doesn't just hide the display - it also keeps
+               people from writing, and it applies to everyone, not just to
+               Ansem's own view. That's why it saves as soon as the field
+               loses focus. A save button would be a step someone forgets -
+               and then a number that no longer applies would be sitting
+               there.
 
-               Keine Voreinstellungs-Knöpfe daneben: Jeder wäre ein Klick, der
-               sofort festlegt, wer Ansem noch schreiben darf. Ein Danebengreifen
-               auf "$100k+" sperrt praktisch alle aus. Das gehört getippt. -->
+               No preset buttons next to it: each one would be a click that
+               immediately decides who can still write to Ansem. A misclick
+               on "$100k+" locks out practically everyone. This belongs
+               typed. -->
           <div id="dm-min-box" class="filters">
             <span class="filters-label">Only accept messages from wallets holding at least</span>
             <div class="filter-group" id="dm-min-row">
@@ -452,23 +461,23 @@
             </div>
           </div>
 
-          <!-- Die von Hand verborgenen Gespraeche. Sie bleibt beim Blaettern
-               stehen, wie der Regler darueber.
+          <!-- The manually hidden conversations. It stays put while
+               scrolling, like the slider above it.
                ---------------------------------------------------------------
-               Hier stand darueber noch eine zweite Zaehlzeile: wie viele
-               Gespraeche die SCHWELLE gerade ausblendet. Sie ist raus, und der
-               Grund ist der Regler selbst – er steht direkt darueber und sagt
-               dieselbe Sache besser. Wer "$1,000" liest, weiss, dass gefiltert
-               wird; die Zahl daneben war eine zweite Auskunft ueber dieselbe
-               Einstellung.
+               A second counter line used to sit above this: how many
+               conversations the THRESHOLD is currently hiding. It's gone,
+               and the reason is the slider itself - it sits right above and
+               says the same thing better. Anyone reading "$1,000" knows
+               filtering is happening; the number next to it was a second
+               report on the same setting.
 
-               (Die alte Begruendung war: Ein stillschweigend gefilterter
-               Posteingang sei gefaehrlich, Ansem muesse sonst raten, ob niemand
-               geschrieben hat oder ob er es nur nicht sieht. Das Argument
-               stimmt – es trifft die Schwelle aber nicht, denn die steht als
-               Zahl da. Es trifft das VERBERGEN, und deshalb ist diese Zeile
-               geblieben: Verborgen bleibt hier verborgen, auch wenn derjenige
-               weiterschreibt. Ohne sie waere das eine Sackgasse.) -->
+               (The old justification was: a silently filtered inbox is
+               dangerous, otherwise Ansem would have to guess whether no one
+               wrote or he just can't see it. The argument is correct - it
+               just doesn't apply to the threshold, because that's shown as
+               a number. It applies to HIDING, and that's why this line
+               stayed: hidden stays hidden here, even if that person keeps
+               writing. Without it, that would be a dead end.) -->
           <p id="thread-versteckt" class="thread-versteckt" hidden>
             <span id="thread-versteckt-zahl"></span>
             <button id="btn-versteckt" class="btn btn-ghost btn-mini" type="button"
@@ -476,15 +485,15 @@
           </p>
         </div>
 
-        <!-- Gerollt wird DIESER Kasten, nicht der ganze Posteingang: Sonst
-             liefe die Anzeige rechts auch neben Kopfzeile, Schwelle und der
-             Verborgen-Zeile entlang – also neben Dingen, die gar nicht
-             mitrollen.
+        <!-- THIS box scrolls, not the whole inbox: otherwise the indicator
+             on the right would run alongside the header, the threshold and
+             the hidden-conversations line too - alongside things that don't
+             scroll at all.
 
-             Der Strich daneben ist kein Rollbalken des Browsers, sondern ein
-             eigenes Kaestchen. Der Grund steht in styles.css: Die Leiste des
-             Browsers ist immer so lang wie der sichtbare Anteil am Ganzen,
-             und genau das sollte sie hier nicht sein. -->
+             The bar next to it isn't a browser scrollbar, it's its own
+             little box. The reason is in styles.css: the browser's bar is
+             always as long as the visible share of the whole, and that's
+             exactly what it shouldn't be here. -->
         <div class="thread-roll">
           <div id="thread-items" class="scroll"></div>
           <div id="thread-strich" aria-hidden="true"></div>
@@ -492,41 +501,41 @@
 
       </aside>
       <section class="thread-view rahmen gefuellt">
-        <!-- Nur auf dem Handy sichtbar: Dort ersetzt das Gespräch die Liste
-             ganz, statt sich mit ihr den Bildschirm zu teilen. -->
+        <!-- Visible only on the phone: there, the conversation replaces the
+             list entirely instead of sharing the screen with it. -->
         <button id="btn-back-inbox" class="btn btn-ghost back-inbox" type="button">‹ Inbox</button>
-        <!-- Titelzeile und Verbergen-Knopf zusammen in einer Zeile.
+        <!-- Title row and hide button together in one row.
              ---------------------------------------------------------------
-             Der Knopf steht NEBEN #thread-title und nicht darin, obwohl er
-             optisch dazugehoert. Der Grund ist ein handfester: renderThread()
-             schreibt bei jedem Oeffnen das innerHTML von #thread-title neu.
-             Ein Knopf darin waere jedes Mal ein neues Element – und ein
-             Zuhoerer daran waere jedes Mal weg. Genau so ist in diesem Projekt
-             schon einmal ein Eingabezuhoerer verschwunden, ohne dass es jemand
-             gemerkt hat.
+             The button sits NEXT TO #thread-title, not inside it, even
+             though visually it belongs there. The reason is a concrete one:
+             renderThread() rewrites the innerHTML of #thread-title on every
+             open. A button inside it would be a new element each time - and
+             a listener on it would be gone each time. Exactly this way, an
+             input listener has already disappeared once in this project,
+             without anyone noticing.
 
-             Also bleibt der Knopf stehen und bekommt seinen Zuhoerer genau
-             einmal beim Start; die Klammer haelt beide in einer Zeile. -->
+             So the button stays put and gets its listener exactly once at
+             startup; the wrapper keeps both on one row. -->
         <div class="thread-kopf">
           <div id="thread-title" class="thread-title dim">Select a thread</div>
-          <!-- Verbergen sitzt IM geoeffneten Gespraech und nicht als Kreuz in
-               der Zeile der Liste.
+          <!-- Hide lives IN the opened conversation, not as an X in the
+               list row.
 
-               Zwei Gruende, und der zweite ist der wichtigere:
+               Two reasons, and the second is the more important one:
 
-                 Die Zeile ist 39 px hoch und traegt schon Kuerzel, Vorschau
-                 und Betrag. Ein viertes Ziel darin waere auf dem Handy nicht
-                 sicher zu treffen – und daneben zu greifen hiesse hier,
-                 jemanden aus dem Posteingang zu nehmen.
+                 The row is 39 px tall and already carries initials, preview
+                 and amount. A fourth target in there couldn't be reliably
+                 hit on the phone - and missing it here would mean removing
+                 someone from the inbox.
 
-                 Verbergen ist kein Aufraeumen im Vorbeigehen. Wer es tut, soll
-                 vorher gelesen haben, was da steht. Im geoeffneten Gespraech
-                 ist das von selbst so. -->
+                 Hiding isn't tidying up in passing. Whoever does it should
+                 have read what's there first. In the opened conversation,
+                 that's true by construction. -->
           <button id="btn-hide-thread" class="btn btn-ghost btn-mini thread-hide"
                   type="button" hidden>Hide</button>
         </div>
         <div id="admin-thread" class="scroll chat-list"></div>
-        <!-- Zeigt über der Eingabe, worauf gerade geantwortet wird. -->
+        <!-- Shows above the input what is currently being replied to. -->
         <div id="admin-reply-bar" class="reply-bar" hidden>
           <span class="reply-bar-mark" aria-hidden="true">↩</span>
           <span class="reply-bar-inner">
@@ -543,14 +552,14 @@
     </div>
   </main>
 
-  <!-- Nur bei ?preview=admin auf dem eigenen Rechner. Siehe PREVIEW_ADMIN. -->
+  <!-- Only with ?preview=admin on your own machine. See PREVIEW_ADMIN. -->
   <div id="preview-flag" class="preview-flag" hidden>
     Preview only &mdash; not signed in as Ansem. Anything you try to save will be refused.
   </div>
 
-  <!-- role="status" – Meldungen ueber Fehler und Taktgrenzen blieben fuer
-       eine Vorlesestimme sonst still. aria-live ist implizit "polite": Sie
-       unterbricht nicht, sie meldet beim naechsten Atemholen. -->
+  <!-- role="status" - otherwise messages about errors and rate limits would
+       stay silent for a screen reader. aria-live is implicitly "polite": it
+       doesn't interrupt, it reports at the next breath. -->
   <div id="toast" class="toast" role="status" hidden></div>
 </div>
 

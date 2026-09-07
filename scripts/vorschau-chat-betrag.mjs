@@ -1,51 +1,52 @@
 // ============================================================================
-// Vorschaubild: Der Betrag im Chat soll deutlicher zu sehen sein
+// Preview image: the amount in the chat should stand out more
 //
-// Der Ausgangspunkt ist ein Widerspruch, der schon eine Weile im Blatt steht.
-// Über der Regel für .msg .worth steht als Begründung:
+// The starting point is a contradiction that's been sitting in the stylesheet
+// for a while. Above the rule for .msg .worth stands this justification:
 //
-//     "Textgröße statt kleiner: Der Betrag ist der Kern der Seite, nicht die
-//      Fußnote am Namen. Kleiner gesetzt war er das Leiseste in der Zeile."
+//     "Text size instead of smaller: the amount is the core of the page, not
+//      a footnote next to the name. Set smaller, it was the quietest thing
+//      in the row."
 //
-// Darunter steht dann .72rem, Gewicht 400, Farbe --dim – also genau das, was
-// der Text ausschließt. Der Betrag ist damit das Leiseste in der Zeile: Der
-// Name ist fett, der Text größer, und die Zahl, um die es auf dieser Seite
-// eigentlich geht, ist kleiner und blasser als beides.
+// And right below that: .72rem, weight 400, color --dim - exactly what the
+// text rules out. The amount ends up the quietest thing in the row: the name
+// is bold, the message text is larger, and the number this whole page is
+// actually about is smaller and dimmer than both.
 //
-// Die Mittel, die zur Verfügung stehen, und was sie kosten:
+// The tools available, and what each one costs:
 //
-//   * Helligkeit  – wirkt sofort, kostet nichts an Platz. --dim liegt bei 4,2:1
-//                   gegen den Grund, --text bei 12,6:1.
-//   * Gewicht     – zweitstärkstes Mittel, verbreitert die Spalte minimal.
-//   * Größe       – stärkstes Mittel, verschiebt aber das Kräfteverhältnis zum
-//                   Nachrichtentext. Ab einem gewissen Punkt liest man die
-//                   Zahlen und überfliegt die Nachrichten, nicht umgekehrt.
-//   * Fläche      – Pille oder getönte Spalte. Am auffälligsten, aber bei
-//                   zwanzig Zeilen untereinander wird daraus ein Muster, das
-//                   mehr Aufmerksamkeit zieht als der Inhalt.
+//   * Brightness - works instantly, costs no space. --dim sits at 4.2:1
+//                  against the background, --text at 12.6:1.
+//   * Weight     - second-strongest tool, widens the column slightly.
+//   * Size       - strongest tool, but shifts the balance of power with the
+//                  message text. Past a certain point you read the numbers
+//                  and skim the messages, not the other way around.
+//   * Area       - pill or tinted column. Most eye-catching, but across
+//                  twenty rows in a row it becomes a pattern that draws more
+//                  attention than the content.
 //
-// Erzeugt preview/chat-betrag.png
+// Produces preview/chat-betrag.png
 // ============================================================================
 
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 
-// Die Beträge decken absichtlich die ganze Spanne ab: von <$1 bis $781K. Nur
-// so sieht man, ob eine Fassung die Spalte hält und ob große und kleine
-// Beträge noch unterscheidbar bleiben.
-const NACHRICHTEN = [
-  { h: '9Qm', ton: 0, usd: '$3.4K', stufe: 'mittel', body: 'gm', zeit: '14:02' },
-  { h: 'bH2', ton: 1, usd: '$8.8K', stufe: 'mittel', body: 'when is the next poll going up', zeit: '14:03' },
-  { admin: true, h: '4bo', usd: '$12M', stufe: 'hoch', body: 'New poll is up. Go vote.', zeit: '14:03' },
-  { h: 'Km9', ton: 3, usd: '<$1', stufe: 'klein', body: 'lfg', zeit: '14:04' },
-  { h: 'zQ4', ton: 0, usd: '$781K', stufe: 'hoch', body: 'sold half my bag and the vote weight dropped immediately', zeit: '14:05' },
-  { admin: true, h: '4bo', usd: '$12M', stufe: 'hoch', body: 'thats the whole point', zeit: '14:06' },
-  { h: '7xK', ton: 2, usd: '$52', stufe: 'klein', body: 'ser', zeit: '14:07' },
+// The amounts deliberately span the whole range: from <$1 to $781K. Only
+// that way can you tell whether a version keeps the column stable and
+// whether large and small amounts stay distinguishable.
+const MESSAGES = [
+  { h: '9Qm', ton: 0, usd: '$3.4K', tier: 'mittel', body: 'gm', zeit: '14:02' },
+  { h: 'bH2', ton: 1, usd: '$8.8K', tier: 'mittel', body: 'when is the next poll going up', zeit: '14:03' },
+  { admin: true, h: '4bo', usd: '$12M', tier: 'hoch', body: 'New poll is up. Go vote.', zeit: '14:03' },
+  { h: 'Km9', ton: 3, usd: '<$1', tier: 'klein', body: 'lfg', zeit: '14:04' },
+  { h: 'zQ4', ton: 0, usd: '$781K', tier: 'hoch', body: 'sold half my bag and the vote weight dropped immediately', zeit: '14:05' },
+  { admin: true, h: '4bo', usd: '$12M', tier: 'hoch', body: 'thats the whole point', zeit: '14:06' },
+  { h: '7xK', ton: 2, usd: '$52', tier: 'klein', body: 'ser', zeit: '14:07' },
 ];
 
-// Jede Fassung ist nur CSS auf .msg .worth – nichts am Aufbau der Zeile.
-// Was sich nicht als ein paar Regeln schreiben lässt, wäre auch im Blatt
-// keine gute Idee.
+// Each version is just CSS on .msg .worth - nothing about the row's
+// structure. Whatever can't be written as a few rules wouldn't be a good
+// idea in the real page either.
 const FASSUNGEN = [
   {
     name: 'Jetzt',
@@ -55,7 +56,7 @@ const FASSUNGEN = [
   {
     name: 'Nur heller',
     css: '.msg .worth { color: var(--text); font-weight: 600; }',
-    hinweis: 'Größe bleibt, nur Farbe und Gewicht ändern sich. Kontrast von 4,2:1 auf 12,6:1. Kein Platz kommt dazu, die Spalte bleibt exakt gleich breit.',
+    hinweis: 'Größe bleibt, nur Farbe und Gewicht ändern sich. Kontrast von 4,2:1 auf 12,6:1. Kein Platz kommt dazu, die Spalte bleibt exakt gleich wide.',
   },
   {
     name: 'Textgröße',
@@ -105,24 +106,25 @@ const FASSUNGEN = [
             border: 1px solid var(--line); border-radius: 999px;
             padding: .07em .5em 0; justify-self: end;
           }`,
-    hinweis: 'Derselbe Umriss wie der eigene Bestand oben in der Kopfzeile. Du hattest das im Chat schon einmal abgelehnt – steht hier nur zum Vergleich, nicht als Vorschlag.',
+    hinweis: 'Derselbe Umriss wie der eigene Bestand peek in der Kopfzeile. Du hattest das im Chat schon einmal abgelehnt – steht hier nur zum Vergleich, nicht als Vorschlag.',
   },
 ];
 
-const zeile = (m, f) => `
+const line = (m, f) => `
   <div class="msg ${m.admin ? 'is-admin' : ''}">
     <span class="who">${m.admin
       ? `<span class="h admin-name">${m.h}</span>`
       : `<span class="h t${m.ton}">${m.h}</span>`}</span>
-    <span class="worth w-${m.stufe}">${m.usd}</span>
+    <span class="worth w-${m.tier}">${m.usd}</span>
     <span class="body">${m.body}</span>
     <span class="meta"><span class="time">${m.zeit}</span></span>
   </div>`;
 
-// Jede Fassung liegt in derselben Datei neben den anderen, also muss jede Regel
-// auf ihre eigene Karte begrenzt werden. Statt CSS-Verschachtelung mit & wird
-// vorher flach umgeschrieben: Aus ".msg .worth { … }" wird "#v3 .msg .worth
-// { … }". Das hängt an keiner Browserversion und ist im Fehlerfall lesbar.
+// Each version sits in the same file next to the others, so every rule has
+// to be scoped to its own card. Instead of CSS nesting with &, it's flattened
+// beforehand: ".msg .worth { … }" becomes "#v3 .msg .worth { … }". That
+// doesn't depend on any browser version and stays readable when something
+// goes wrong.
 const flach = (css, i) => css
   .split('}')
   .map((s) => s.trim())
@@ -143,7 +145,7 @@ const html = `<!doctype html>
 <style>
   body { padding: 26px 26px 40px; background: var(--bg); }
   .raster { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px 22px; max-width: 1300px; }
-  .karte h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .card h2 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
   .nr {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; border-radius: 999px;
@@ -160,11 +162,11 @@ ${FASSUNGEN.map((f, i) => f.css ? `<style>${flach(f.css, i)}</style>` : '').join
 <p class="lead">Acht Fassungen derselben Liste. Nummer 0 ist der heutige Stand. Die Beträge reichen absichtlich von &lt;$1 bis $12M – so sieht man, ob die Spalte hält und ob groß und klein noch auseinanderzuhalten sind.</p>
 <div class="raster">
   ${FASSUNGEN.map((f, i) => `
-  <section class="karte">
+  <section class="card">
     <h2><span class="nr">${i}</span>${f.name}</h2>
     <p class="hinweis">${f.hinweis}</p>
     <div class="chat-panel" id="v${i}">
-      <div class="chat-list">${NACHRICHTEN.map((m) => zeile(m, f)).join('')}</div>
+      <div class="chat-list">${MESSAGES.map((m) => line(m, f)).join('')}</div>
     </div>
   </section>`).join('')}
 </div>`;
@@ -176,10 +178,10 @@ writeFileSync(tmp, html);
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 1360, height: 1400 }, deviceScaleFactor: 2 });
-await seite.goto(`file://${tmp}`);
-await seite.waitForTimeout(400);
-await seite.screenshot({ path: `${ausgabe}chat-betrag.png`, fullPage: true });
+const page = await browser.newPage({ viewport: { width: 1360, height: 1400 }, deviceScaleFactor: 2 });
+await page.goto(`file://${tmp}`);
+await page.waitForTimeout(400);
+await page.screenshot({ path: `${ausgabe}chat-betrag.png`, fullPage: true });
 await browser.close();
 rmSync(tmp);
 

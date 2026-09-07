@@ -1,18 +1,19 @@
 -- ============================================================================
--- Antworten auf Nachrichten
+-- Replies to messages
 --
--- Eine Nachricht kann sich auf eine frühere beziehen. Gespeichert wird nur die
--- Kennung der Ursprungsnachricht, nicht deren Text.
+-- A message can refer to an earlier one. Only the id of the original message
+-- is stored, not its text.
 --
--- Warum kein Abbild des zitierten Textes mitgespeichert wird: Ansem kann
--- Nachrichten löschen. Läge der Text als Kopie in jeder Antwort, bliebe eine
--- gelöschte Beleidigung oder ein Betrugsversuch als Zitat in der Runde stehen –
--- und wäre über die Löschfunktion nicht mehr erreichbar. Mit einem Verweis
--- verschwindet das Zitat mit dem Original.
+-- Why no copy of the quoted text is stored alongside it: Ansem can delete
+-- messages. If the text sat as a copy in every reply, a deleted insult or
+-- scam attempt would still stand as a quote in the room - reachable no
+-- longer through the delete function. With a reference, the quote
+-- disappears along with the original.
 --
--- ON DELETE SET NULL statt CASCADE: Wird die Ursprungsnachricht gelöscht,
--- verliert die Antwort ihren Bezug, bleibt aber stehen. Sonst würde das Löschen
--- einer einzigen Nachricht ganze Gesprächsstränge mitreißen.
+-- ON DELETE SET NULL instead of CASCADE: when the original message is
+-- deleted, the reply loses its reference but stays standing. Otherwise
+-- deleting a single message would drag whole conversation threads down
+-- with it.
 -- ============================================================================
 
 alter table public.messages
@@ -22,24 +23,24 @@ alter table public.messages
 comment on column public.messages.reply_to is
   'Kennung der Nachricht, auf die geantwortet wird. NULL = keine Antwort.';
 
--- Ohne diesen Index würde das Nachladen der zitierten Nachrichten mit der
--- Größe der Tabelle langsamer werden.
+-- Without this index, loading the quoted messages would get slower as the
+-- table grows.
 create index if not exists messages_reply_to_idx
   on public.messages (reply_to)
   where reply_to is not null;
 
 -- ----------------------------------------------------------------------------
--- Antworten dürfen keinen Bezug erfinden
+-- Replies may not invent a reference
 -- ----------------------------------------------------------------------------
--- Der Fremdschlüssel stellt sicher, dass die zitierte Nachricht existiert.
--- Zwei Dinge fängt er aber nicht ab, und beide sind hier relevant:
+-- The foreign key ensures the quoted message exists. But it doesn't catch
+-- two things, and both are relevant here:
 --
---   * Eine Antwort auf sich selbst. Technisch unmöglich beim Einfügen, weil
---     die eigene Kennung noch nicht vergeben ist – aber ein späteres Update
---     könnte es. Updates sind per RLS ohnehin niemandem erlaubt; die Regel
---     steht trotzdem hier, damit sie es auch bleibt, falls das je aufgeht.
---   * Ein Bezug, der älter ist als das, was überhaupt noch angezeigt wird.
---     Das ist harmlos und wird bewusst zugelassen.
+--   * A reply to itself. Technically impossible on insert, because its own
+--     id hasn't been assigned yet - but a later update could still do it.
+--     Updates aren't allowed to anyone via RLS anyway; the rule is still
+--     here so it stays that way if that ever changes.
+--   * A reference older than what's even still shown. That's harmless and
+--     deliberately allowed.
 
 create or replace function app.guard_reply()
 returns trigger

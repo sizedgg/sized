@@ -1,44 +1,45 @@
 // ============================================================================
-// Am Finger: lange draufhalten und nach links wischen
+// On a finger: long-press and swipe left
 //
-// Der Befund vom Geraet: Auf dem Handy gab es fuer eine Antwort nur einen Weg –
-// die Nachricht antippen, damit der Pfeil erscheint, dann den Pfeil treffen.
-// Wer stattdessen lange draufhielt, bekam eine Textmarkierung und das Menue
-// von iOS, das mit dieser Seite nichts zu tun hat.
+// The finding from the device: on a phone there was only one way to reply -
+// tap the message so the arrow appears, then hit the arrow. Long-pressing
+// instead got you a text selection and iOS's own menu, which has nothing to
+// do with this page.
 //
-// Verlangt war es wie in den DMs bei X: nach rechts wischen antwortet direkt,
-// der Pfeil taucht dabei auf, und am Anschlag brummt es einmal.
+// What was wanted was the same as in X's DMs: swiping right replies
+// directly, the arrow appears along the way, and it buzzes once at the
+// stop point.
 //
-// Ein Fenster beim langen Draufhalten ("Reply / Copy") gab es eine Runde lang
-// und ist auf Wunsch wieder weg. Geblieben ist, dass sich am Finger
-// kein Text markiert – das steht unten unveraendert drin.
-//
-// ----------------------------------------------------------------------------
-// Was hier wirklich gemessen wird
-//
-// Beruehrungen lassen sich in Chromium nachstellen – TouchEvent gibt es dort,
-// und die Handler in app.js unterscheiden nicht, woher ein Ereignis kommt.
-// Gemessen wird deshalb nicht "steht die Regel da", sondern was nach einer
-// Geste im Blatt steht: Ist das Fenster offen? Steht es neben der Blase? Ist
-// die Antwortleiste danach da?
-//
-// Nicht gemessen werden kann, ob iOS sein eigenes Menue wirklich zurueckhaelt.
-// Dafuer gibt es -webkit-touch-callout, und ob das greift, sieht man nur auf
-// einem iPhone. Geprueft wird hier, dass die Regel gilt und nur am Finger.
-//
-// Ebenso wenig messbar: ob das Brummen am Anschlag zu spueren ist. Safari auf
-// dem iPhone kennt navigator.vibrate nicht. Geprueft wird, dass es genau
-// einmal gerufen wird – auf Android ist es dann auch da.
+// A long-press popup ("Reply / Copy") existed for one round and is gone
+// again on request. What stayed is that nothing selects on a finger - that
+// is still in here unchanged below.
 //
 // ----------------------------------------------------------------------------
-// Warum die halbe Datei aus app.js geschnitten wird
+// What is actually measured here
 //
-// app.js braucht beim Start eine Datenbank. Hier geht es nur um die Gesten,
-// also werden genau die Teile herausgeschnitten, die sie ausmachen, und mit
-// einem kleinen Zustand daneben ausgefuehrt. Nachgebaut wird nichts: Aendert
-// jemand die Schwellen oder die Reihenfolge in app.js, aendert sich dieser
-// Test mit – und wenn ein Stueck verschwindet, schlaegt das Schneiden fehl,
-// statt still etwas anderes zu pruefen.
+// Touches can be reconstructed in Chromium - TouchEvent exists there, and
+// the handlers in app.js don't distinguish where an event comes from. So
+// what's measured isn't "is the rule there", but what the sheet looks like
+// after a gesture: is the popup open? Does it sit next to the bubble? Is the
+// reply bar there afterward?
+//
+// What can't be measured is whether iOS actually holds back its own menu.
+// That's what -webkit-touch-callout is for, and whether it works can only be
+// seen on an iPhone. What's checked here is that the rule is present, and
+// only for a finger.
+//
+// Just as unmeasurable: whether the buzz at the stop point can be felt.
+// Safari on iPhone doesn't know navigator.vibrate. What's checked is that
+// it gets called exactly once - on Android it's then also there.
+//
+// ----------------------------------------------------------------------------
+// Why half the file gets cut out of app.js
+//
+// app.js needs a database at startup. Here it's only about the gestures, so
+// exactly the pieces that make them up get cut out and run alongside a
+// small piece of state. Nothing is rebuilt: if someone changes a threshold
+// or the order in app.js, this test changes along with it - and if a piece
+// disappears, the cut fails instead of quietly checking something else.
 //
 //   node scripts/test-dm-gesten.mjs
 // ============================================================================
@@ -54,36 +55,36 @@ const pub = path.join(root, 'public');
 const appJs = fs.readFileSync(path.join(pub, 'app.js'), 'utf8');
 const cssText = fs.readFileSync(path.join(pub, 'styles.css'), 'utf8');
 
-const schneide = (von, bis) => {
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a + von.length);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b + bis.length);
 };
-/** Wie schneide, aber bis zum Ende der Zeile, in der die Marke steht.
- *  So haengt der Schnitt am NAMEN und nicht am Wert – sonst muesste dieser
- *  Test jedes Mal nachgezogen werden, wenn sich eine Schwelle aendert, und
- *  wer das vergisst, sieht nur einen Absturz ohne Bezug zur Sache. */
-const schneideZeile = (von, bisName) => {
+/** Like cut, but up to the end of the line the marker sits on.
+ *  That way the cut hangs off the NAME, not the value - otherwise this test
+ *  would have to be updated every time a threshold changes, and whoever
+ *  forgets that just sees a crash with no obvious connection to the cause. */
+const cutLine = (von, bisName) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bisName, a + von.length);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von} .. ${bisName}`);
   return appJs.slice(a, appJs.indexOf('\n', b));
 };
 
-// Die echten Stuecke, woertlich.
+// The real pieces, verbatim.
 const GESTEN = [
-  schneideZeile('const WISCH_START_PX =', 'const WISCH_SCHWELLE_PX ='),
+  cutLine('const SWIPE_START_PX =', 'const SWIPE_THRESHOLD_PX ='),
   'let griff = null;',
-  schneide('function wischZurueck(g) {', '\n}'),
-  // Der Klick-Handler gehoert dazu: An ihm haengt, dass der Pfeil antwortet
-  // und dass ein Tipp auf die Nachricht NICHTS tut. Ohne ihn pruefte der Test
-  // die halbe Sache.
-  schneide("for (const sel of ['#dm-thread', '#admin-thread']) {\n  $(sel).addEventListener('click'", '\n  });\n}'),
-  schneide("for (const sel of ['#dm-thread', '#admin-thread']) {\n  const box = $(sel);", '\n}'),
+  cut('function swipeBack(g) {', '\n}'),
+  // The click handler belongs here too: it's what makes the arrow reply and
+  // a tap on the message do NOTHING. Without it the test would only check
+  // half the story.
+  cut("for (const sel of ['#dm-thread', '#admin-thread']) {\n  $(sel).addEventListener('click'", '\n  });\n}'),
+  cut("for (const sel of ['#dm-thread', '#admin-thread']) {\n  const box = $(sel);", '\n}'),
 ].join('\n\n');
 
-const NACHRICHTEN = [
+const MESSAGES = [
   { id: 1, from_admin: false, body: 'yo ansem, when is the next call?' },
   { id: 2, from_admin: true, body: 'thursday, same link as last time' },
   { id: 3, from_admin: false, body: 'perfect, see you there' },
@@ -95,13 +96,13 @@ const TYPEN = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascrip
 const server = http.createServer((q, res) => {
   let pfad = decodeURIComponent(q.url.split('?')[0]);
   if (pfad === '/') pfad = '/index.html';
-  const datei = path.join(pub, pfad);
-  if (!datei.startsWith(pub) || !fs.existsSync(datei)) return res.writeHead(404).end('');
+  const file = path.join(pub, pfad);
+  if (!file.startsWith(pub) || !fs.existsSync(file)) return res.writeHead(404).end('');
   if (pfad === '/app.js') {
     return res.writeHead(200, { 'content-type': 'text/javascript' }).end('');
   }
-  res.writeHead(200, { 'content-type': TYPEN[path.extname(datei)] ?? 'application/octet-stream' })
-     .end(fs.readFileSync(datei));
+  res.writeHead(200, { 'content-type': TYPEN[path.extname(file)] ?? 'application/octet-stream' })
+     .end(fs.readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -118,15 +119,15 @@ const kontext = await browser.newContext({
   viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
   deviceScaleFactor: 3, permissions: ['clipboard-read', 'clipboard-write'],
 });
-const seite = await kontext.newPage();
-await seite.goto(base, { waitUntil: 'load' });
+const page = await kontext.newPage();
+await page.goto(base, { waitUntil: 'load' });
 
 console.log('\nGesten in den DMs\n');
 
 // ---------------------------------------------------------------------------
-// Aufbau: das echte Blatt, die echten Gesten-Teile, ein kleiner Zustand
+// Setup: the real markup, the real gesture pieces, a small piece of state
 // ---------------------------------------------------------------------------
-await seite.evaluate(({ gesten, rows }) => {
+await page.evaluate(({ gesten, rows }) => {
   const $ = (s, w = document) => w.querySelector(s);
   const $$ = (s, w = document) => [...w.querySelectorAll(s)];
   window.$ = $; window.$$ = $$;
@@ -156,24 +157,25 @@ await seite.evaluate(({ gesten, rows }) => {
 
   // eslint-disable-next-line no-eval
   (0, eval)(gesten);
-}, { gesten: GESTEN, rows: NACHRICHTEN });
+}, { gesten: GESTEN, rows: MESSAGES });
 
 // ---------------------------------------------------------------------------
-// Beruehrungen nachstellen
+// Reconstructing touches
 // ---------------------------------------------------------------------------
-// Echte TouchEvents, keine Maus: Die Handler haengen an touchstart/-move/-end,
-// und eine Maus loest davon nichts aus. Ohne das pruefte dieser Test nichts.
-const geste = (schritte) => seite.evaluate(async (s) => {
+// Real TouchEvents, not a mouse: the handlers hang off touchstart/-move/-end,
+// and a mouse fires none of those. Without this the test would check
+// nothing.
+const geste = (schritte) => page.evaluate(async (s) => {
   const ziel = document.querySelector(s.sel);
   const r = ziel.getBoundingClientRect();
   const x0 = Math.round(r.left + r.width / 2);
   const y0 = Math.round(r.top + r.height / 2);
-  const punkt = (x, y) => new Touch({
+  const dot = (x, y) => new Touch({
     identifier: 1, target: ziel, clientX: x, clientY: y,
     pageX: x, pageY: y, screenX: x, screenY: y,
   });
-  const feuer = (typ, x, y) => {
-    const t = punkt(x, y);
+  const fire = (typ, x, y) => {
+    const t = dot(x, y);
     ziel.dispatchEvent(new TouchEvent(typ, {
       bubbles: true, cancelable: true,
       touches: typ === 'touchend' ? [] : [t],
@@ -181,208 +183,212 @@ const geste = (schritte) => seite.evaluate(async (s) => {
       changedTouches: [t],
     }));
   };
-  feuer('touchstart', x0, y0);
+  fire('touchstart', x0, y0);
   if (s.haltenMs) await new Promise((r2) => setTimeout(r2, s.haltenMs));
-  for (const [dx, dy] of s.zuege ?? []) feuer('touchmove', x0 + dx, y0 + dy);
-  if (!s.ohneEnde) feuer('touchend', x0 + (s.zuege?.at(-1)?.[0] ?? 0), y0);
+  for (const [dx, dy] of s.zuege ?? []) fire('touchmove', x0 + dx, y0 + dy);
+  if (!s.ohneEnde) fire('touchend', x0 + (s.zuege?.at(-1)?.[0] ?? 0), y0);
   await new Promise((r2) => setTimeout(r2, 60));
   return null;
 }, schritte);
 
-const zustand = () => seite.evaluate(() => ({
+const zustand = () => page.evaluate(() => ({
   leisteOffen: !document.querySelector('#dm-reply-bar').hidden,
   leisteText: document.querySelector('#dm-reply-bar-text').textContent,
   protokoll: [...window.protokoll],
   verschoben: document.querySelector('.dm-row[data-id="2"] .dm-block').style.transform,
 }));
 
-const zuruecksetzen = () => seite.evaluate(() => {
+const reset = () => page.evaluate(() => {
   window.protokoll = [];
   document.querySelector('#dm-reply-bar').hidden = true;
   document.querySelectorAll('.dm-block').forEach((b) => { b.style.transform = ''; });
 });
 
 // ---------------------------------------------------------------------------
-// 1. Nach rechts wischen
+// 1. Swiping right
 // ---------------------------------------------------------------------------
-await zuruecksetzen();
+await reset();
 await geste({ sel: '.dm-row[data-id="2"] .msg.dm', zuege: [[20, 0], [36, 0], [48, 0]] });
 let z = await zustand();
-check('Ein Wisch nach rechts antwortet', z.protokoll.includes('reply:2'), z.protokoll.join());
+check('Ein Wisch nach right antwortet', z.protokoll.includes('reply:2'), z.protokoll.join());
 check('Und die Blase steht danach wieder gerade', z.verschoben === '');
 
-// Zu kurz gewischt: nichts. Sonst loeste jedes Verrutschen eine Antwort aus.
-await zuruecksetzen();
+// Swiped too short: nothing happens. Otherwise any little slip would trigger
+// a reply.
+await reset();
 await geste({ sel: '.dm-row[data-id="2"] .msg.dm', zuege: [[16, 0], [24, 0]] });
 z = await zustand();
 check('Gegenprobe: ein kurzer Wisch antwortet nicht',
   !z.protokoll.length, z.protokoll.join());
 check('Und laesst die Blase ebenfalls gerade', z.verschoben === '');
 
-// Senkrecht ist Rollen und darf die Blase gar nicht erst anfassen.
-await zuruecksetzen();
+// Vertical is scrolling, and shouldn't touch the bubble at all.
+await reset();
 await geste({ sel: '.dm-row[data-id="2"] .msg.dm', zuege: [[6, -30], [14, -80]] });
 z = await zustand();
 check('Ein senkrechter Wisch bleibt Rollen',
   !z.protokoll.length && z.verschoben === '', `${z.protokoll.join()} ${z.verschoben}`);
 
-// Und der Schraege dazwischen.
+// And the diagonal case in between.
 // ---------------------------------------------------------------------------
-// Der Fall oben trifft den Faktor 1.5 gar nicht: Bei 80 px senkrecht greift
-// schon der Zweig davor ("eindeutig senkrecht") und beendet den Griff. Genau
-// das hat die Gegenprobe gezeigt – der Faktor liess sich herausnehmen, ohne
-// dass etwas fehlschlug.
+// The case above doesn't actually exercise the 1.5 factor at all: at 80 px
+// vertical, the earlier branch ("clearly vertical") already fires and ends
+// the grip. That's exactly what the control check showed - the factor could
+// be removed without anything failing.
 //
-// Gemeint ist mit ihm ein Wisch, der WAAGERECHT weit genug waere, aber schraeg
-// laeuft: 14 px zur Seite, 11 px nach unten. Der gehoert der Liste, nicht uns –
-// im Zweifel rollt man, man wischt nicht.
-await zuruecksetzen();
-const schraeg = await seite.evaluate(() => {
+// What it's meant to catch is a swipe that would be far enough
+// HORIZONTALLY, but runs diagonally: 14 px sideways, 11 px down. That belongs
+// to the scroll list, not to us - when in doubt, you scroll, you don't
+// swipe.
+await reset();
+const diagonal = await page.evaluate(() => {
   const ziel = document.querySelector('.dm-row[data-id="2"] .msg.dm');
   const r = ziel.getBoundingClientRect();
   const x0 = Math.round(r.left + r.width / 2);
   const y0 = Math.round(r.top + r.height / 2);
-  const feuer = (typ, x, y) => {
+  const fire = (typ, x, y) => {
     const t = new Touch({ identifier: 1, target: ziel, clientX: x, clientY: y,
       pageX: x, pageY: y, screenX: x, screenY: y });
     ziel.dispatchEvent(new TouchEvent(typ, { bubbles: true, cancelable: true,
       touches: typ === 'touchend' ? [] : [t],
       targetTouches: typ === 'touchend' ? [] : [t], changedTouches: [t] }));
   };
-  feuer('touchstart', x0, y0);
-  feuer('touchmove', x0 + 14, y0 - 11);
-  const zeile = document.querySelector('.dm-row[data-id="2"]');
+  fire('touchstart', x0, y0);
+  fire('touchmove', x0 + 14, y0 - 11);
+  const line = document.querySelector('.dm-row[data-id="2"]');
   const erg = {
-    verschoben: zeile.querySelector('.dm-block').style.transform,
-    klasse: zeile.classList.contains('wischt'),
+    verschoben: line.querySelector('.dm-block').style.transform,
+    klasse: line.classList.contains('wischt'),
   };
-  feuer('touchend', x0 + 14, y0 - 11);
+  fire('touchend', x0 + 14, y0 - 11);
   return erg;
 });
 check('Ein schraeger Wisch gehoert der Liste, nicht der Blase',
-  schraeg.verschoben === '' && !schraeg.klasse,
-  `${schraeg.verschoben} ${schraeg.klasse}`);
+  diagonal.verschoben === '' && !diagonal.klasse,
+  `${diagonal.verschoben} ${diagonal.klasse}`);
 
-// Waehrend des Ziehens muss man sehen, dass die Geste erkannt ist.
-await zuruecksetzen();
-const waehrend = await seite.evaluate(async () => {
+// While dragging, it has to be visible that the gesture is recognized.
+await reset();
+const during = await page.evaluate(async () => {
   const ziel = document.querySelector('.dm-row[data-id="2"] .msg.dm');
   const r = ziel.getBoundingClientRect();
   const x0 = Math.round(r.left + r.width / 2);
   const y0 = Math.round(r.top + r.height / 2);
-  const feuer = (typ, x) => {
+  const fire = (typ, x) => {
     const t = new Touch({ identifier: 1, target: ziel, clientX: x, clientY: y0,
       pageX: x, pageY: y0, screenX: x, screenY: y0 });
     ziel.dispatchEvent(new TouchEvent(typ, { bubbles: true, cancelable: true,
       touches: [t], targetTouches: [t], changedTouches: [t] }));
   };
-  feuer('touchstart', x0);
-  feuer('touchmove', x0 + 20);
-  feuer('touchmove', x0 + 44);
-  const zeile = document.querySelector('.dm-row[data-id="2"]');
+  fire('touchstart', x0);
+  fire('touchmove', x0 + 20);
+  fire('touchmove', x0 + 44);
+  const line = document.querySelector('.dm-row[data-id="2"]');
   const erg = {
-    verschoben: zeile.querySelector('.dm-block').style.transform,
-    pfeil: zeile.querySelector('.reply-btn').style.opacity,
-    klasse: zeile.classList.contains('wischt'),
+    verschoben: line.querySelector('.dm-block').style.transform,
+    pfeil: line.querySelector('.reply-btn').style.opacity,
+    klasse: line.classList.contains('wischt'),
   };
-  feuer('touchend', x0 + 44);
+  fire('touchend', x0 + 44);
   return erg;
 });
 check('Beim Ziehen folgt die Blase dem Finger',
-  waehrend.verschoben === 'translateX(44px)', waehrend.verschoben);
-check('Der Pfeil taucht dabei auf', Number(waehrend.pfeil) > 0.9, waehrend.pfeil);
-check('Und die Zeile weiss, dass sie gezogen wird', waehrend.klasse);
+  during.verschoben === 'translateX(44px)', during.verschoben);
+check('Der Pfeil taucht dabei auf', Number(during.pfeil) > 0.9, during.pfeil);
+check('Und die Zeile weiss, dass sie gezogen wird', during.klasse);
 
-// Am Anschlag brummt es einmal.
+// It buzzes once at the stop point.
 // ---------------------------------------------------------------------------
-// Nur einmal, und das ist der Punkt: Am Anschlag kommen noch viele
-// touchmove-Ereignisse, und ein Brummen bei jedem waere ein Dauerbrummen.
+// Only once, and that's the point: at the stop point, many more touchmove
+// events keep coming in, and buzzing on each of them would be a constant
+// buzz.
 //
-// Auf dem iPhone passiert dabei gar nichts – Safari kennt navigator.vibrate
-// nicht. Der Test kann trotzdem etwas Echtes pruefen: DASS es genau einmal
-// gerufen wird. Auf Android ist es dann auch spuerbar.
-await zuruecksetzen();
-const gebrummt = await seite.evaluate(() => {
+// On an iPhone nothing happens here at all - Safari doesn't know
+// navigator.vibrate. The test can still check something real: THAT it gets
+// called exactly once. On Android it's then also felt.
+await reset();
+const gebrummt = await page.evaluate(() => {
   const rufe = [];
   navigator.vibrate = (n) => { rufe.push(n); return true; };
   const ziel = document.querySelector('.dm-row[data-id="2"] .msg.dm');
   const r = ziel.getBoundingClientRect();
   const x0 = Math.round(r.left + r.width / 2);
   const y0 = Math.round(r.top + r.height / 2);
-  const feuer = (typ, x) => {
+  const fire = (typ, x) => {
     const t = new Touch({ identifier: 1, target: ziel, clientX: x, clientY: y0,
       pageX: x, pageY: y0, screenX: x, screenY: y0 });
     ziel.dispatchEvent(new TouchEvent(typ, { bubbles: true, cancelable: true,
       touches: typ === 'touchend' ? [] : [t],
       targetTouches: typ === 'touchend' ? [] : [t], changedTouches: [t] }));
   };
-  feuer('touchstart', x0);
-  feuer('touchmove', x0 + 20);
-  const vorAnschlag = rufe.length;
-  // Ueber den Anschlag hinaus, mehrfach – so wie ein echter Daumen es tut.
-  feuer('touchmove', x0 + 60);
-  feuer('touchmove', x0 + 75);
-  feuer('touchmove', x0 + 90);
-  const nachAnschlag = rufe.length;
-  feuer('touchend', x0 + 90);
-  return { vorAnschlag, nachAnschlag };
+  fire('touchstart', x0);
+  fire('touchmove', x0 + 20);
+  const beforeTap = rufe.length;
+  // Past the stop point, several times - the way a real thumb does it.
+  fire('touchmove', x0 + 60);
+  fire('touchmove', x0 + 75);
+  fire('touchmove', x0 + 90);
+  const afterTap = rufe.length;
+  fire('touchend', x0 + 90);
+  return { beforeTap, afterTap };
 });
-check('Vor dem Anschlag brummt nichts', gebrummt.vorAnschlag === 0,
-  String(gebrummt.vorAnschlag));
-check('Am Anschlag brummt es genau einmal', gebrummt.nachAnschlag === 1,
-  `${gebrummt.nachAnschlag} Mal`);
+check('Vor dem Anschlag brummt nichts', gebrummt.beforeTap === 0,
+  String(gebrummt.beforeTap));
+check('Am Anschlag brummt es genau einmal', gebrummt.afterTap === 1,
+  `${gebrummt.afterTap} Mal`);
 
-// Die Blasen stehen an ihrem Rand – der Pfeil daneben, nicht davor.
+// The bubbles sit at their edge - the arrow beside them, not in front.
 // ---------------------------------------------------------------------------
-// Eine Runde lang stand der Pfeil bei allen Nachrichten links. Damit ruecken
-// die eingehenden Blasen um seine Breite vom linken Rand ab, und der Rand ist
-// das, woran man eine eingehende Nachricht erkennt.
-const seiten = await seite.evaluate(() => {
-  const feld = document.querySelector('#dm-thread').getBoundingClientRect();
-  const messen = (id) => {
+// For one round the arrow sat on the left for every message. That pushed
+// incoming bubbles away from the left edge by its width, and the edge is
+// what tells you a message is incoming.
+const pages = await page.evaluate(() => {
+  const field = document.querySelector('#dm-thread').getBoundingClientRect();
+  const measure = (id) => {
     const z = document.querySelector(`.dm-row[data-id="${id}"]`);
     const b = z.querySelector('.msg.dm').getBoundingClientRect();
     return {
       eigen: z.classList.contains('mine'),
-      linksVomRand: Math.round(b.left - feld.left),
-      rechtsVomRand: Math.round(feld.right - b.right),
+      linksVomRand: Math.round(b.left - field.left),
+      rechtsVomRand: Math.round(field.right - b.right),
       pfeil: Math.round(z.querySelector('.reply-btn').getBoundingClientRect().left),
-      blase: Math.round(b.left),
+      bubble: Math.round(b.left),
     };
   };
-  return [messen(1), messen(2)];
+  return [measure(1), measure(2)];
 });
-const eigene = seiten.find((x) => x.eigen);
-const rein = seiten.find((x) => !x.eigen);
-// Der Pfeil ist 1,5 rem breit. Steht er VOR der eingehenden Blase, waere ihr
-// Abstand zum Rand entsprechend groesser – genau das soll nicht sein.
+const eigene = pages.find((x) => x.eigen);
+const rein = pages.find((x) => !x.eigen);
+// The arrow is 1.5rem wide. If it sat IN FRONT OF the incoming bubble, its
+// distance from the edge would be correspondingly larger - exactly what
+// shouldn't happen.
 check('Eine eingehende Nachricht steht am linken Rand',
   rein.linksVomRand < 8, `${rein.linksVomRand} px`);
 check('Und eine eigene am rechten', eigene.rechtsVomRand < 8,
   `${eigene.rechtsVomRand} px`);
-check('Der Pfeil liegt bei einer eigenen links daneben',
-  eigene.pfeil < eigene.blase, `Pfeil ${eigene.pfeil}, Blase ${eigene.blase}`);
-check('Und bei einer eingehenden rechts daneben',
-  rein.pfeil > rein.blase, `Pfeil ${rein.pfeil}, Blase ${rein.blase}`);
-// Gegenprobe: Die beiden Zeilen sind wirklich verschieden ausgerichtet.
+check('Der Pfeil liegt bei einer eigenen left daneben',
+  eigene.pfeil < eigene.bubble, `Pfeil ${eigene.pfeil}, Blase ${eigene.bubble}`);
+check('Und bei einer eingehenden right daneben',
+  rein.pfeil > rein.bubble, `Pfeil ${rein.pfeil}, Blase ${rein.bubble}`);
+// Control check: the two rows really are aligned differently.
 check('Gegenprobe: die beiden Zeilen liegen auf verschiedenen Seiten',
-  Math.abs(seiten[0].blase - seiten[1].blase) > 20,
-  `${seiten[0].blase} vs ${seiten[1].blase}`);
+  Math.abs(pages[0].bubble - pages[1].bubble) > 20,
+  `${pages[0].bubble} vs ${pages[1].bubble}`);
 
 // ---------------------------------------------------------------------------
-// Ein Tipp auf eine Nachricht tut nichts
+// A tap on a message does nothing
 // ---------------------------------------------------------------------------
-// Frueher schaltete er die Zeile auf "aktiv" und liess den Antwortpfeil
-// erscheinen. Ein Tipp ist aber die haeufigste Beruehrung ueberhaupt – beim
-// Rollen, beim Zielen auf etwas anderes –, und jedes Mal sprang ein Pfeil ins
-// Bild, den niemand gerufen hat. Geantwortet wird durch Wischen.
-await zuruecksetzen();
-const nachTipp = await seite.evaluate(() => {
-  const zeile = document.querySelector('.dm-row[data-id="2"]');
-  zeile.querySelector('.msg.dm').click();
+// It used to switch the row to "active" and make the reply arrow appear.
+// But a tap is the single most common touch there is - while scrolling,
+// while aiming at something else - and every time an arrow would pop up
+// that nobody asked for. Replying happens by swiping.
+await reset();
+const nachTipp = await page.evaluate(() => {
+  const line = document.querySelector('.dm-row[data-id="2"]');
+  line.querySelector('.msg.dm').click();
   return {
-    aktiv: zeile.className,
-    pfeil: getComputedStyle(zeile.querySelector('.reply-btn')).opacity,
+    aktiv: line.className,
+    pfeil: getComputedStyle(line.querySelector('.reply-btn')).opacity,
     protokoll: [...window.protokoll],
   };
 });
@@ -391,69 +397,70 @@ check('Ein Tipp auf eine Nachricht macht nichts sichtbar',
   `${nachTipp.aktiv} / Deckkraft ${nachTipp.pfeil}`);
 check('Und loest schon gar keine Antwort aus',
   !nachTipp.protokoll.length, nachTipp.protokoll.join());
-// Gegenprobe: Der Knopf selbst antwortet weiterhin – am Rechner ist er ueber
-// :hover erreichbar, und ohne diese Zeile waere oben auch dann alles gruen,
-// wenn der Antwortweg ganz weg waere.
-await zuruecksetzen();
-const ueberKnopf = await seite.evaluate(() => {
+// Control check: the button itself still replies - on desktop it's reachable
+// via :hover, and without this line, everything above would still pass even
+// if the whole reply path were gone.
+await reset();
+const overButton = await page.evaluate(() => {
   document.querySelector('.dm-row[data-id="2"] .reply-btn').click();
   return [...window.protokoll];
 });
 check('Gegenprobe: der Pfeil selbst antwortet noch',
-  ueberKnopf.includes('reply:2'), ueberKnopf.join());
+  overButton.includes('reply:2'), overButton.join());
 
 // ---------------------------------------------------------------------------
-// Kein Markieren in einer Nachricht – am Finger
+// No selecting inside a message - on a finger
 // ---------------------------------------------------------------------------
-// Am Finger ist Markieren ein Unfall: zu lange aufgehalten, Text markiert,
-// Systemmenue drueber. Mit der Maus ist es eine Absicht – deshalb gilt die
-// Regel nur dort, wo kein Zeiger schweben kann. Die Pruefung dafuer steht
-// weiter unten und ist die wichtigere von beiden.
+// On a finger, selecting is an accident: held too long, text selected,
+// system menu on top. With a mouse it's intentional - so the rule only
+// applies where no pointer can hover. The check for that is further down
+// and is the more important of the two.
 //
-// Geprueft wird am gerechneten Stil und nicht am Regeltext: So faellt auch
-// auf, wenn eine spaetere Regel es irgendwo wieder anschaltet.
-const markieren = await seite.evaluate(() => {
+// Checked against the computed style, not the rule text: that way it also
+// shows if a later rule quietly turns it back on somewhere.
+const markieren = await page.evaluate(() => {
   const st = getComputedStyle(document.querySelector('.msg.dm'));
   const pfeil = getComputedStyle(document.querySelector('.reply-btn'));
   const frei = getComputedStyle(document.querySelector('#dm-input'));
-  return { blase: st.userSelect, pfeil: pfeil.userSelect, feld: frei.userSelect };
+  return { bubble: st.userSelect, pfeil: pfeil.userSelect, field: frei.userSelect };
 });
 check('In einer Nachricht laesst sich nichts markieren',
-  markieren.blase === 'none', markieren.blase);
-// Der Pfeil gehoert dazu. Die Regel stand erst nur an der Blase, und wer den
-// Pfeil auf dem Handy lange hielt, bekam ihn markiert samt Kopieren-Menue
-// fuer ein einzelnes Zeichen.
+  markieren.bubble === 'none', markieren.bubble);
+// The arrow belongs here too. The rule first sat only on the bubble, and
+// whoever long-pressed the arrow on a phone got it selected, copy menu and
+// all, for a single character.
 check('Und im Antwortpfeil auch nicht',
   markieren.pfeil === 'none', markieren.pfeil);
-// -webkit-touch-callout kennt dieses Chromium nicht – getComputedStyle gibt
-// dort einen leeren Wert zurueck, egal was im Blatt steht. Eine Messung waere
-// also immer rot, ganz gleich ob die Regel richtig ist. Deshalb hier
-// ausnahmsweise am Regeltext, und mit dem Vermerk, warum: Ob das Systemmenue
-// von iOS wirklich wegbleibt, sieht man nur auf einem iPhone.
+// This Chromium doesn't know -webkit-touch-callout - getComputedStyle
+// returns an empty value there regardless of what the stylesheet says. So a
+// measurement would always fail, no matter whether the rule is correct.
+// Hence, as an exception, checking the rule text here instead, with a note
+// on why: whether iOS's system menu really stays away can only be seen on
+// an iPhone.
 check('Und die Zeile gegen das Systemmenue von iOS steht da (hier nicht messbar)',
   /\.dm-row \{[^}]*-webkit-touch-callout: none/.test(cssText));
-// Gegenprobe: Die Regel trifft die Blase und nicht die ganze Seite – im
-// Eingabefeld muss man weiter markieren koennen, sonst laesst sich ein Tippfehler
-// nicht mehr korrigieren.
+// Control check: the rule targets the bubble and not the whole page - the
+// input field still has to allow selecting, otherwise a typo can no longer
+// be fixed.
 check('Gegenprobe: im Eingabefeld sehr wohl',
-  markieren.feld !== 'none', markieren.feld);
+  markieren.field !== 'none', markieren.field);
 
-// Am RECHNER dagegen SCHON.
+// On DESKTOP, though, you SHOULD.
 // ---------------------------------------------------------------------------
-// Diese Pruefung fehlte lange, und ihr Fehlen war messbar: Die Regel liess
-// sich beliebig ein- und auswickeln, ohne dass etwas fehlschlug. Kein Wunder –
-// diese Suite laeuft mit Finger, dort gilt (hover: none) so oder so. Was am
-// Rechner passiert, sagt nur ein zweiter Browser.
+// This check was missing for a long time, and its absence was measurable:
+// the rule could be wound in and out arbitrarily without anything failing.
+// No wonder - this suite runs with a finger, where (hover: none) applies
+// either way. What happens on desktop only a second browser can tell you.
 //
-// Sie hat einmal das Gegenteil verlangt ("auch am Rechner nicht"). Die
-// Anforderung hat sich geaendert, nicht die Messung: Mit der Maus soll man
-// den Text einer Nachricht wieder markieren und kopieren koennen.
+// It once demanded the opposite ("not on desktop either"). The requirement
+// changed, not the measurement: with a mouse you should be able to select
+// and copy a message's text again.
 const amRechner = await browser.newContext({
   viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false,
 });
-const rechnerSeite = await amRechner.newPage();
-await rechnerSeite.goto(base, { waitUntil: 'load' });
-const rechner = await rechnerSeite.evaluate(() => {
+const computerPage = await amRechner.newPage();
+await computerPage.goto(base, { waitUntil: 'load' });
+const computer = await computerPage.evaluate(() => {
   const app = document.querySelector('#app');
   app.hidden = false;
   document.querySelector('#pane-dms').hidden = false;
@@ -462,17 +469,18 @@ const rechner = await rechnerSeite.evaluate(() => {
     '<div class="dm-row" data-id="9"><div class="dm-block">'
     + '<div class="msg dm"><span class="body">Probe</span></div></div></div>';
   return {
-    blase: getComputedStyle(document.querySelector('.msg.dm')).userSelect,
+    bubble: getComputedStyle(document.querySelector('.msg.dm')).userSelect,
     zeiger: matchMedia('(hover: hover)').matches,
   };
 });
 await amRechner.close();
 check('Am Rechner laesst sich der Text einer Nachricht markieren',
-  rechner.blase !== 'none', rechner.blase);
-// Gegenprobe dazu: Dieser zweite Browser ist wirklich einer ohne Finger –
-// sonst maesse er dasselbe wie der erste und sagte nichts Neues.
+  computer.bubble !== 'none', computer.bubble);
+// Control check for that: this second browser really is one without a
+// finger - otherwise it would measure the same thing as the first and say
+// nothing new.
 check('Gegenprobe: dieser zweite Browser hat wirklich einen Zeiger',
-  rechner.zeiger);
+  computer.zeiger);
 
 await browser.close();
 server.close();

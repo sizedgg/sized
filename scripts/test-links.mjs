@@ -1,29 +1,29 @@
 // ============================================================================
-// Prüft die anklickbaren Links in den DMs.
+// Checks the clickable left in DMs.
 //
-// Hier wird aus Text HTML, und das ist die eine Stelle der Seite, an der ein
-// Fehler nicht "sieht schlecht aus" heißt, sondern "fremder Code läuft in
-// eurem Browser". Deshalb ist der halbe Test ein Angriffstest.
+// This is where text turns into HTML, and it's the one place on the site
+// where a bug doesn't mean "looks bad" but "foreign code runs in your
+// browser". So half this test is an attack test.
 //
-// Der gefährliche Weg wäre gewesen: erst maskieren, dann mit einem regulären
-// Ausdruck über das maskierte Ergebnis laufen. Das Maskieren fügt selbst
-// Zeichen ein (& wird &amp;), die der Ausdruck wieder auseinandernehmen
-// müsste – und wer sich dabei verrechnet, lässt HTML durch. mitLinks() zerlegt
-// stattdessen den ROHEN Text und maskiert jedes Stück einzeln. Der Test prüft
-// nicht die Umsetzung, sondern das Ergebnis: Kommt irgendwo ein < durch, das
-// nicht von uns stammt?
+// The dangerous path would have been: escape first, then run a regular
+// expression over the escaped result. Escaping itself inserts characters
+// (& becomes &amp;) that the expression would then have to take apart
+// again - and whoever miscalculates there lets HTML through. withLinks()
+// instead splits the RAW text apart and escapes each piece individually.
+// The test doesn't check the implementation, it checks the result: does a
+// < get through anywhere that didn't come from us?
 //
-// Die zweite Hälfte ist die Frage, WO Links überhaupt anklickbar werden:
+// The second half is the question of WHERE left become clickable at all:
 //
-//   * In DMs bei beiden Seiten. Dort sind Links erlaubt, weil genau eine
-//     Person Empfänger ist.
-//   * Im Zitat über einer Antwort gar nicht: Das Zitat IST ein Knopf, und ein
-//     Link in einem Knopf ist ungültiges HTML mit unvorhersehbarem Verhalten.
-//   * In der Vorschauzeile des Posteingangs auch nicht – aus demselben Grund.
+//   * In DMs, on both sides. Links are allowed there because exactly one
+//     person is the recipient.
+//   * Not at all in the quote above a reply: the quote IS a button, and a
+//     link inside a button is invalid HTML with unpredictable behavior.
+//   * Not in the inbox preview line either - for the same reason.
 //
-// Bis zum Entfernen des Chats stand hier eine dritte Regel: Dort waren Links
-// nur bei Ansem anklickbar, als zweites Schloss neben dem der Datenbank. Sie
-// ist mit ihm weggefallen.
+// Until chat was removed, a third rule stood here: there, left were only
+// clickable for Ansem, as a second lock next to the database's. It fell
+// away along with chat.
 //
 //   node scripts/test-links.mjs
 // ============================================================================
@@ -38,14 +38,14 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
 
-// Wörtlich aus app.js – eine nachgebaute Kopie würde die eigene Fassung prüfen.
-const schneide = (von, bis) => {
+// Verbatim from app.js - a hand-rebuilt copy would only test itself.
+const cut = (von, bis) => {
   const a = appJs.indexOf(von);
   const b = appJs.indexOf(bis, a);
   if (a < 0 || b < 0) throw new Error(`Nicht gefunden in app.js: ${von}`);
   return appJs.slice(a, b);
 };
-const linker = schneide('const esc =', 'function toast');
+const linker = cut('const esc =', 'function toast');
 
 const server = http.createServer((_q, res) =>
   res.writeHead(200, { 'content-type': 'text/html' })
@@ -55,26 +55,26 @@ await new Promise((r) => server.listen(0, r));
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch(fs.existsSync(CHROME) ? { executablePath: CHROME } : {});
-const seite = await browser.newPage({ viewport: { width: 900, height: 600 } });
-await seite.goto(`http://127.0.0.1:${server.address().port}/`);
-await seite.addScriptTag({ content: `${linker}\nwindow.mitLinks = mitLinks;` });
+const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+await page.goto(`http://127.0.0.1:${server.address().port}/`);
+await page.addScriptTag({ content: `${linker}\nwindow.withLinks = withLinks;` });
 
 const befunde = [];
-const pruefe = (name, ok, zusatz = '') => {
+const check = (name, ok, zusatz = '') => {
   befunde.push({ name, ok });
   console.log(`  ${ok ? 'ok  ' : 'FEHL'}  ${name}${zusatz ? '  – ' + zusatz : ''}`);
 };
 
-// Der Text wird wirklich in die Seite gehaengt und danach der DOM befragt.
-// Ein Test, der nur die Zeichenkette anschaut, uebersieht genau die Faelle,
-// in denen der Browser etwas anders auslegt als erwartet.
-const einsetzen = (text) => seite.evaluate((t) => {
+// The text is really attached to the page and the DOM is then queried. A
+// test that only looks at the string misses exactly the cases where the
+// browser interprets something differently than expected.
+const einsetzen = (text) => page.evaluate((t) => {
   const el = document.querySelector('#ziel');
-  el.innerHTML = window.mitLinks(t);
+  el.innerHTML = window.withLinks(t);
   return {
     html: el.innerHTML,
     text: el.textContent,
-    links: [...el.querySelectorAll('a')].map((a) => ({
+    left: [...el.querySelectorAll('a')].map((a) => ({
       href: a.getAttribute('href'), sichtbar: a.textContent,
       rel: a.getAttribute('rel'), ziel: a.getAttribute('target'),
       referrer: a.getAttribute('referrerpolicy'),
@@ -98,88 +98,88 @@ const ANGRIFFE = [
 
 for (const [angriff, was] of ANGRIFFE) {
   const r = await einsetzen(angriff);
-  pruefe(`Kein fremdes Element: ${was}`, r.fremd.length === 0, r.fremd.join(', '));
-  const boese = r.links.some((l) => !/^https?:\/\//i.test(l.href));
-  pruefe(`Kein Link ohne http/https: ${was}`, !boese,
-    r.links.map((l) => l.href).join(' | '));
-  // Der Text muss unveraendert lesbar bleiben – wer so etwas schreibt, soll
-  // sehen, was er geschrieben hat.
-  pruefe(`Der Text bleibt vollständig stehen: ${was}`,
+  check(`Kein fremdes Element: ${was}`, r.fremd.length === 0, r.fremd.join(', '));
+  const malicious = r.left.some((l) => !/^https?:\/\//i.test(l.href));
+  check(`Kein Link ohne http/https: ${was}`, !malicious,
+    r.left.map((l) => l.href).join(' | '));
+  // The text must stay readable unchanged - whoever writes something like
+  // this should see what they wrote.
+  check(`Der Text bleibt vollständig stehen: ${was}`,
     r.text === angriff, JSON.stringify(r.text));
 }
 
 console.log('\nWas ein Link ist und was nicht\n');
 
-const FAELLE = [
+const CASES = [
   ['https://sized.gg', ['https://sized.gg'], 'volle Adresse'],
   ['www.sized.gg', ['https://www.sized.gg'], 'www ohne Schema bekommt https'],
   ['schau auf https://sized.gg.', ['https://sized.gg'], 'Punkt am Satzende bleibt draussen'],
   ['ende: https://sized.gg/p/12!', ['https://sized.gg/p/12'], 'Ausrufezeichen ebenso'],
   ['(https://en.wikipedia.org/wiki/Foo_(bar))', ['https://en.wikipedia.org/wiki/Foo_(bar)'],
-   'Klammern werden gezaehlt, nicht geraten'],
+   'Klammern werden counted, nicht geraten'],
   ['https://x.com/a?b=1&c=2', ['https://x.com/a?b=1&c=2'], 'kaufmaennisches Und im Parameter'],
   ['preis 1.25 und z.b nichts', [], 'Zahlen und Abkuerzungen werden nicht verlinkt'],
   ['sized.gg', [], 'die nackte Domain bleibt Text'],
   ['gm', [], 'gewoehnlicher Text'],
 ];
 
-for (const [text, erwartet, was] of FAELLE) {
+for (const [text, erwartet, was] of CASES) {
   const r = await einsetzen(text);
-  const hrefs = r.links.map((l) => l.href);
-  pruefe(`${was}`, JSON.stringify(hrefs) === JSON.stringify(erwartet),
+  const hrefs = r.left.map((l) => l.href);
+  check(`${was}`, JSON.stringify(hrefs) === JSON.stringify(erwartet),
     `${JSON.stringify(hrefs)} statt ${JSON.stringify(erwartet)}`);
 }
 
-// Die Adresse steht immer im Klartext da. Das ist der eigentliche Schutz
-// gegen Betrug: Es gibt keine Moeglichkeit, "sized.gg" zu schreiben und
-// woanders hinzufuehren, weil der Text keine Formatierung kennt.
+// The address always sits there in plain text. That's the real protection
+// against fraud: there's no way to write "sized.gg" and link somewhere
+// else, because the text has no concept of formatting.
 const sicht = await einsetzen('https://böse-nachbau.example/login');
-pruefe('Der sichtbare Text ist die Adresse selbst',
-  sicht.links[0].sichtbar === 'https://böse-nachbau.example/login', sicht.links[0].sichtbar);
+check('Der sichtbare Text ist die Adresse selbst',
+  sicht.left[0].sichtbar === 'https://böse-nachbau.example/login', sicht.left[0].sichtbar);
 
 console.log('\nWie der Link geöffnet wird\n');
 
-const eins = (await einsetzen('https://sized.gg')).links[0];
-pruefe('Öffnet in einem neuen Tab', eins.ziel === '_blank', eins.ziel);
-// Ohne noopener kann die geoeffnete Seite ueber window.opener diese hier
-// umleiten, waehrend der Nutzer im anderen Tab liest.
-pruefe('noopener ist gesetzt', /noopener/.test(eins.rel), eins.rel);
-pruefe('noreferrer ist gesetzt', /noreferrer/.test(eins.rel), eins.rel);
-pruefe('Die Zielseite erfährt nicht, woher der Klick kam',
+const eins = (await einsetzen('https://sized.gg')).left[0];
+check('Öffnet in einem neuen Tab', eins.ziel === '_blank', eins.ziel);
+// Without noopener, the opened page could redirect this one via
+// window.opener while the user reads it in the other tab.
+check('noopener ist gesetzt', /noopener/.test(eins.rel), eins.rel);
+check('noreferrer ist gesetzt', /noreferrer/.test(eins.rel), eins.rel);
+check('Die Zielseite erfährt nicht, woher der Klick kam',
   eins.referrer === 'no-referrer', eins.referrer);
 
 console.log('\nWo Links anklickbar werden\n');
 
-pruefe('In DMs bei beiden Seiten',
-  /<span class="body">\$\{mitLinks\(row\.body\)\}<\/span>/.test(appJs));
-// Ein <a> in einem <button> ist ungueltiges HTML; der Browser darf damit
-// machen, was er will.
-pruefe('Im Zitat über einer Antwort nicht',
+check('In DMs bei beiden Seiten',
+  /<span class="body">\$\{withLinks\(row\.body\)\}<\/span>/.test(appJs));
+// An <a> inside a <button> is invalid HTML; the browser is free to do
+// whatever it wants with it.
+check('Im Zitat über einer Antwort nicht',
   /<span class="quote-body">\$\{esc\(text\)\}<\/span>/.test(appJs));
-pruefe('Und in der Vorschauzeile des Posteingangs auch nicht',
+check('Und in der Vorschauzeile des Posteingangs auch nicht',
   /<span class="thread-prev">\$\{esc\(t\.preview\)\}<\/span>/.test(appJs));
 
 console.log('\nLesbarkeit\n');
 
-// Farbe allein traegt die Aussage "anklickbar" nicht – wer Farben schlecht
-// unterscheidet, saehe sonst gar nichts.
-pruefe('Links sind unterstrichen, nicht nur eingefärbt',
+// Color alone doesn't carry the message "clickable" - someone who can't
+// tell colors apart well would otherwise see nothing at all.
+check('Links sind unterstrichen, nicht nur eingefärbt',
   /\.msg \.body a \{[^}]*text-decoration: underline/s.test(css));
-// Diese Pruefung ist zweimal gekippt, und beide Male aus demselben Grund: Sie
-// haengt daran, wie hell die eigene Sprechblase gerade ist.
+// This check has flipped twice, both times for the same reason: it
+// depends on how light the "own message" bubble currently is.
 //
-//   fast weisse Blase  → Link brauchte eine eigene, dunkle Farbe
-//   beide Blasen dunkel → Ausnahme weg, --worth reichte ueberall
-//   blaue Blase (X)    → wieder eine eigene Farbe, diesmal weiss
+//   near-white bubble  -> link needed its own, dark color
+//   both bubbles dark  -> exception gone, --worth was enough everywhere
+//   blue bubble (X)    -> its own color again, white this time
 //
-// Deshalb steht hier jetzt nicht mehr "es gibt eine Ausnahme" oder "es gibt
-// keine", sondern die Bedingung dahinter: Der Link muss sich auf dem Grund
-// abheben, auf dem er tatsaechlich liegt. Hier bleibt die Regel, dass die
-// Grundfarbe aus --worth kommt und die Blase nur davon abweicht, wenn sie es
-// muss.
-pruefe('Links holen ihre Grundfarbe aus --worth',
+// So this no longer says "there is an exception" or "there is none", but
+// states the condition behind it: the link has to stand out against the
+// ground it actually sits on. What stays fixed here is the rule that the
+// base color comes from --worth and the bubble only deviates from it when
+// it has to.
+check('Links fetch ihre Grundfarbe aus --worth',
   /\.msg \.body a \{[^}]*color: var\(--worth\)/s.test(css));
-pruefe('Auf der farbigen Blase weichen sie davon ab',
+check('Auf der farbigen Blase weichen sie davon ab',
   /\.msg\.dm\.mine \.body a \{[^}]*color:/s.test(css));
 
 await browser.close();
