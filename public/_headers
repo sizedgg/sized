@@ -149,19 +149,3 @@
 /p/*
   Content-Type: text/html; charset=utf-8
 
-# ===========================================================================
-# Solange die Seite noch nicht freigegeben ist: nicht in den Suchindex.
-#
-# Das Blatt liegt oeffentlich, es ist nur niemand hereingelassen (siehe
-# app_config.open_to_public). Suchmaschinen kommen trotzdem vorbei, und ein
-# einmal aufgenommener Eintrag verschwindet nicht auf Zuruf – er bleibt
-# stehen, auch wenn dahinter noch nichts ist.
-#
-# Zum Start diese vier Zeilen loeschen und neu hochladen. Steht der Eintrag
-# erst einmal drin, ist das Aufraeumen deutlich mehr Arbeit als dieses
-# Entfernen. Die Sicherheitskopfzeilen weiter oben bleiben stehen – die
-# gehoeren NICHT zu diesen vier Zeilen.
-# ===========================================================================
-
-/*
-  X-Robots-Tag: noindex, nofollow
