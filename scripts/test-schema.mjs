@@ -186,6 +186,38 @@ for (const [addr, amt, usd] of [[ADMIN, 1_434, 6.02], [WHALE, 903_302, 3_793.87]
 // existiert in der Oberflaeche nicht.
 console.log('\n── messages (Tabelle steht, Oberflaeche entfernt) ──');
 
+// Seit 20260907010000 darf ein Client gar nicht mehr hineinschreiben.
+// ---------------------------------------------------------------------------
+// Der Grund steht in der Migration: Eine tote Tabelle mit offenen
+// Schreibrechten ist eine Flaeche, auf der jemand unbegrenzt Zeilen ablegen
+// kann, die niemand ansieht – und jede davon ging zusaetzlich als
+// Realtime-Ereignis hinaus.
+//
+// Das wird hier zuerst geprueft, denn es ist der Zustand, mit dem die Seite
+// live geht.
+await expectFail('Ein Client kann nicht mehr in messages schreiben', WHALE, () =>
+  client.query(`insert into public.messages (wallet, body) values ($1, $2)`,
+    [WHALE, 'geht nicht mehr']));
+
+// Und JETZT das Recht befristet zurueckgeben, um die Regeln selbst zu pruefen.
+// ---------------------------------------------------------------------------
+// Die Linksperre, die Taktgrenze, der serverseitige Bestandsstempel: Die
+// Regeln stehen alle noch, und sie sollen weiter stimmen – sonst waere der
+// Chat nicht "umkehrbar entfernt", sondern kaputt und niemand wuesste es.
+//
+// Ohne diesen Kunstgriff gaebe es nur zwei Moeglichkeiten, und beide sind
+// schlecht: die fuenfzehn Pruefungen loeschen (dann faellt beim Zurueckdrehen
+// niemandem etwas auf), oder das Recht dauerhaft lassen (dann ist das Loch
+// wieder da).
+await client.query('grant insert, delete on public.messages to authenticated');
+await client.query('drop policy if exists messages_insert on public.messages');
+await client.query('drop policy if exists messages_admin_delete on public.messages');
+await client.query(`create policy messages_insert on public.messages
+  for insert to authenticated
+  with check (app.jwt_wallet() is not null and wallet = app.jwt_wallet())`);
+await client.query(`create policy messages_admin_delete on public.messages
+  for delete to authenticated using (app.is_admin())`);
+
 await asWallet(WHALE, () =>
   client.query(`insert into public.messages (wallet, body) values ($1, $2)`, [WHALE, 'endlich. warte seit wochen.']));
 await asWallet(SHRIMP, () =>
@@ -582,6 +614,16 @@ try {
   }
 } catch { /* sollte nicht passieren */ }
 check('Ansem wird nicht gebremst', adminSent === 15, `${adminSent} durchgelassen`);
+
+// Das befristete Recht wieder einziehen – ab hier gilt wieder der Zustand,
+// mit dem die Seite live geht. Ohne diese Zeilen prueften alle folgenden
+// Abschnitte gegen eine Datenbank, die es so nicht gibt.
+await client.query('drop policy if exists messages_insert on public.messages');
+await client.query('drop policy if exists messages_admin_delete on public.messages');
+await client.query('revoke insert, delete on public.messages from authenticated');
+await expectFail('Gegenprobe: danach ist messages wieder dicht', WHALE, () =>
+  client.query(`insert into public.messages (wallet, body) values ($1, $2)`,
+    [WHALE, 'und jetzt nicht mehr']));
 
 // GHOST haelt aus den Taktgrenzen-Tests darueber 5.000 Token / $21 – zu wenig
 // fuer eine DM, seit die Schwelle bei $1000 liegt. Ohne diese Zeile misst der
@@ -1064,6 +1106,124 @@ const wanderungDm = fs.readFileSync(
   path.join(root, 'supabase/migrations/20260904010000_dm_broadcast.sql'), 'utf8');
 check('public.dms verlässt die Realtime-Veröffentlichung',
   /drop table public\.dms/.test(wanderungDm));
+
+// ── Was vor dem Start gehaertet wurde ──────────────────────────────────────
+//
+// Vier Loecher, keines davon von einer der 22 Reihen gefunden. Der Grund ist
+// derselbe bei allen: Die Reihen pruefen, ob die Regeln tun, was sie sollen.
+// Hier ging es um Regeln, die es gar nicht gab – und was es nicht gibt, misst
+// auch keiner.
+console.log('\n── Haertung vor dem Start ──');
+
+// 1. created_at gehoert der Datenbank
+// ---------------------------------------------------------------------------
+// Der Angriff war nicht, eine Nachricht zu faelschen, sondern die ZAEHLUNG zu
+// umgehen: Beide Sperren gegen Spam zaehlen nach Zeit, und wer created_at
+// selbst mitschickt, steht in keinem Fenster.
+await client.query(`update public.wallets set ui_amount = 400000, usd_value = 5000
+                    where address = $1`, [WHALE]);
+await asWallet(WHALE, () => client.query(
+  `insert into public.dms (wallet, body, created_at) values ($1, $2, '1990-01-01')`,
+  [WHALE, 'aus der vergangenheit']));
+const gestempelt = await client.query(
+  `select created_at from public.dms where body = 'aus der vergangenheit'`);
+check('created_at kommt vom Server, nicht vom Client',
+  new Date(gestempelt.rows[0].created_at).getFullYear() >= 2020,
+  String(gestempelt.rows[0].created_at));
+
+// Und die Wirkung, um die es geht: Mit gefaelschtem Datum muss die Taktgrenze
+// trotzdem greifen. Ohne den Trigger liefen hier alle zehn durch.
+let ausVergangenheit = 0;
+try {
+  for (let i = 0; i < 10; i++) {
+    await asWallet(WHALE, () => client.query(
+      `insert into public.dms (wallet, body, created_at) values ($1, $2, '1990-01-01')`,
+      [WHALE, `alt ${i}`]));
+    ausVergangenheit++;
+  }
+} catch { /* die Taktgrenze greift – genau das ist der Punkt */ }
+check('Die Taktgrenze greift auch bei gefaelschtem created_at',
+  ausVergangenheit < 10, `${ausVergangenheit} von 10 durchgelassen`);
+
+// 2. Abgelaufene Challenges geben ihren Betrag frei
+// ---------------------------------------------------------------------------
+// Sonst laesst sich eine fremde Adresse aussperren: 999 moegliche Betraege,
+// drei offene Challenges gleichzeitig, 25 Minuten Laufzeit – nach gut sechs
+// Tagen ist jede Zahl belegt und der Besitzer kommt nicht mehr herein.
+await client.query(`delete from public.challenges`);
+await client.query(
+  `insert into public.challenges (wallet, lamports, expires_at, status)
+   values ($1, 2000123, now() - interval '1 hour', 'pending')`, [SHRIMP]);
+// Der zweite insert traegt DENSELBEN Betrag. Er muss durchgehen – und wenn
+// nicht, ist genau das der Befund und kein Absturz: Ohne das Aufraeumen weist
+// der Unique-Index ihn ab, und dann darf der Test das melden, statt hier
+// stehenzubleiben und die drei Abschnitte danach gar nicht erst zu erreichen.
+let zweiteChallenge = true;
+try {
+  await client.query(
+    `insert into public.challenges (wallet, lamports, expires_at, status)
+     values ($1, 2000123, now() + interval '20 minutes', 'pending')`, [SHRIMP]);
+} catch { zweiteChallenge = false; }
+check('Der Betrag einer abgelaufenen Challenge ist wieder zu haben',
+  zweiteChallenge, zweiteChallenge ? '' : 'Unique-Index weist ihn ab');
+// Die zweite Zeile traegt DENSELBEN Betrag wie die erste. Dass ihr insert
+// oben durchgelaufen ist, ist der Beweis: Ohne das Aufraeumen haette der
+// Unique-Index auf (wallet, lamports) where status = 'pending' sie abgewiesen.
+const frei = await client.query(
+  `select status, count(*)::int n from public.challenges where wallet = $1
+   group by status order by status`, [SHRIMP]);
+const zaehler = Object.fromEntries(frei.rows.map((r) => [r.status, r.n]));
+check('Derselbe Betrag ist nach Ablauf wieder zu haben',
+  zaehler.pending === 1 && zaehler.expired === 1,
+  frei.rows.map((r) => `${r.status}:${r.n}`).join(' '));
+const abgelaufen = await client.query(
+  `select count(*)::int n from public.challenges
+   where wallet = $1 and status = 'expired'`, [SHRIMP]);
+check('Die abgelaufene Zeile steht auf expired, nicht mehr auf pending',
+  abgelaufen.rows[0].n === 1, `${abgelaufen.rows[0].n} aufgeraeumt`);
+
+// 3. Lesen setzt einen wallet-Claim voraus
+// ---------------------------------------------------------------------------
+// Ein Token mit role: authenticated aber OHNE wallet-Claim ist genau das, was
+// Supabases eigene Anmeldewege ausstellen – "Anonymous sign-ins" reicht. Damit
+// war vorher die komplette Wallet-Tabelle zu lesen.
+async function ohneClaim(sql) {
+  await client.query('begin');
+  try {
+    await client.query(`select set_config('request.jwt.claims', '{"role":"authenticated"}', true)`);
+    await client.query('set local role authenticated');
+    const r = await client.query(sql);
+    return r.rows.length;
+  } finally { await client.query('rollback'); }
+}
+for (const [name, sql] of [
+  ['wallets', 'select address from public.wallets limit 5'],
+  ['polls', 'select id from public.polls limit 5'],
+  ['votes', 'select id from public.votes limit 5'],
+  ['poll_totals', 'select poll_id from public.poll_totals limit 5'],
+]) {
+  check(`Ohne wallet-Claim ist ${name} leer`, (await ohneClaim(sql)) === 0);
+}
+// Gegenprobe: MIT Claim liest dieselbe Abfrage sehr wohl – sonst haette ich
+// die Tabellen nur leergeraeumt und der Test saehe trotzdem gruen aus.
+const mitClaim = await asWallet(WHALE, () =>
+  client.query('select address from public.wallets limit 5'));
+check('Gegenprobe: mit wallet-Claim sind sie es nicht',
+  mitClaim.rows.length > 0, `${mitClaim.rows.length} Zeilen`);
+
+// 4. read_by_admin gehoert dem Server
+// ---------------------------------------------------------------------------
+// Ein Nutzer konnte seine DM als gelesen einliefern. Kein Datenabfluss – aber
+// Ansem entscheidet nach diesem Zaehler, wem er antwortet.
+await client.query(`delete from public.dms where wallet = $1`, [DOLPHIN]);
+await client.query(`update public.wallets set usd_value = 5000 where address = $1`, [DOLPHIN]);
+await asWallet(DOLPHIN, () => client.query(
+  `insert into public.dms (wallet, body, read_by_admin) values ($1, $2, true)`,
+  [DOLPHIN, 'schon gelesen, angeblich']));
+const gelesen = await client.query(
+  `select read_by_admin from public.dms where body = 'schon gelesen, angeblich'`);
+check('read_by_admin laesst sich nicht vom Client setzen',
+  gelesen.rows[0].read_by_admin === false, String(gelesen.rows[0].read_by_admin));
 
 console.log(`\n${failures === 0 ? '✅ Alle Prüfungen bestanden' : `❌ ${failures} Prüfung(en) fehlgeschlagen`}\n`);
 await client.end();

@@ -709,126 +709,325 @@ check('Und unten alles erreichbar', kurz.untenFehlt <= 0, `${kurz.untenFehlt} px
 await page.setViewportSize({ width: 375, height: 667 });
 
 // ---------------------------------------------------------------------------
-// Ansem legt auf dem Handy eine Abstimmung an
+// Hier standen zehn Pruefungen fuer das Abstimmungsformular auf dem Handy
 // ---------------------------------------------------------------------------
+// Trefferflaeche des Schalters "+ New poll", Hoehe der Laufzeit-Eintraege, und
+// dass sich der Bereich mit offener Tastatur rollen laesst. Alle gemessen,
+// alle mit Gegenprobe, alle gruen.
 //
-// Drei Befunde, alle nachhandyForm und alle unangenehm auf genau die Art, die
-// man erst merkt, wenn man es wirklich tut:
+// Sie sind raus, weil die Sache selbst raus ist: Auf dem Handy gibt es kein
+// Formular mehr, dort steht ein Satz. Was sie geprueft haben, kann also nicht
+// mehr kaputtgehen – und eine Pruefung, die einen Zustand misst, den es nicht
+// gibt, faellt entweder durch oder wird gruen gehalten, indem man sie
+// zurechtbiegt. Beides ist schlechter als sie zu loeschen und dazuzuschreiben,
+// warum.
 //
-//   1. "+ New poll" war 84 x 18 px. Das ist der Schalter, mit dem er ueberhaupt
-//      erst an das Formular kommt.
-//   2. Die Eintraege in Days/Hours/Minutes waren 27 x 32 px – und getroffen hat
-//      man sie nur genau auf der Ziffer, nicht auf der Zeile.
-//   3. Der schlimmste: Mit fuenf Antworten und offener Tastatur endete das
-//      Formular bei 604 px, sichtbar waren 508. "Start poll" stand 95 px unter
-//      dem Rand, und der Bereich liess sich nicht rollen. Die Abstimmung war
-//      fertig getippt und nicht abzuschicken.
-const anlegen = await browser.newPage({
+// Was an ihre Stelle tritt, steht weiter unten: dass der Schalter auf dem
+// Handy fehlt, dass der Satz da ist, dass ein erzwungen geoeffnetes Formular
+// zu bleibt – und die Gegenprobe, dass am Rechner alles beim Alten ist.
+//
+// Die Regeln im Blatt bleiben stehen (die vergroesserte Trefferflaeche, die
+// 44 px hohen Eintraege): Sie schaden am Rechner nicht und helfen dort, wo
+// jemand mit dem Finger auf einem grossen Bildschirm arbeitet.
+
+
+// ---------------------------------------------------------------------------
+// Kuerzel, Adresse und "Hide" stehen auf einer Linie
+// ---------------------------------------------------------------------------
+// Gemeldet als "Hide steht versetzt weiter unten", gemessen: 5,3 px, auf
+// iPhone 15 und SE identisch. Die Ursache war kein Ausrichtungsfehler, sondern
+// ein asymmetrisches Polster: Auf dem Handy verlor die Titelzeile ihr oberes,
+// behielt aber ihr unteres – ihr Text sass damit oben in einem Kasten, den
+// .thread-kopf mittig setzte. Zentriert wurden also die Kaesten und nicht das,
+// was man sieht.
+//
+// Geprueft wird deshalb die Mitte des TEXTES gegen die Mitte des Knopfes und
+// nicht die der Kaesten. Eine Pruefung auf die Kaesten waere schon vor der
+// Behebung durchgelaufen – sie standen ja immer auf einer Linie.
+const zeile = await browser.newPage({
   viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
   isMobile: true, hasTouch: true,
 });
-await anlegen.goto(base + '/', { waitUntil: 'load' });
-const handyForm = await anlegen.evaluate(() => {
+await zeile.goto(base + '/', { waitUntil: 'load' });
+const kopfzeile = await zeile.evaluate(() => {
   const $ = (x) => document.querySelector(x);
   $('#login').hidden = true;
   $('#app').hidden = false;
-  $('#pane-dms').hidden = true;
-  $('#pane-polls').hidden = false;
-  $('#poll-admin').hidden = false;
-
-  const pane = $('#pane-polls');
-  const zu = getComputedStyle(pane).overflowY;
-
-  $('#poll-admin-felder').hidden = false;
-  // Fuenf Antworten, wie bei einer richtigen Abstimmung.
-  const kasten = $('#poll-options');
-  while (kasten.children.length < 5) kasten.append(kasten.lastElementChild.cloneNode(true));
-
-  const hoch = (s) => Math.round($(s).getBoundingClientRect().height);
-
-  // Die Trefferflaeche, nicht der Kasten.
-  // -----------------------------------------------------------------------
-  // Der Knopf DARF nicht hoeher werden – daran haengt, dass die Ueberschrift
-  // auf einer Linie mit den Fragen bleibt und beim Aufklappen nichts springt.
-  // Gemessen wird deshalb, was ein Finger trifft: ein Punkt 20 px ueber der
-  // Mitte des Knopfes muss noch bei ihm landen.
-  const knopf = $('#btn-poll-neu');
-  const kb = knopf.getBoundingClientRect();
-  const trifft = (dy) => {
-    const el = document.elementFromPoint(
-      Math.round(kb.left + kb.width / 2), Math.round(kb.top + kb.height / 2 + dy));
-    return Boolean(el && (el === knopf || knopf.contains(el) || el.closest('#btn-poll-neu')));
+  document.querySelectorAll('.pane').forEach((p) => { p.hidden = true; });
+  $('#pane-dms').hidden = false;
+  $('#dm-user').hidden = true;
+  $('#dm-admin').hidden = false;
+  $('#dm-admin').classList.add('viewing');
+  $('#thread-title').classList.remove('dim');
+  $('#thread-title').innerHTML =
+    '<span class="h">7xK</span><span class="addr">7xKm9QpLvRt2sYwE4nBc6HjA1dFgZuVmTqXrPyNb3Ks</span>';
+  $('#btn-hide-thread').hidden = false;
+  const mitte = (x) => {
+    const r = document.querySelector(x).getBoundingClientRect();
+    return (r.top + r.bottom) / 2;
   };
-  // -35 und nicht weiter weg: Der Knopf ist 18 px hoch, die Flaeche reicht
-  // 13 px darueber hinaus – ab 22 px von der Mitte ist man draussen. Bei -60
-  // liegt der Punkt schon in der Kopfzeile, und die faengt ihn ohnehin ab;
-  // eine Gegenprobe, die aus dem falschen Grund gruen ist, prueft nichts.
-  const treffer = { oben: trifft(-20), unten: trifft(20), weitWeg: trifft(-35) };
-
-  // Die Liste einmal oeffnen und einen Eintrag ausmessen.
-  const liste = $('#lz-liste-minuten');
-  liste.hidden = false;
-  liste.innerHTML = '<button class="lz-eintrag" type="button">37</button>';
-  const e = liste.querySelector('.lz-eintrag').getBoundingClientRect();
-  const lr = liste.getBoundingClientRect();
-  const eintrag = { h: Math.round(e.height), w: Math.round(e.width),
-    listeBreite: Math.round(lr.width), listeUnten: Math.round(lr.bottom) };
-  liste.hidden = true;
-
-  // Und jetzt die Tastatur, genau wie app.js sie nachfuehrt.
-  const TASTATUR = 336;
-  document.documentElement.style.setProperty('--sicht', `${innerHeight - TASTATUR}px`);
-  const sichtbar = innerHeight - TASTATUR;
-  const knopfVor = Math.round($('#btn-create-poll').getBoundingClientRect().bottom);
-  pane.scrollTop = 99999;
-  const knopfNach = Math.round($('#btn-create-poll').getBoundingClientRect().bottom);
-  const offen = getComputedStyle(pane).overflowY;
-  pane.scrollTop = 0;
-  document.documentElement.style.removeProperty('--sicht');
-
-  return { neu: hoch('#btn-poll-neu'), treffer, eintrag, zu, offen,
-    sichtbar, knopfVor, knopfNach };
+  return {
+    kuerzel: mitte('.thread-title .h'),
+    adresse: mitte('.thread-title .addr'),
+    hide: mitte('#btn-hide-thread'),
+    // Die Kaesten – nur, um die Gegenprobe unten ehrlich zu machen.
+    titelKasten: mitte('#thread-title'),
+  };
 });
-await anlegen.close();
+await zeile.close();
 
-check('Der Schalter "+ New poll" ist daumentauglich',
-  handyForm.treffer.oben && handyForm.treffer.unten,
-  `20 px darueber: ${handyForm.treffer.oben}, darunter: ${handyForm.treffer.unten}`);
-// Gegenprobe: Die Flaeche ist gewachsen, nicht die halbe Seite. 60 px ueber
-// der Mitte gehoert schon der Kopfzeile.
-check('Gegenprobe: weiter weg trifft man ihn nicht mehr',
-  !handyForm.treffer.weitWeg);
-// Und der Kasten selbst bleibt so hoch wie er war – daran haengen zwei
-// Zusagen in test-polls-tab.mjs (Linie mit den Fragen, kein Sprung beim
-// Aufklappen), die der erste Versuch mit min-height gerissen hat.
-check('Und der Kasten selbst ist NICHT gewachsen',
-  handyForm.neu < 30, `${handyForm.neu} px hoch`);
-check('Ein Eintrag in der Laufzeit-Liste ebenso',
-  handyForm.eintrag.h >= 44, `${handyForm.eintrag.h} px hoch`);
-// Die Breite ist der zweite Teil desselben Fehlers: Ein Eintrag, der nur so
-// breit ist wie seine Ziffer, laesst sich nur auf der Ziffer treffen.
-check('Und er nimmt die ganze Breite der Liste',
-  handyForm.eintrag.w >= handyForm.eintrag.listeBreite - 12,
-  `${handyForm.eintrag.w} von ${handyForm.eintrag.listeBreite} px`);
-// Die Liste klappt nach unten auf – sie darf nicht ueber den Bildschirm
-// hinausreichen, sonst ist ihr unteres Ende nicht zu sehen.
-check('Die Liste bleibt im Bild',
-  handyForm.eintrag.listeUnten <= 844, `${handyForm.eintrag.listeUnten} px`);
+check('"Hide" steht auf einer Linie mit dem Kuerzel',
+  Math.abs(kopfzeile.hide - kopfzeile.kuerzel) <= 1,
+  `${(kopfzeile.hide - kopfzeile.kuerzel).toFixed(1)} px Versatz`);
+check('Und mit der Adresse',
+  Math.abs(kopfzeile.hide - kopfzeile.adresse) <= 1,
+  `${(kopfzeile.hide - kopfzeile.adresse).toFixed(1)} px Versatz`);
+// Gegenprobe an der Pruefung selbst: Der Text muss jetzt dort liegen, wo sein
+// Kasten liegt. Taete er das nicht, waere das Polster wieder asymmetrisch und
+// der Fehler zurueck, ohne dass die beiden Zeilen darueber es merken muessten.
+check('Und der Text sitzt mittig in seiner Zeile, nicht oben',
+  Math.abs(kopfzeile.kuerzel - kopfzeile.titelKasten) <= 1,
+  `${(kopfzeile.kuerzel - kopfzeile.titelKasten).toFixed(1)} px`);
 
-// Der wichtigste Teil: Das Formular ist laenger als der Platz – und trotzdem
-// erreichbar.
-check('Gegenprobe: mit Tastatur steht der Knopf zunaechst unter dem Rand',
-  handyForm.knopfVor > handyForm.sichtbar,
-  `${handyForm.knopfVor} px bei ${handyForm.sichtbar} px sichtbar`);
-check('Nach dem Rollen ist "Start poll" erreichbar',
-  handyForm.knopfNach <= handyForm.sichtbar,
-  `${handyForm.knopfNach} px bei ${handyForm.sichtbar} px sichtbar`);
-check('Der Bereich rollt, solange das Formular offen ist',
-  handyForm.offen === 'auto', handyForm.offen);
-// Und nur dann. Zwei Rollflaechen ineinander sind eine Falle; solange Ansem
-// nichts anlegt, gibt es weiterhin genau eine.
-check('Gegenprobe: bei geschlossenem Formular rollt er nicht',
-  handyForm.zu !== 'auto' && handyForm.zu !== 'scroll', handyForm.zu);
+// ---------------------------------------------------------------------------
+// Abstimmungen anlegen geht nur am Rechner
+// ---------------------------------------------------------------------------
+// Das Formular war auf dem Telefon mit offener Tastatur nicht zu bedienen, und
+// statt weiter daran zu ziehen ist der Weg dort jetzt zu. Geprueft wird beides
+// – dass er auf dem Handy zu ist UND dass er am Rechner offen bleibt. Nur
+// zusammen ist es eine Aussage: Eine Regel, die ueberall greift, haette die
+// Funktion abgeschafft statt sie zu verlegen.
+async function pollSchalter(w, h, handy) {
+  const p = await browser.newPage({
+    viewport: { width: w, height: h }, deviceScaleFactor: 2,
+    isMobile: handy, hasTouch: handy,
+  });
+  await p.goto(base + '/', { waitUntil: 'load' });
+  const r = await p.evaluate(() => {
+    const $ = (x) => document.querySelector(x);
+    $('#login').hidden = true;
+    $('#app').hidden = false;
+    document.querySelectorAll('.pane').forEach((x) => { x.hidden = true; });
+    $('#pane-polls').hidden = false;
+    $('#poll-admin').hidden = false;
+    const sicht = (x) => {
+      const e = document.querySelector(x);
+      if (!e) return false;
+      return getComputedStyle(e).display !== 'none'
+        && e.getBoundingClientRect().height > 0;
+    };
+    // Und wenn das Formular doch offen ist – etwa weil jemand am Rechner
+    // aufgeklappt und dann das Fenster schmal gezogen hat?
+    $('#poll-admin-felder').hidden = false;
+    const erzwungen = sicht('#poll-admin-felder');
+    $('#poll-admin-felder').hidden = true;
+    return {
+      knopf: sicht('#btn-poll-neu'),
+      satz: sicht('.poll-nur-rechner'),
+      text: ($('.poll-nur-rechner') || {}).textContent || '',
+      erzwungen,
+      // Was auf dem Handy bleiben MUSS: die Liste und die Reiter.
+      liste: !!$('#poll-list'),
+      reiter: sicht('.tabs'),
+    };
+  });
+  await p.close();
+  return r;
+}
+
+const handy = await pollSchalter(390, 844, true);
+check('Auf dem Handy gibt es keinen Schalter fuer neue Abstimmungen',
+  !handy.knopf);
+check('Stattdessen steht dort ein Satz', handy.satz, handy.text.trim());
+check('Und er nennt den Rechner beim Namen',
+  /desktop/i.test(handy.text), handy.text.trim());
+check('Auch ein erzwungen geoeffnetes Formular bleibt zu', !handy.erzwungen);
+// Verlegt, nicht abgeschafft: Alles andere muss auf dem Handy bleiben.
+check('Die Abstimmungsliste ist weiterhin da', handy.liste);
+check('Und die Reiter auch', handy.reiter);
+
+const rechner = await pollSchalter(1280, 900, false);
+check('Gegenprobe: am Rechner ist der Schalter da', rechner.knopf);
+check('Gegenprobe: und der Satz steht dort nicht', !rechner.satz);
+check('Gegenprobe: und das Formular laesst sich oeffnen', rechner.erzwungen);
+
+// ---------------------------------------------------------------------------
+// Was vor dem Start gehaertet wurde
+// ---------------------------------------------------------------------------
+// Vier Sachen, die keine der 22 Reihen gesehen hat, weil sie alle einen
+// Browser voraussetzen, der sich normal verhaelt: gesperrter Speicher, ein
+// sehr schmales Fenster, eine Antwort ohne Leerzeichen, eine Tastatur.
+
+// 1. Gesperrter localStorage darf die Seite nicht schwarz machen
+// ---------------------------------------------------------------------------
+// Nicht "leer", sondern VERBOTEN: Safari mit "alle Cookies blockieren" wirft
+// beim blossen Zugriff. Die Zeile stand auf oberster Modulebene, der Fehler
+// fiel also vor dem ersten Bild – und der Besucher sah nichts. Kein Login,
+// keine Meldung, Neuladen half nie.
+//
+// Eigener Server dafuer: Der Server dieser Reihe liefert app.js absichtlich
+// LEER aus, weil die anderen Pruefungen den Zustand von Hand setzen. Genau das
+// waere hier aber der Fehler – zu pruefen ist ja, ob das echte app.js den
+// gesperrten Speicher ueberlebt. Ohne den zweiten Server misst diese Pruefung
+// eine leere Seite und meldet stolz, dass sie leer ist.
+const echtServer = http.createServer((req, res) => {
+  const pfad = req.url.split('?')[0];
+  const file = pfad === '/' ? '/index.html' : pfad;
+  const abs = path.join(pub, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
+  if (!abs.startsWith(pub) || !fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
+    return res.writeHead(404).end('nicht gefunden');
+  }
+  res.writeHead(200, { 'content-type': MIME[path.extname(abs)] || 'application/octet-stream' })
+     .end(fs.readFileSync(abs));
+});
+await new Promise((r) => echtServer.listen(0, r));
+const echtBasis = `http://127.0.0.1:${echtServer.address().port}`;
+
+const gesperrt = await browser.newPage({ viewport: { width: 390, height: 844 } });
+await gesperrt.addInitScript(() => {
+  const werfen = () => { throw new DOMException('The operation is insecure.', 'SecurityError'); };
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get: () => ({ getItem: werfen, setItem: werfen, removeItem: werfen }),
+  });
+});
+const fehlerImLauf = [];
+gesperrt.on('pageerror', (e) => fehlerImLauf.push(e.message));
+await gesperrt.goto(echtBasis + '/', { waitUntil: 'load' });
+await gesperrt.waitForTimeout(3200);   // boot() fragt erst die Datenbank
+const beiSperre = await gesperrt.evaluate(() => ({
+  login: !document.querySelector('#login').hidden,
+  text: (document.body.innerText || '').trim().length,
+}));
+await gesperrt.close();
+echtServer.close();
+check('Mit gesperrtem Speicher erscheint der Login trotzdem', beiSperre.login);
+check('Und es steht ueberhaupt etwas auf der Seite',
+  beiSperre.text > 0, `${beiSperre.text} Zeichen`);
+check('Ohne unbehandelten Fehler beim Laden',
+  fehlerImLauf.length === 0, fehlerImLauf.join(' | '));
+
+// 2. Eine Antwort ohne Leerzeichen frisst den Betrag nicht mehr
+// ---------------------------------------------------------------------------
+// Gemessen war: bei 320 px reichten 17 Zeichen, damit der Dollarbetrag aus dem
+// Balken faellt. Nicht gequetscht – weg, weil .opt-bar abschneidet.
+async function betragSichtbar(breite, text) {
+  const p = await browser.newPage({ viewport: { width: breite, height: 800 } });
+  await p.goto(base + '/', { waitUntil: 'load' });
+  const r = await p.evaluate((label) => {
+    const $ = (x) => document.querySelector(x);
+    $('#login').hidden = true;
+    $('#app').hidden = false;
+    document.querySelectorAll('.pane').forEach((x) => { x.hidden = true; });
+    $('#pane-polls').hidden = false;
+    $('#poll-list').innerHTML = `
+      <article class="poll"><div class="poll-body"><div class="opt">
+        <div class="opt-bar"><div class="opt-fill" style="width:60%"></div>
+        <div class="opt-text">
+          <span class="opt-label">${label}</span>
+          <span class="opt-num"><span class="held">$1,640,000</span></span>
+        </div></div></div></div></article>`;
+    const num = $('.opt-num').getBoundingClientRect();
+    const bar = $('.opt-bar').getBoundingClientRect();
+    return {
+      innerhalb: num.right <= bar.right + 1 && num.left >= bar.left,
+      breite: Math.round(num.width),
+      seite: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    };
+  }, text);
+  await p.close();
+  return r;
+}
+const adresse = '7xKm9QpLvRt2sYwE4nBc6HjA1dFgZuVmTqXrPyNb3Ks';
+for (const breite of [320, 375, 390]) {
+  const r = await betragSichtbar(breite, adresse);
+  check(`Bei ${breite} px bleibt der Betrag im Balken (44-Zeichen-Adresse)`,
+    r.innerhalb, `${r.breite} px breit`);
+  check(`Und die Seite rollt bei ${breite} px nicht seitlich`, r.seite);
+}
+// Gegenprobe: Diese Messung muss ueberhaupt etwas messen koennen – mit einer
+// kuenstlich abgeschalteten Regel muss sie durchfallen.
+const ohneRegel = await browser.newPage({ viewport: { width: 320, height: 800 } });
+await ohneRegel.goto(base + '/', { waitUntil: 'load' });
+const kaputt = await ohneRegel.evaluate((label) => {
+  const st = document.createElement('style');
+  st.textContent = '.opt-label { min-width: auto !important; overflow-wrap: normal !important; }';
+  document.head.appendChild(st);
+  const $ = (x) => document.querySelector(x);
+  $('#login').hidden = true; $('#app').hidden = false;
+  document.querySelectorAll('.pane').forEach((x) => { x.hidden = true; });
+  $('#pane-polls').hidden = false;
+  $('#poll-list').innerHTML = `
+    <article class="poll"><div class="poll-body"><div class="opt">
+      <div class="opt-bar"><div class="opt-fill" style="width:60%"></div>
+      <div class="opt-text">
+        <span class="opt-label">${label}</span>
+        <span class="opt-num"><span class="held">$1,640,000</span></span>
+      </div></div></div></div></article>`;
+  const num = $('.opt-num').getBoundingClientRect();
+  const bar = $('.opt-bar').getBoundingClientRect();
+  return num.right <= bar.right + 1;
+}, adresse);
+await ohneRegel.close();
+check('Gegenprobe: ohne die Regel faellt der Betrag heraus', !kaputt);
+
+// 3. "Send" bleibt bei 320 px im Bild
+const schmal = await browser.newPage({ viewport: { width: 320, height: 700 } });
+await schmal.goto(base + '/', { waitUntil: 'load' });
+const senden = await schmal.evaluate(() => {
+  const $ = (x) => document.querySelector(x);
+  $('#login').hidden = true; $('#app').hidden = false;
+  document.querySelectorAll('.pane').forEach((x) => { x.hidden = true; });
+  $('#pane-dms').hidden = false; $('#dm-user').hidden = false;
+  const knopf = document.querySelector('#dm-form .btn-primary')
+    || document.querySelector('#dm-form button');
+  const r = knopf.getBoundingClientRect();
+  return { rechts: Math.round(r.right), fenster: window.innerWidth };
+});
+await schmal.close();
+check('Bei 320 px liegt "Send" im Bild',
+  senden.rechts <= senden.fenster, `Kante bei ${senden.rechts} von ${senden.fenster} px`);
+
+// 4. Abstimmen geht mit der Tastatur
+// ---------------------------------------------------------------------------
+// Die Antwortzeile war ein nacktes <div>: kein Fokus, keine Taste, und eine
+// Vorlesestimme meldete sie als Text. Das ist die zentrale Handlung der Seite.
+const tastaturSeite = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+await tastaturSeite.goto(base + '/', { waitUntil: 'load' });
+const bedienbar = await tastaturSeite.evaluate(() => {
+  const $ = (x) => document.querySelector(x);
+  $('#login').hidden = true; $('#app').hidden = false;
+  document.querySelectorAll('.pane').forEach((x) => { x.hidden = true; });
+  $('#pane-polls').hidden = false;
+  $('#poll-list').innerHTML = `
+    <div class="opt" data-poll="1" data-option="2" role="button" tabindex="0"
+         aria-disabled="false" aria-pressed="false"><div class="opt-bar">
+    <div class="opt-text"><span class="opt-label">A</span></div></div></div>
+    <div class="opt locked" data-poll="1" data-option="3" role="button" tabindex="-1"
+         aria-disabled="true" aria-pressed="false"><div class="opt-bar">
+    <div class="opt-text"><span class="opt-label">B</span></div></div></div>`;
+  const offen = document.querySelector('.opt:not(.locked)');
+  const zu = document.querySelector('.opt.locked');
+  offen.focus();
+  return {
+    fokussierbar: document.activeElement === offen,
+    rolle: offen.getAttribute('role'),
+    gedrueckt: offen.getAttribute('aria-pressed'),
+    zuNichtImTab: zu.getAttribute('tabindex') === '-1',
+    zuGemeldet: zu.getAttribute('aria-disabled') === 'true',
+  };
+});
+await tastaturSeite.close();
+check('Eine Antwort bekommt den Fokus', bedienbar.fokussierbar);
+check('Und meldet sich als Knopf', bedienbar.rolle === 'button', bedienbar.rolle);
+check('Und sagt, ob sie die eigene Stimme ist', bedienbar.gedrueckt !== null);
+check('Eine geschlossene Antwort liegt nicht im Tab-Lauf', bedienbar.zuNichtImTab);
+check('Und meldet sich als nicht bedienbar', bedienbar.zuGemeldet);
+// Im Quelltext: Enter und Leertaste muessen wirklich verdrahtet sein. Die
+// Messung oben zeigt nur, dass das Element den Fokus nimmt.
+const appJsText = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+check("Enter und Leertaste sind am '.opt' verdrahtet",
+  /\$\$\('\.opt'[\s\S]{0,900}addEventListener\('keydown'/.test(appJsText));
 
 await browser.close();
 server.close();

@@ -1,7 +1,7 @@
 // ============================================================================
 // Baut aus verify/index.ts eine Datei, die man ins Dashboard einfügen kann.
 //
-// Warum es die gibt: Auf dem Mac liegt kein Node und keine Supabase-CLI, und
+// Warum es die gibt: Nicht ueberall liegen Node und die Supabase-CLI, und
 // eine Function mit relativen Importen (../_shared/...) lässt sich im
 // Dashboard-Editor nicht speichern – dort gibt es die Nachbardateien nicht.
 // og/index.ts ist deshalb von Hand importfrei gehalten. Bei verify ginge das

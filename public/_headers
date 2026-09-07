@@ -24,10 +24,10 @@
 # Projektadresse stehen, sonst kommt die Seite an ihre eigene Datenbank nicht
 # heran und zeigt gar nichts. Derselbe Handgriff wie bei _redirects:
 #
-#   cd ~/Documents/ansem-hub
+#   cd <projektordner>
 #   URL=$(grep -o 'https://[a-z0-9]*\.supabase\.co' public/config.js | head -1)
 #   HOST=${URL#https://}
-#   sed -i '' "s#wbkfjvpxxlwcivqcmmpo.supabase.co#$HOST#g" public/_headers
+#   perl -pi -e "s{wbkfjvpxxlwcivqcmmpo\.supabase\.co}{$HOST}g" public/_headers
 #   grep connect-src public/_headers
 #
 # Die letzte Zeile zeigt, was jetzt dort steht – da darf kein "DEIN-PROJEKT"

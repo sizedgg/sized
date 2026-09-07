@@ -49,6 +49,13 @@ _to_delete/
 bin/
 supabase.tar.gz
 
+# Python legt neben jedem Skript kompilierten Bytecode ab. Eine .pyc-Datei im
+# Verzeichnis ist das Erste, was auf GitHub schlampig aussieht – und sie stand
+# hier nicht drin, ausgerechnet in der Datei, die erklaert, was nicht
+# hineingehoert.
+__pycache__/
+*.pyc
+
 # --- Nebenprodukte ---------------------------------------------------------
 .DS_Store
 *.log

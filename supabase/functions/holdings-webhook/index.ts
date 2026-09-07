@@ -26,6 +26,21 @@ import { serviceClient, loadConfig, json, fail, CORS } from '../_shared/common.t
 import { isSolanaAddress } from '../_shared/base58.ts';
 import { refreshWallet } from '../_shared/holdings.ts';
 
+/**
+ * Zeichenweiser Vergleich in fester Zeit.
+ *
+ * Ein gewoehnliches !== bricht beim ersten Unterschied ab. Ueber das Netz ist
+ * das kaum auszunutzen, aber verify/index.ts macht es an derselben Stelle
+ * richtig – und zwei Massstaebe fuer dieselbe Sache in einem Projekt sind
+ * schlechter als der strengere ueberall.
+ */
+function gleich(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 const MAX_WALLETS_PER_CALL = 60;
 
 const db = serviceClient();
@@ -37,7 +52,7 @@ Deno.serve(async (req) => {
   const secret = Deno.env.get('WEBHOOK_SECRET');
   if (!secret) return fail('WEBHOOK_SECRET is not set', 503);
   const presented = req.headers.get('authorization') ?? '';
-  if (presented !== secret && presented !== `Bearer ${secret}`) return fail('Not allowed', 403);
+  if (!gleich(presented, secret) && !gleich(presented, `Bearer ${secret}`)) return fail('Not allowed', 403);
 
   let payload: unknown;
   try {

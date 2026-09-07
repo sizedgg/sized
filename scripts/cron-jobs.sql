@@ -25,7 +25,7 @@ begin
 end $$;
 
 -- 1. Kurs-Takt: EIN Kursabruf, eine Anweisung, alle Wallets gleichzeitig.
---    Das ist der Job, der die Beträge im Chat jede Minute aktuell hält.
+--    Das ist der Job, der die Beträge auf der Seite jede Minute aktuell hält.
 select cron.schedule('price-tick', '* * * * *', $$
   select net.http_post(
     url     := 'https://DEIN-PROJEKT.supabase.co/functions/v1/refresh-holdings',

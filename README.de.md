@@ -120,7 +120,7 @@ abgerechnet.
 
 ### 6. Bestände aktuell halten
 
-Hieran hängt die Korrektheit der Abstimmungen, nicht nur die Anzeige. Zwei
+Hieran hängt die Korrektheit der Abstimmungen, nicht nur die Anzeige. Drei
 Cron-Jobs im Dashboard (Database → Cron) – der erste ist der wichtige, er
 betrifft nur Wallets mit einer Stimme in einer offenen Abstimmung:
 
@@ -246,7 +246,7 @@ npm run test:functions   # Adressen, Base58, JWT, Zahlungszuordnung
 npm run test:schema      # RLS, Trigger und Stimmgewichte gegen echtes Postgres
 ```
 
-Daneben liegen in `scripts/` rund zwei Dutzend weitere `test-*.mjs`, die mit
+Daneben liegen in `scripts/` zweiundzwanzig weitere `test-*.mjs`, die mit
 Playwright gegen die echte `index.html` und das echte Blatt messen – Reiter,
 Fokus, Seitenhöhe, Tastaturverhalten, Trefferflächen, Abstimmungsbilder,
 Realtime-Kanäle. Sie laufen einzeln mit `node scripts/test-….mjs`.
@@ -295,7 +295,7 @@ Key hat, kommt rein – bei einer geleakten Wallet also auch jemand anderes.
 **Warum der krumme Betrag wichtig ist.** Bei einem festen Preis könnte jemand
 eine fremde Adresse eintragen, warten, bis diese Person zufällig bezahlt, und
 deren Zahlung als eigenen Nachweis einlösen. Der Zufallsaufschlag von bis zu
-0,0001 SOL ist dem Angreifer unbekannt, offene Beträge sind per Unique-Index
+0,000999 SOL ist dem Angreifer unbekannt, offene Beträge sind per Unique-Index
 eindeutig, und jede Transaktionssignatur wird nur einmal akzeptiert.
 
 **Adressen haben keine Prüfsumme.** Ein Vertipper ist strukturell oft noch eine
@@ -317,7 +317,7 @@ steht deshalb ein Trigger daneben, der Nachrichten pro Wallet und Minute zählt.
 
 **Der öffentliche Solana-RPC reicht nicht.** Für Livebetrieb einen eigenen
 Endpoint (Helius, QuickNode, Triton) eintragen, sonst laufen Login und
-Bestandsabruf ins Rate-Limit. Der Login pollt alle vier Sekunden, das summiert
+Bestandsabruf ins Rate-Limit. Der Login fragt mit 3/10/30 Sekunden Abstand nach, das summiert
 sich schnell.
 
 **Preisquelle.** Jupiter zuerst, DexScreener als Rückfall. Bei einem sehr

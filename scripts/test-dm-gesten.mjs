@@ -403,10 +403,12 @@ check('Gegenprobe: der Pfeil selbst antwortet noch',
   ueberKnopf.includes('reply:2'), ueberKnopf.join());
 
 // ---------------------------------------------------------------------------
-// Kein Markieren in einer Nachricht – ueberall
+// Kein Markieren in einer Nachricht – am Finger
 // ---------------------------------------------------------------------------
-// Erst galt das nur am Finger, mit der Begruendung, am Rechner sei Markieren
-// normal. Es sollte trotzdem ganz raus.
+// Am Finger ist Markieren ein Unfall: zu lange aufgehalten, Text markiert,
+// Systemmenue drueber. Mit der Maus ist es eine Absicht – deshalb gilt die
+// Regel nur dort, wo kein Zeiger schweben kann. Die Pruefung dafuer steht
+// weiter unten und ist die wichtigere von beiden.
 //
 // Geprueft wird am gerechneten Stil und nicht am Regeltext: So faellt auch
 // auf, wenn eine spaetere Regel es irgendwo wieder anschaltet.
@@ -436,12 +438,16 @@ check('Und die Zeile gegen das Systemmenue von iOS steht da (hier nicht messbar)
 check('Gegenprobe: im Eingabefeld sehr wohl',
   markieren.feld !== 'none', markieren.feld);
 
-// Und am RECHNER ebenfalls nicht.
+// Am RECHNER dagegen SCHON.
 // ---------------------------------------------------------------------------
-// Das ist die Pruefung, die vorher fehlte, und ihr Fehlen war messbar: Die
-// Regel liess sich wieder in @media (hover: none) einwickeln, ohne dass etwas
-// fehlschlug. Kein Wunder – diese Suite laeuft mit Finger, dort gilt die
-// Abfrage. Ob es AUCH ohne Finger gilt, sagt nur ein zweiter Browser.
+// Diese Pruefung fehlte lange, und ihr Fehlen war messbar: Die Regel liess
+// sich beliebig ein- und auswickeln, ohne dass etwas fehlschlug. Kein Wunder –
+// diese Suite laeuft mit Finger, dort gilt (hover: none) so oder so. Was am
+// Rechner passiert, sagt nur ein zweiter Browser.
+//
+// Sie hat einmal das Gegenteil verlangt ("auch am Rechner nicht"). Die
+// Anforderung hat sich geaendert, nicht die Messung: Mit der Maus soll man
+// den Text einer Nachricht wieder markieren und kopieren koennen.
 const amRechner = await browser.newContext({
   viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false,
 });
@@ -461,8 +467,8 @@ const rechner = await rechnerSeite.evaluate(() => {
   };
 });
 await amRechner.close();
-check('Auch am Rechner laesst sich in einer Nachricht nichts markieren',
-  rechner.blase === 'none', rechner.blase);
+check('Am Rechner laesst sich der Text einer Nachricht markieren',
+  rechner.blase !== 'none', rechner.blase);
 // Gegenprobe dazu: Dieser zweite Browser ist wirklich einer ohne Finger –
 // sonst maesse er dasselbe wie der erste und sagte nichts Neues.
 check('Gegenprobe: dieser zweite Browser hat wirklich einen Zeiger',

@@ -112,7 +112,7 @@
         <input id="wallet-input" type="text" spellcheck="false" autocomplete="off" placeholder="e.g. 7xKX…9Qm2">
       </label>
       <button id="btn-challenge" class="btn btn-primary">Continue</button>
-      <p id="login-error" class="error" hidden></p>
+      <p id="login-error" role="alert" class="error" hidden></p>
     </div>
 
     <div id="step-pay" class="step" hidden>
@@ -141,7 +141,7 @@
 
       <button id="btn-mock-pay" class="btn btn-ghost" hidden>⚡ Simulate payment (mock mode)</button>
       <button id="btn-cancel" class="btn btn-ghost">Start over</button>
-      <p id="pay-error" class="error" hidden></p>
+      <p id="pay-error" role="alert" class="error" hidden></p>
     </div>
   </div>
   <p class="foot-note">Send the exact amount from the wallet you want to verify.
@@ -245,6 +245,22 @@
         <h3><button id="btn-poll-neu" class="poll-neu" type="button"
                     aria-expanded="false" aria-controls="poll-admin-felder"
             ><span class="zeichen" aria-hidden="true">+</span>New poll</button></h3>
+        <!-- Auf dem Handy steht hier dieser Satz statt des Schalters.
+             ----------------------------------------------------------------
+             Eine Abstimmung anzulegen heisst: Frage tippen, bis zu vier
+             Antworten tippen, Laufzeit setzen. Das ist Arbeit an einer
+             Tastatur, und auf einem Telefon war das Formular mit offener
+             Tastatur hoeher als der Bildschirm.
+
+             Statt das Formular fuer einen Fall zu biegen, den es kaum gibt –
+             Ansem legt eine Abstimmung an, und zwar genau eine, mit Bedacht –
+             steht dort jetzt, wo es geht. Ein Satz ist ehrlicher als eine
+             Oberflaeche, die zwar reagiert, aber nicht zu bedienen ist.
+
+             Der Satz steht im Aufbau und nicht im Blatt: So liest ihn auch
+             eine Vorlesestimme, und er ist da, bevor das erste Bild
+             gezeichnet wird. -->
+        <p class="poll-nur-rechner">For now, polls can only be created on desktop.</p>
       </div>
       <!-- Zu, solange niemand eine Abstimmung anlegt. Ansem sieht diesen
            Kasten als Einziger, und er sieht ihn immer – fuenf Zeilen ueber
@@ -318,13 +334,16 @@
                mitbringt: Pfeile, Pos1/Ende, Enter, Escape. Die steht deshalb in
                app.js ausgeschrieben – halb gebaut waere schlimmer als gar
                nicht, siehe den Kommentar dort. -->
+          <!-- Gilt fuer alle drei Kaesten dieser Reihe: Der Knopf ist der GANZE
+               Kasten und nicht nur die Zahl darin. Wer auf "Days" tippt, will
+               die Tage aendern – nicht daneben. Auf 390 px sind die drei
+               Kaesten zusammen keine 300 px breit, da ist jeder Pixel, den man
+               NICHT trifft, ein Fehlversuch.
+
+               Hier stand dieser Absatz dreimal, einmal ueber jedem Kasten.
+               Dreimal derselbe Satz sagt nicht dreimal so viel. -->
           <div class="lz-reihe">
             <div class="lz-feld">
-              <!-- Der Knopf ist der GANZE Kasten, Beschriftung inbegriffen –
-                   so wie bei X. Anders herum – Beschriftung daneben, Knopf nur
-                   um die Zahl – waere das antippbare Ziel auf dem Handy 24 px
-                   hoch statt 44, obwohl der Kasten drumherum gross genug
-                   aussieht. Man traefe daneben und wuesste nicht, warum. -->
               <button type="button" id="lz-tage" class="lz-wahl" data-wert="1"
                       aria-haspopup="listbox" aria-expanded="false"
                       aria-controls="lz-liste-tage">
@@ -335,11 +354,6 @@
                    aria-label="Days" hidden></div>
             </div>
             <div class="lz-feld">
-              <!-- Der Knopf ist der GANZE Kasten, Beschriftung inbegriffen –
-                   so wie bei X. Anders herum – Beschriftung daneben, Knopf nur
-                   um die Zahl – waere das antippbare Ziel auf dem Handy 24 px
-                   hoch statt 44, obwohl der Kasten drumherum gross genug
-                   aussieht. Man traefe daneben und wuesste nicht, warum. -->
               <button type="button" id="lz-stunden" class="lz-wahl" data-wert="0"
                       aria-haspopup="listbox" aria-expanded="false"
                       aria-controls="lz-liste-stunden">
@@ -350,12 +364,7 @@
                    aria-label="Hours" hidden></div>
             </div>
             <div class="lz-feld">
-              <!-- Der Knopf ist der GANZE Kasten, Beschriftung inbegriffen –
-                   so wie bei X. Anders herum – Beschriftung daneben, Knopf nur
-                   um die Zahl – waere das antippbare Ziel auf dem Handy 24 px
-                   hoch statt 44, obwohl der Kasten drumherum gross genug
-                   aussieht. Man traefe daneben und wuesste nicht, warum. -->
-              <button type="button" id="lz-minuten" class="lz-wahl" data-wert="0"
+                            <button type="button" id="lz-minuten" class="lz-wahl" data-wert="0"
                       aria-haspopup="listbox" aria-expanded="false"
                       aria-controls="lz-liste-minuten">
                 <span class="lz-name">Minutes</span>
@@ -539,7 +548,10 @@
     Preview only &mdash; not signed in as Ansem. Anything you try to save will be refused.
   </div>
 
-  <div id="toast" class="toast" hidden></div>
+  <!-- role="status" – Meldungen ueber Fehler und Taktgrenzen blieben fuer
+       eine Vorlesestimme sonst still. aria-live ist implizit "polite": Sie
+       unterbricht nicht, sie meldet beim naechsten Atemholen. -->
+  <div id="toast" class="toast" role="status" hidden></div>
 </div>
 
 

@@ -518,7 +518,7 @@ code { font-family: var(--mono); }
   margin-block: auto;
   width: min(520px, 100%); background: rgba(16, 18, 24, .82);
   border: 1px solid var(--line); border-radius: 18px; padding: 2rem;
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
 /* Marke: Zeichen und Wort in einer Reihe. Als Flex und nicht im Textfluss,
    weil das Zeichen jetzt ein SVG ist – eine Grafik sitzt auf der Grundlinie
@@ -845,7 +845,7 @@ code { font-family: var(--mono); }
   align-items: center; gap: 1rem;
   padding: calc(.7rem + env(safe-area-inset-top, 0px)) calc(1rem + env(safe-area-inset-right, 0px)) .7rem calc(1rem + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--line); background: rgba(10, 11, 15, .85);
-  backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 5;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 5;
 }
 /* Ohne das zöge der Rasterplatz die Marke auf die ganze Spaltenbreite – ein
    Link, dessen Klickfläche quer durch leeren Raum läuft. */
@@ -1189,7 +1189,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 /* Ohne Flaeche muss der Zeigerhinweis aus der Schrift kommen. */
 .quote:hover { color: var(--dim); border-left-color: var(--dim); }
 .quote .h { font-family: var(--mono); font-weight: 700; font-size: .78rem; flex: none; }
-.quote-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* min-width: 0, sonst kommen die Auslassungspunkte nie: Als Flex-Element
+   schrumpft .quote-body nicht unter seinen Inhalt, und .quote schneidet
+   stattdessen mitten im Wort ab. */
+.quote-body { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .quote.is-gone {
   width: auto; cursor: default; font-style: italic;
   color: var(--dimmer); border-left-color: var(--bg-3); background: none;
@@ -1237,14 +1240,22 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 
 /* Kein Markieren in einer Nachricht – ueberall, nicht nur am Finger.
    ---------------------------------------------------------------------------
-   Hier stand eine @media-(hover: none)-Abfrage darum, mit der Begruendung,
-   am Rechner sei Markieren normal und man nehme es niemandem weg. Es sollte
-   trotzdem ganz raus, und die Abfrage ist deshalb gefallen.
+   Und zwar NUR am Finger.
+   ---------------------------------------------------------------------------
+   Die Abfrage stand hier schon einmal, fiel dann weg ("ganz raus"), und ist
+   jetzt wieder da – dieses Mal mit dem Unterschied dazwischen als Begruendung:
 
-   Was das kostet, steht der Vollstaendigkeit halber hier: Seit auch "Copy" aus
-   dem Fenster weg ist, gibt es damit KEINEN Weg mehr, den Text einer Nachricht
-   zu kopieren – weder am Finger noch mit der Maus. Wer das zurueckdreht,
-   dreht diese Zeile zurueck.
+     Am Finger ist Markieren ein Unfall. Man haelt zu lange auf eine Blase,
+     bekommt Text markiert und darueber das Systemmenue von iOS. Gewollt hat
+     das niemand, gedrueckt hat man nur.
+
+     Mit einer Maus ist es eine Absicht. Man zieht ueber genau die Woerter,
+     die man will. Wer das verbietet, nimmt jemandem etwas weg, das er
+     ausdruecklich tut – und es gibt seit dem Entfernen von "Copy" keinen
+     anderen Weg mehr, den Text einer Nachricht zu kopieren.
+
+   (hover: none) trennt beides sauber genug: Ein Geraet, ueber dem ein Zeiger
+   schweben kann, hat eine Maus.
 
    -webkit-touch-callout unterdrueckt zusaetzlich das Systemmenue von iOS
    ("Kopieren / Nachschlagen / Teilen"), das beim langen Draufhalten sonst
@@ -1259,7 +1270,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    .dm-row deckt Blase, Zeitstempel, Zitat und Pfeil in einem ab – und ist
    damit auch die Regel, die stehen bleibt, wenn jemand der Zeile spaeter noch
    etwas hinzufuegt. */
-.dm-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+@media (hover: none) {
+  .dm-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+}
 
 /* Die Blase folgt dem Finger.
    Die Ueberblendung gilt fuers Zurueckschnappen; waehrend des Ziehens ist sie
@@ -1355,8 +1368,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 .msg .time { font-size: .7rem; color: var(--dimmer); flex: none; }
 
 .composer { display: flex; gap: .5rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+/* min-width: 0 – ohne das ragt "Send" bei 320 px aus dem Bild.
+   Ein <input> hat implizit size="20", in der Monoschrift also rund 239 px
+   Mindestbreite. Gemessen bei 320 px Fenster: Der Knopf lag 23 px ausserhalb,
+   die Beschriftung war auf "Sen" abgeschnitten, ein Viertel der Trefferflaeche
+   nicht antippbar. Betrifft iPhone SE 1, alte Android-Geraete, geteilten
+   Bildschirm und den Anzeigezoom von iOS. */
 .composer input {
-  flex: 1; padding: .7rem .9rem; border-radius: 10px;
+  flex: 1; min-width: 0; padding: .7rem .9rem; border-radius: 10px;
   background: var(--bg-1); border: 1px solid var(--line);
 }
 .composer input:focus { outline: none; }
@@ -1589,6 +1608,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   gap: .5rem .8rem; margin-bottom: .3rem;
 }
 .poll-admin-kopf h3 { margin: 0; }
+/* Der Hinweis gehoert dem Handy – am Rechner ist er falsch, dort geht es ja.
+   Versteckt wird er mit display: none und nicht mit dem hidden-Attribut: Das
+   Attribut gehoert app.js, und zwei Stellen, die dasselbe Element ein- und
+   ausblenden, geraten irgendwann in Streit. */
+.poll-nur-rechner { display: none; }
 
 /* Die Laufzeit: Tage, Stunden, Minuten.
    ---------------------------------------------------------------------------
@@ -1879,8 +1903,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    (Blau) und daneben auf dem leeren Teil bei 16,2:1 – auf beiden Seiten der
    Kante gut lesbar, nur unterschiedlich hell. Die Werte selbst stehen oben
    bei --fuellung. */
+/* Die Langform steht vor der Kurzform: Browser, die inset nicht kennen (iOS
+   14.0 bis 14.4, Chrome unter 87), ueberspringen die zweite Zeile und behalten
+   die erste. Ohne sie hat die Fuellung keine Hoehe – nachgestellt gemessen:
+   228 x 0 px – und man sieht Antwortzeilen ganz ohne Balken. Welche Antwort
+   fuehrt, waere dann nicht mehr zu erkennen. */
 .opt-fill {
-  position: absolute; inset: 0 auto 0 0;
+  position: absolute; top: 0; right: auto; bottom: 0; left: 0;
+  inset: 0 auto 0 0;
   background: var(--fuellung);
   transition: width .5s cubic-bezier(.2,.8,.2,1);
 }
@@ -1906,7 +1936,24 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    irgendwo neben der zweiten Zeile. Oben ausgerichtet steht er dort, wo die
    Antwort anfängt, und alle Beträge einer Abstimmung stehen auf einer Linie. */
 .opt-text { position: relative; display: flex; width: 100%; align-items: flex-start; gap: .8rem; padding: .5rem .8rem; }
-.opt-label { font-weight: 500; }
+.opt-label {
+  font-weight: 500;
+  /* min-width: 0 und overflow-wrap, sonst frisst eine lange Antwort den Betrag.
+     -------------------------------------------------------------------------
+     Ein Flex-Element hat als Mindestbreite den Inhalt, und "Inhalt" heisst bei
+     Text: das laengste WORT. Eine Antwort ohne Leerzeichen – eine Adresse, ein
+     Link – schrumpft deshalb nie, schiebt .opt-num nach rechts aus dem Balken,
+     und .opt-bar schneidet dort ab. Der Betrag ist dann nicht gequetscht,
+     sondern weg.
+
+     Gemessen: bei 320 px reichen 17 Zeichen ohne Leerzeichen, bei 390 px 25.
+     Die Datenbank erlaubt 60 Zeichen je Antwort.
+
+     Derselbe Fehler trifft bei 200 % Systemschrift auch normalen Text: Aus
+     "$1,640,000" wurde "$1,640,0". Eine abgeschnittene Zahl ist schlimmer als
+     eine fehlende – sie liest sich wie ein anderer Betrag. */
+  min-width: 0; overflow-wrap: anywhere;
+}
 /* Der Haken an der eigenen Stimme. Er nimmt seine Farbe vom Text darüber –
    damit steht er auf jeder Füllung so gut da wie die Antwort selbst und
    braucht keinen eigenen Wert. Die -.18em heben ihn auf die Mitte der
@@ -1974,7 +2021,13 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    die beim naechsten Mal niemand anzufassen wagt.
    Die beiden Pruefungen dafuer stehen in scripts/test-polls-tab.mjs und
    bleiben stehen: Taucht der Fall doch auf, faellt er dort auf. */
-.opt-num { margin-left: auto; font-family: var(--mono); text-align: right; line-height: 1.25; }
+/* flex: none – der Betrag gibt nach, wenn ueberhaupt, als Letztes.
+   Zusammen mit min-width: 0 an .opt-label heisst das: Der Text weicht, die
+   Zahl bleibt vollstaendig. Andersherum waere es falsch. */
+.opt-num {
+  margin-left: auto; flex: none; white-space: nowrap;
+  font-family: var(--mono); text-align: right; line-height: 1.25;
+}
 .opt-num .held { display: block; color: var(--text); font-size: .95rem; font-weight: 650; }
 .opt.leads .opt-num .held { color: var(--accent); }
 .closed-tag { font-size: .68rem; background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; }
@@ -2462,6 +2515,33 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    ========================================================================== */
 
 @media (max-width: 760px) {
+  /* Abstimmungen anlegen geht nur am Rechner.
+     -------------------------------------------------------------------------
+     Gemessen war das Formular mit fuenf Antworten und offener Tastatur hoeher
+     als der sichtbare Bereich, und der Knopf "Start poll" stand 95 px unter
+     der Kante. Dagegen half eine Rollflaeche – bis auf dem Geraet etwas
+     anderes dazwischenkam, das sich hier nicht nachstellen liess.
+     
+     Statt weiter an einem Formular zu ziehen, das auf einem Telefon ohnehin
+     niemand gern ausfuellt, ist der Weg hier zu: Der Schalter verschwindet,
+     der Satz erscheint. Alles andere bleibt – Abstimmungen ansehen, abstimmen,
+     DMs lesen und schreiben geht auf dem Handy unveraendert.
+     
+     Das Formular wird zusaetzlich hart ausgeblendet. Normalerweise reicht es,
+     den Schalter zu nehmen, denn ohne ihn wird nie geoeffnet; wer aber am
+     Rechner oeffnet und dann das Fenster schmal zieht, saehe es sonst
+     trotzdem. */
+  .poll-neu { display: none; }
+  #poll-admin-felder { display: none; }
+  .poll-nur-rechner {
+    display: block; margin: 0;
+    font-size: .82rem; letter-spacing: .04em; color: var(--dimmer);
+  }
+  /* Und die Rollflaeche, die es nur fuer das offene Formular gab, wird hier
+     nicht mehr gebraucht: Ohne Formular gibt es nichts, was ueberlaeuft.
+     Zwei Rollflaechen ineinander sind eine Falle – siehe oben. */
+  .pane:has(#poll-admin-felder:not([hidden])) { overflow-y: visible; }
+
   /* --- Kopfzeile: eine Zeile für Kennung und Bestand, eine für die Reiter --- */
   /* Zurück auf Flex: Auf dem Handy soll die Kopfzeile umbrechen – Marke und
      Bestand in die erste Zeile, die Reiter als eigene darunter. Ein Raster
@@ -2650,7 +2730,23 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     min-height: 44px; padding: .4rem .6rem .4rem 0;
     color: var(--accent); font-size: .95rem;
   }
-  .dm-admin.viewing .thread-title { padding-top: 0; }
+  /* Kuerzel, Adresse und "Hide" auf einer Linie.
+     -------------------------------------------------------------------------
+     Hier stand nur padding-top: 0 – oben braucht die Zeile kein Polster, weil
+     der Zurueck-Knopf darueber schon Luft macht. Das untere blieb aber stehen,
+     und damit sass der TEXT oben in seinem Kasten, waehrend der Knopf daneben
+     mittig sass. .thread-kopf zentriert naemlich die Kaesten, nicht das, was
+     darin steht. Gemessen: 5,3 px Versatz, auf iPhone 15 und SE identisch.
+
+     Also traegt jetzt die ZEILE das Polster und die Titelzeile gar keins mehr.
+     Dann ist ihr Kasten genau ihr Text, und was zentriert wird, ist das, was
+     man sieht. Gemessen danach: 0,0 px.
+
+     Die Zeile wird dadurch 5,6 px hoeher, weil der Knopf hoeher ist als der
+     Text und jetzt er das Mass vorgibt. Das ist der ehrliche Preis: Vorher
+     stimmte die Hoehe und die Linie nicht, jetzt umgekehrt. */
+  .dm-admin.viewing .thread-kopf { padding-bottom: .7rem; }
+  .dm-admin.viewing .thread-title { padding: 0; }
   .thread-top .w { font-size: .78rem; }
   .thread-prev { font-size: .9rem; }
   .thread-head, .thread-head .dim { font-size: .78rem; }
@@ -2699,5 +2795,25 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   padding: .5rem .85rem; border-radius: 999px;
   background: rgba(255, 204, 77, .12); border: 1px solid rgba(255, 204, 77, .45);
   color: var(--gold); font-size: .78rem; text-align: center;
-  backdrop-filter: blur(8px); pointer-events: none;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); pointer-events: none;
+}
+
+/* ---- Trefferflaechen am Finger, unabhaengig von der Breite ---------------
+   Der Block oben haengt an (max-width: 760px). Ein Telefon im Querformat ist
+   aber 844 px breit (iPhone 14), 896 (11) oder 932 (Pro Max) – dort galten
+   alle Handy-Regeln nicht mehr, und gemessen fielen die Ziele von 44 px auf
+   30: Reiter 38, Kopfzeilenknoepfe 30 x 30, "Hide" 42 x 24, Posteingangszeile
+   39.
+
+   Die Aufteilung des Bildschirms soll quer ruhig die des Rechners bleiben –
+   dort ist wirklich Platz fuer zwei Spalten. Was NICHT von der Breite abhaengen
+   darf, ist die Groesse eines Ziels: Der Finger wird beim Drehen nicht duenner.
+
+   Deshalb hier nur die Masse, und nur fuer Geraete ohne Zeiger. */
+@media (hover: none) and (pointer: coarse) {
+  .tab { min-height: 44px; }
+  .icon-btn { min-width: 44px; min-height: 44px; }
+  .thread-hide { min-height: 44px; }
+  .thread { min-height: 48px; }
+  .dm-row .reply-btn { min-width: 44px; min-height: 44px; }
 }

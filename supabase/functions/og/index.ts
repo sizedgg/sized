@@ -24,7 +24,7 @@
  *
  * Alle anderen Functions hier teilen sich common.ts. Diese nicht, und das ist
  * kein Versehen: Sie muss sich als eine einzige Datei in den Editor des
- * Dashboards einfügen lassen, ohne dass man dafür einen CLI braucht. Der Preis
+ * Dashboards einfügen lassen, ohne dass man dafür eine CLI braucht. Der Preis
  * sind die zwanzig Zeilen unten, die es woanders schon gibt. Wer sie ändert,
  * muss dort mitziehen – dafür kann man sie ausrollen, ohne etwas zu
  * installieren.

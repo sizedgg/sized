@@ -33,7 +33,7 @@ import { refreshWallet } from '../_shared/holdings.ts';
 const CHALLENGE_TTL_MIN = Number(Deno.env.get('CHALLENGE_TTL_MIN') ?? 25);
 
 // 90 Tage. Eine kurze Sitzung würde bedeuten, dass jemand für den Wiedereintritt
-// erneut bezahlen muss – bei einem Chat, den man alle paar Tage öffnet, wäre das
+// erneut bezahlen muss – bei einer Seite, die man alle paar Tage öffnet, wäre das
 // eine Zumutung.
 const SESSION_TTL_HOURS = Number(Deno.env.get('SESSION_TTL_HOURS') ?? 24 * 90);
 
@@ -231,16 +231,38 @@ async function checkStatus(
 ) {
   if (typeof id !== 'string' || id.length < 10) return fail('Invalid challengeId');
 
-  if (!MOCK) await scanTreasury(cfg.treasury!);
-
+  // Erst das Geheimnis, dann die Chain.
+  // -------------------------------------------------------------------------
   // Ohne das passende Geheimnis gibt es hier nichts – auch nicht mit der
   // richtigen Kennung. Das ist die Zeile, an der die Übernahme hing: Sie las
   // die Challenge früher allein über die id.
   //
   // Dieselbe Absage für "gibt es nicht" und "Geheimnis falsch": Sonst wäre die
   // Antwort ein Orakel dafür, welche Kennungen existieren.
+  //
+  // Die Reihenfolge ist der zweite Punkt, und sie war falsch herum. Der
+  // Treasury-Scan stand VOR dieser Prüfung – ein POST mit erfundener Kennung
+  // löste ihn also aus, ohne dass der Absender irgendetwas nachweisen musste.
+  // Ein Scan sind bis zu sechzig getTransaction-Aufrufe beim RPC-Anbieter, und
+  // die kosten Geld und Kontingent. Ein Skript mit billigen HTTP-Anfragen
+  // konnte damit die Anmeldung für alle lahmlegen.
+  //
+  // Für den rechtmässigen Aufrufer ändert die Reihenfolge nichts: Er hat sein
+  // Geheimnis, er kommt eine Zeile später am Scan an.
   const c = await challengeMitGeheimnis(id, geheimnis);
   if (!c) return fail('Unknown request', 404);
+
+  // Erst jetzt auf die Chain schauen – und nur, wenn diese Challenge
+  // ueberhaupt noch auf eine Zahlung wartet. Bei 'paid', 'used' oder
+  // 'expired' gibt es nichts mehr zu finden.
+  if (!MOCK && c.status === 'pending') await scanTreasury(cfg.treasury!);
+
+  // Nach dem Scan neu lesen: Er kann genau diese Challenge auf 'paid' gesetzt
+  // haben, und die Zeile in der Hand ist dann veraltet.
+  if (!MOCK && c.status === 'pending') {
+    const frisch = await challengeMitGeheimnis(id, geheimnis);
+    if (frisch) Object.assign(c, frisch);
+  }
 
   if (c.status === 'pending' && new Date(c.expires_at).getTime() < Date.now()) {
     await db.from('challenges').update({ status: 'expired' }).eq('id', id);

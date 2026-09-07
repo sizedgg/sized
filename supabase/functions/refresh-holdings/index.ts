@@ -18,6 +18,21 @@ import { refreshWallet } from '../_shared/holdings.ts';
 import { tokenPrice } from '../_shared/solana.ts';
 
 /**
+ * Zeichenweiser Vergleich in fester Zeit.
+ *
+ * Ein gewoehnliches !== bricht beim ersten Unterschied ab. Ueber das Netz ist
+ * das kaum auszunutzen, aber verify/index.ts macht es an derselben Stelle
+ * richtig – und zwei Massstaebe fuer dieselbe Sache in einem Projekt sind
+ * schlechter als der strengere ueberall.
+ */
+function gleich(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
  * Sperrfrist zwischen zwei selbst ausgelösten Auffrischungen.
  *
  * Sie schützt das RPC-Kontingent davor, dass jemand den Knopf im Sekundentakt
@@ -67,7 +82,7 @@ Deno.serve(async (req) => {
     // Augenblick, statt über eine Minute verteilt einzeln zu springen.
     if (body.prices === true) {
       const secret = Deno.env.get('CRON_SECRET');
-      if (!secret || req.headers.get('x-cron-secret') !== secret) return fail('Not allowed', 403);
+      if (!secret || !gleich(req.headers.get('x-cron-secret') ?? '', secret)) return fail('Not allowed', 403);
 
       const price = MOCK ? 0.0042 : await tokenPrice(cfg.ansem_mint);
 
@@ -85,7 +100,7 @@ Deno.serve(async (req) => {
     // --- Cron-Variante: viele Wallets auf einmal auffrischen ---
     if (body.all === true) {
       const secret = Deno.env.get('CRON_SECRET');
-      if (!secret || req.headers.get('x-cron-secret') !== secret) return fail('Not allowed', 403);
+      if (!secret || !gleich(req.headers.get('x-cron-secret') ?? '', secret)) return fail('Not allowed', 403);
 
       const { data: rows, error } = await db.rpc('wallets_to_refresh', {
         stale_seconds: Number(body.stale ?? 300),

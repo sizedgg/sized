@@ -190,8 +190,28 @@ function demoThreads(n) {
   })).sort((a, b) => b.usd - a.usd);
 }
 
+/* Speicher, der auch dann nicht umfaellt, wenn es keinen gibt.
+   ---------------------------------------------------------------------------
+   localStorage ist nicht "manchmal leer", sondern manchmal VERBOTEN: Safari
+   mit "alle Cookies blockieren", Brave mit harten Shields, mehrere
+   In-App-Browser werfen beim blossen Zugriff einen SecurityError.
+
+   Hier stand der Zugriff einmal nackt in der Zeile darunter, auf oberster
+   Modulebene – der Fehler fiel also, bevor irgendetwas gezeichnet war, und der
+   Besucher sah eine schwarze Flaeche. Kein Login, keine Meldung, und Neuladen
+   half nie. Getroffen hat es ausgerechnet die, die einen Link aus X oder
+   Telegram oeffnen.
+
+   Ein leerer Speicher ist dagegen harmlos: Dann ist man eben nicht angemeldet.
+   Deshalb faengt lies() den Fehler ab und gibt null zurueck, und schreib()
+   schluckt ihn. Was verlorengeht, ist das Wiederkommen ohne neue Anmeldung –
+   nicht die Seite. */
+const lies = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const schreib = (k, v) => { try { localStorage.setItem(k, v); } catch { /* gesperrt */ } };
+const loesche = (k) => { try { localStorage.removeItem(k); } catch { /* gesperrt */ } };
+
 const state = {
-  jwt: localStorage.getItem(TOKEN_KEY) || null,
+  jwt: lies(TOKEN_KEY) || null,
   db: null,
   me: null,
   // min_chat_usd steht weiter in der Datenbank, wird hier aber nicht mehr
@@ -520,6 +540,23 @@ function unwrap({ data, error }) {
 // Login per Zahlungsverifikation
 // ---------------------------------------------------------------------------
 
+// Enter im Adressfeld tut dasselbe wie der Knopf.
+// ---------------------------------------------------------------------------
+// Das Feld steht in keinem <form>, also gab es kein Absenden – und ohne
+// Zuhoerer passierte auf Enter gar nichts. Auf dem Handy ist das der
+// schlimmste Ort dafuer: Man tippt die Adresse, drueckt die "Los"-Taste der
+// Tastatur, nichts geschieht, und der Knopf liegt in dem Moment hinter der
+// eingeblendeten Tastatur. Das ist die erste Handlung jedes neuen Nutzers.
+//
+// Kein <form> nachtraeglich drumherum: Ein Formular ohne action laedt bei
+// Enter die Seite neu, wenn das JavaScript einmal nicht laeuft – und dann ist
+// die eingetippte Adresse weg. Ein Zuhoerer tut genau das eine, was er soll.
+$('#wallet-input').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  if (!$('#btn-challenge').disabled) $('#btn-challenge').click();
+});
+
 $('#btn-challenge').addEventListener('click', async () => {
   const wallet = $('#wallet-input').value.trim();
   const err = $('#login-error');
@@ -747,13 +784,143 @@ function tastaturBeobachten() {
 }
 tastaturBeobachten();
 
+/* ---------------------------------------------------------------------------
+   Messanzeige: ?mess=1
+   ---------------------------------------------------------------------------
+   Ein kleiner Kasten, der zeigt, was der Browser gerade meldet und was das
+   Blatt daraus macht. Er ist da, weil ein Fehler gemeldet wurde, den keine
+   Nachstellung hier reproduziert – das Formular wird auf dem Geraet gestaucht,
+   im Nachbau nicht. Statt zu raten, welcher Wert schuld ist, zeigt das Geraet
+   ihn selbst.
+
+   Bewusst nicht auf localhost beschraenkt, anders als ?demo= und ?preview=:
+   Der Fehler tritt auf dem Telefon auf, und das Telefon kann kein localhost
+   der Entwicklungsmaschine. Er zeigt auch nichts Vertrauliches – nur Zahlen
+   ueber das Fenster, in dem er selbst laeuft. Wer die Adresse nicht kennt,
+   sieht ihn nie.
+
+   pointer-events: none, damit er nichts abfaengt: Ein Messgeraet, das die
+   Messung stoert, misst sich selbst. */
+const MESS_SCHALTER = 'size_mess';
+
+/* Fuenfmal in die freie Flaeche der Kopfzeile tippen schaltet die Anzeige an
+   und wieder aus.
+   ---------------------------------------------------------------------------
+   Erst haengte das an der Marke – ein Fehler: Die Marke ist ein Link auf den
+   X-Account. Beim ersten Tippen war man weg, und die vier weiteren gab es nie.
+
+   Jetzt haengt es an der Kopfzeile selbst, und Beruehrungen, die auf einem
+   Link oder Knopf landen, zaehlen nicht mit. Auf dem Handy bricht die
+   Kopfzeile um: Marke links, Bild rechts, dazwischen rund 220 px, die nichts
+   tun. Genau dort hinein.
+
+   Der Umweg ueber die Adresse (?mess=1) reicht naemlich nicht: Der Fehler
+   tritt auf dem Startbildschirm auf, und dort GIBT es keine Adresszeile – die
+   App startet immer mit der start_url aus dem Manifest. Ein Schalter, den man
+   nur in Safari umlegen kann, misst genau den Fall nicht, um den es geht.
+   (Der Speicher hilft auch nicht: iOS haelt den einer abgelegten App getrennt
+   von dem in Safari.)
+
+   Fuenf Beruehrungen in zwei Sekunden auf eine Flaeche, die sonst nichts tut:
+   Von allein macht das niemand, und wer es absichtlich macht, sieht Zahlen
+   ueber sein eigenes Fenster. Mehr steht dort nicht. */
+(function messSchalter() {
+  const kopf = document.querySelector('.topbar');
+  if (!kopf) return;
+  let zaehler = 0;
+  let letzte = 0;
+  kopf.addEventListener('click', (e) => {
+    // Wer den Link oder einen Knopf trifft, wollte den Link oder den Knopf.
+    if (e.target.closest('a, button, input')) { zaehler = 0; return; }
+    const jetzt = Date.now();
+    zaehler = jetzt - letzte < 2000 ? zaehler + 1 : 1;
+    letzte = jetzt;
+    if (zaehler < 5) return;
+    zaehler = 0;
+    try {
+      const an = localStorage.getItem(MESS_SCHALTER) === '1';
+      localStorage.setItem(MESS_SCHALTER, an ? '0' : '1');
+    } catch {}
+    location.reload();
+  });
+})();
+
+const messAn = (() => {
+  if (new URLSearchParams(location.search).get('mess') === '1') return true;
+  try { return localStorage.getItem(MESS_SCHALTER) === '1'; } catch { return false; }
+})();
+
+if (messAn) {
+  const kasten = document.createElement('pre');
+  kasten.style.cssText = 'position:fixed;left:6px;top:6px;z-index:9999;'
+    + 'margin:0;padding:6px 8px;border-radius:6px;pointer-events:none;'
+    + 'background:rgba(0,0,0,.82);color:#9fe8b0;font:11px/1.35 ui-monospace,monospace;'
+    + 'white-space:pre;max-width:calc(100vw - 12px);border:1px solid #2a2f3a';
+  document.body.appendChild(kasten);
+
+  const box = (s) => {
+    const e = document.querySelector(s);
+    if (!e) return 'fehlt';
+    const r = e.getBoundingClientRect();
+    return `${Math.round(r.top)}..${Math.round(r.bottom)} h=${Math.round(r.height)}`;
+  };
+  const stil = (n) => getComputedStyle(document.documentElement)
+    .getPropertyValue(n).trim() || '(leer)';
+
+  const zeigen = () => {
+    const vv = window.visualViewport;
+    const admin = document.querySelector('#poll-admin');
+    kasten.textContent = [
+      `innerHeight  ${window.innerHeight}`,
+      vv ? `vv.height    ${Math.round(vv.height)}   offsetTop ${Math.round(vv.offsetTop)}`
+         : 'vv           fehlt',
+      vv ? `verdeckt     ${Math.round(window.innerHeight - vv.height)}` : '',
+      `--sicht      ${stil('--sicht')}   --versatz ${stil('--versatz')}`,
+      `body         ${Math.round(document.body.getBoundingClientRect().height)}`,
+      `.app         ${box('.app')}`,
+      `pane-polls   ${box('#pane-polls')}`,
+      `poll-admin   ${box('#poll-admin')}`,
+      admin ? `  braucht    ${admin.scrollHeight}` : '',
+      `poll-list    ${box('#poll-list')}`,
+      `start-knopf  ${box('#btn-create-poll')}`,
+      // Nicht isStandalone() aufrufen: Die Funktion steht weiter unten und
+      // ist hier noch nicht initialisiert – der Aufruf wuerfe einen Fehler,
+      // und zwar ausgerechnet in dem Werkzeug, das Fehler finden soll.
+      `standalone   ${window.matchMedia?.('(display-mode: standalone)').matches
+        || window.navigator?.standalone === true}`,
+    ].filter(Boolean).join('\n');
+  };
+
+  zeigen();
+  window.visualViewport?.addEventListener('resize', zeigen);
+  window.visualViewport?.addEventListener('scroll', zeigen);
+  window.addEventListener('resize', zeigen);
+  document.addEventListener('focusin', () => setTimeout(zeigen, 350));
+  document.addEventListener('click', () => setTimeout(zeigen, 350));
+  setInterval(zeigen, 500);
+}
+
 const INSTALL_SKIPPED = 'size_install_skipped';
 
 const isStandalone = () =>
   window.matchMedia?.('(display-mode: standalone)').matches === true ||
   window.navigator?.standalone === true;
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent || '');
-const isPhone = () => window.matchMedia?.('(max-width: 760px)').matches === true;
+/* Ein Telefon erkennt man am Finger, nicht an der Breite.
+   ---------------------------------------------------------------------------
+   Hier stand (max-width: 760px). Ein iPhone 14 im Querformat ist aber 844 px
+   breit, ein Pro Max 932 – wer den Link quer oeffnet, galt damit als Rechner
+   und bekam den Hinweis auf den Startbildschirm nie zu sehen.
+   
+   Das ist teurer als es klingt: Genau dieser Hinweis schuetzt davor, dass iOS
+   die Sitzung nach ein paar Tagen wegraeumt. Ist sie weg, kostet die naechste
+   Anmeldung wieder eine Zahlung.
+   
+   (hover: none) und (pointer: coarse) zusammen: Das erste allein trifft auch
+   Fernseher, das zweite allein auch Rechner mit Touchscreen. Beide zusammen
+   sind ein Geraet, das man in der Hand haelt. */
+const isPhone = () =>
+  window.matchMedia?.('(hover: none) and (pointer: coarse)').matches === true;
 
 // Chrome bietet das Ablegen selbst an – wir fangen das Angebot ab und lösen es
 // erst aus, wenn der Nutzer auf unseren Knopf tippt.
@@ -859,7 +1026,7 @@ function startPolling() {
         stopPolling();
         vergissChallenge();
         state.jwt = r.token;
-        localStorage.setItem(TOKEN_KEY, r.token);
+        schreib(TOKEN_KEY, r.token);
         state.me = r.profile;
         await enterApp();
         return;
@@ -883,7 +1050,7 @@ function startPolling() {
 const stopPolling = () => { if (state.poller) clearTimeout(state.poller); state.poller = null; };
 
 function logout() {
-  localStorage.removeItem(TOKEN_KEY);
+  loesche(TOKEN_KEY);
   unsubscribeAll();
   stopHoldingsTick();
   state.dmCache.clear();
@@ -962,7 +1129,7 @@ async function enterApp() {
   const results = await Promise.allSettled([loadPolls(), loadDms()]);
   const failed = results.map((r) => r.reason).filter(Boolean);
   if (failed.length) {
-    for (const err of failed) console.error('[start] Bereich nicht geladen:', err.message);
+    for (const err of failed) console.error('[start] section failed to load:', err.message);
     toast(failed[0].message || 'Some parts could not be loaded', true);
   }
 
@@ -1278,7 +1445,7 @@ function startFallback(name) {
   // kommen weiter an. Bricht die Leitung, verzögert sich einzig, wann eine
   // NEUE Abstimmung auftaucht, und auch die holt der Takt binnen 5 Sekunden.
   if (name === 'polls') return;
-  console.warn(`[realtime] ${name}: keine Live-Leitung, frage alle ${FALLBACK_MS} ms nach`);
+  console.warn(`[realtime] ${name}: no live connection, polling every ${FALLBACK_MS} ms`);
   if (!Object.keys(state.fallback).length) {
     toast('Live updates unavailable - refreshing every few seconds');
   }
@@ -1304,10 +1471,10 @@ const logStatus = (name) => (status, err) => {
     }
     stopFallback(name);
   } else if (status === 'CHANNEL_ERROR') {
-    console.warn(`[realtime] ${name} Fehler:`, err?.message ?? err);
+    console.warn(`[realtime] ${name} error:`, err?.message ?? err);
     startFallback(name);
   } else if (status === 'TIMED_OUT') {
-    console.warn(`[realtime] ${name} Zeitüberschreitung`);
+    console.warn(`[realtime] ${name} timed out`);
     startFallback(name);
   }
 };
@@ -1384,7 +1551,7 @@ async function dmsNachziehen(versuche = 3) {
       if (state.activeThread) openThread(state.activeThread);
       return true;
     } catch (e) {
-      console.warn(`[dm] Nachladen fehlgeschlagen (${i + 1}/${versuche}):`, e.message);
+      console.warn(`[dm] reload failed (${i + 1}/${versuche}):`, e.message);
       if (i < versuche - 1) {
         await new Promise((r) => setTimeout(r, 600 * 2 ** i));
       }
@@ -1392,7 +1559,7 @@ async function dmsNachziehen(versuche = 3) {
   }
   // Aufgeben, aber nicht schweigen: Der nächste Tabwechsel, das nächste
   // Sichtbarwerden und der nächste Stups laden ohnehin neu.
-  console.error('[dm] Nachladen nach einem Stups endgültig fehlgeschlagen');
+  console.error('[dm] reload after nudge failed for good');
   return false;
 }
 
@@ -1464,7 +1631,7 @@ const CATCH_UP = { polls: () => loadPolls(), dms: () => loadDms() };
 function taktAn() {
   if (state.stimmenTakt) return;
   state.stimmenTakt = setInterval(() => {
-    loadPolls().catch((e) => console.warn('[poll] Takt:', e.message));
+    loadPolls().catch((e) => console.warn('[poll] tick:', e.message));
   }, STIMMEN_TAKT_MS);
 }
 
@@ -1858,7 +2025,7 @@ function fristTakt() {
 
   fristT = setInterval(() => {
     if (state.polls.some((p) => !p.closed && p.closesAt && new Date(p.closesAt) <= new Date())) {
-      return loadPolls().catch((e) => console.warn('[poll] Neu laden nach Fristablauf:', e.message));
+      return loadPolls().catch((e) => console.warn('[poll] reload after deadline:', e.message));
     }
     for (const p of state.polls) {
       if (p.closed || !p.closesAt) continue;
@@ -1907,9 +2074,25 @@ function renderPolls() {
   knoepfeMalen(list);
   if (fokusWar) $(fokusWar, list)?.focus({ preventScroll: true });
 
-  $$('.opt', list).forEach((el) => el.addEventListener('click', () => {
-    if (!el.classList.contains('locked')) vote(Number(el.dataset.poll), Number(el.dataset.option));
-  }));
+  $$('.opt', list).forEach((el) => {
+    const abstimmen = () => {
+      if (!el.classList.contains('locked')) {
+        vote(Number(el.dataset.poll), Number(el.dataset.option));
+      }
+    };
+    el.addEventListener('click', abstimmen);
+    // Enter und Leertaste – das ist, was ein Knopf tut, und role="button"
+    // verspricht genau das. Ein Element, das sich als Knopf ausgibt und dann
+    // auf keine Taste hoert, ist schlimmer als ein ehrliches div.
+    //
+    // preventDefault bei der Leertaste, sonst rollt die Seite darunter weg,
+    // waehrend die Stimme abgegeben wird.
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+      e.preventDefault();
+      abstimmen();
+    });
+  });
   $$('.btn-close-poll', list).forEach((b) => b.addEventListener('click', async () => {
     const { error } = await state.db.from('polls').update({ closed: true }).eq('id', b.dataset.poll);
     if (error) toast(error.message, true); else loadPolls();
@@ -2851,7 +3034,7 @@ async function ladeOgBildHoch(p) {
     if (error) throw new Error(error.message);
     return true;
   } catch (e) {
-    console.warn('[og] Vorschaubild nicht hochgeladen:', e.message);
+    console.warn('[og] preview image not uploaded:', e.message);
     return false;
   }
 }
@@ -2891,7 +3074,7 @@ async function ergaenzeFehlendeKarten() {
     for (const p of fehlend) await ladeOgBildHoch(p);
     console.info(`[og] ${fehlend.length} Vorschaukarte(n) nachgetragen`);
   } catch (e) {
-    console.warn('[og] Karten nicht nachgetragen:', e.message);
+    console.warn('[og] cards not backfilled:', e.message);
   }
 }
 
@@ -2939,7 +3122,7 @@ async function ladePollBild(id) {
 
     knopfAn('poll-image', id);
   } catch (e) {
-    console.error('[poll] Bild fehlgeschlagen:', e);
+    console.error('[poll] image failed:', e);
     toast(e.message || 'Could not build the image', true);
   } finally {
     knopfFreigeben('poll-image', id);
@@ -2958,9 +3141,31 @@ function pollHtml(p) {
   // dem Schliessen: warum, steht bei fuehrenderAnteil().
   const fuehrt = fuehrenderAnteil(p);
 
-  const opts = p.options.map((o) => `
-    <div class="opt ${p.closed || !stimmberechtigt ? 'locked' : ''} ${p.myOptionId === o.id ? 'mine' : ''}${fuehrt !== null && o.share === fuehrt ? ' leads' : ''}"
-         data-poll="${p.id}" data-option="${o.id}">
+  // Abstimmen mit der Tastatur.
+  // -------------------------------------------------------------------------
+  // Hier stand ein nacktes <div>. Damit war die zentrale Handlung der ganzen
+  // Seite fuer eine Tastatur nicht erreichbar: Die gemessene Reihenfolge lief
+  // Marke, Reiter, Abmelden, Link, Bild – und dann von vorn, ohne je eine
+  // Antwort zu beruehren. Eine Vorlesestimme meldete die Zeilen als Text.
+  //
+  // Kein <button>, obwohl es naheliegt: Ein Knopf bringt eigene Innenabstaende,
+  // eigene Schriftvererbung und in Safari eine eigene Mindesthoehe mit, und das
+  // Blatt darum herum ist auf ein div gebaut. Ein role="button" mit tabindex
+  // sagt derselben Vorlesestimme dasselbe, ohne das Aussehen anzufassen.
+  //
+  // aria-disabled statt disabled, weil ein div kein disabled kennt – und weil
+  // eine geschlossene Abstimmung SICHTBAR bleiben soll, auch fuer den, der
+  // sie sich vorlesen laesst.
+  //
+  // aria-pressed sagt, welche Antwort die eigene ist. Ohne das ist der Haken
+  // nur ein Bild.
+  const opts = p.options.map((o) => {
+    const zu = p.closed || !stimmberechtigt;
+    return `
+    <div class="opt ${zu ? 'locked' : ''} ${p.myOptionId === o.id ? 'mine' : ''}${fuehrt !== null && o.share === fuehrt ? ' leads' : ''}"
+         data-poll="${p.id}" data-option="${o.id}"
+         role="button" tabindex="${zu ? -1 : 0}"
+         aria-disabled="${zu}" aria-pressed="${p.myOptionId === o.id}">
       <div class="opt-bar">
         <div class="opt-fill" style="width:${(o.share * 100).toFixed(1)}%"></div>
         <div class="opt-text">
@@ -2974,7 +3179,8 @@ function pollHtml(p) {
           </span>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   return `<article class="poll" id="poll-${p.id}">
     <div class="poll-head">
@@ -3058,11 +3264,11 @@ async function loeschePoll(id) {
   state.db.storage?.from('og')
     .remove(Array.from({ length: KARTEN_VERSION }, (_, i) => `poll-${p.id}-v${i + 1}.png`)
       .concat(`poll-${p.id}.png`))
-    .catch((e) => console.warn('[og] Vorschaubild nicht gelöscht:', e.message));
+    .catch((e) => console.warn('[og] preview image not deleted:', e.message));
 
   // Die anderen Browser holen sich das über Realtime; der eigene wartet nicht
   // darauf, damit der Knopf nicht ins Leere zu zeigen scheint.
-  loadPolls().catch((e) => console.warn('[poll] Neu laden nach dem Löschen:', e.message));
+  loadPolls().catch((e) => console.warn('[poll] reload after delete:', e.message));
 }
 
 async function vote(pollId, optionId) {
@@ -3754,15 +3960,6 @@ async function loadDms() {
 }
 
 /**
- * Zeichnet den Posteingang aus state.dmThreads.
- *
- * Eigene Funktion, weil sie nicht nur beim Laden gebraucht wird: Öffnet Ansem
- * einen Faden, sind dessen Nachrichten damit gelesen, und die rote Zahl muss
- * sofort verschwinden. Vorher tat sie das erst beim nächsten vollständigen
- * Neuladen – man klickte also auf einen Faden und die Zahl blieb stehen, als
- * hätte der Klick nichts bewirkt.
- */
-/**
  * Kennt die Datenbank das Verbergen schon?
  *
  * Dasselbe Muster wie bei pruefeDmAntworten() daneben, und aus demselben
@@ -3787,6 +3984,15 @@ function pruefeVerbergen(threads) {
   if (threads?.length) state.dmHideAvailable = 'hidden' in threads[0];
 }
 
+/**
+ * Zeichnet den Posteingang aus state.dmThreads.
+ *
+ * Eigene Funktion, weil sie nicht nur beim Laden gebraucht wird: Öffnet Ansem
+ * einen Faden, sind dessen Nachrichten damit gelesen, und die rote Zahl muss
+ * sofort verschwinden. Vorher tat sie das erst beim nächsten vollständigen
+ * Neuladen – man klickte also auf einen Faden und die Zahl blieb stehen, als
+ * hätte der Klick nichts bewirkt.
+ */
 function renderThreads() {
   const alle = state.dmThreads ?? [];
 
@@ -3937,17 +4143,6 @@ function renderThreads() {
 }
 
 /**
- * Das Zitat über einer DM-Antwort.
- *
- * Ohne Namen: In einem Gespräch mit genau zwei Beteiligten sagt er nichts, was
- * man nicht ohnehin weiß, und nimmt dem eigentlichen Text die Breite.
- *
- * Es braucht keinen Nachladeweg: Ein Gespräch wird immer vollständig
- * geladen, die zitierte Nachricht liegt also bereits vor. Fehlt
- * sie doch, wurde sie gelöscht – und dann soll dort auch nichts stehen, was
- * sie wiederherstellt.
- */
-/**
  * Wessen Nachricht zitiert wird – als Kürzel.
  *
  * Nur zwei Beteiligte, also gibt es genau zwei Antworten: Ansem oder die
@@ -3958,6 +4153,17 @@ const dmAutor = (q) => handleOf(q.from_admin
   ? state.cfg.admin_wallet
   : (state.me.isAdmin ? state.activeThread : state.me.wallet));
 
+/**
+ * Das Zitat über einer DM-Antwort.
+ *
+ * Ohne Namen: In einem Gespräch mit genau zwei Beteiligten sagt er nichts, was
+ * man nicht ohnehin weiß, und nimmt dem eigentlichen Text die Breite.
+ *
+ * Es braucht keinen Nachladeweg: Ein Gespräch wird immer vollständig
+ * geladen, die zitierte Nachricht liegt also bereits vor. Fehlt
+ * sie doch, wurde sie gelöscht – und dann soll dort auch nichts stehen, was
+ * sie wiederherstellt.
+ */
 function dmQuoteHtml(row) {
   if (!row.reply_to) return '';
   const q = state.dmMessages.find((x) => x.id === row.reply_to);
@@ -3970,18 +4176,6 @@ function dmQuoteHtml(row) {
     </button>`;
 }
 
-/**
- * Eine DM: Blase plus Antwortpfeil daneben.
- *
- * Der Pfeil steht bewusst AUSSERHALB der Blase. Innen säße er mitten im Satz
- * und schöbe bei jedem Erscheinen den Text.
- *
- * Die Zeile drumherum ist auch der Grund, warum er auftaucht, sobald der
- * Zeiger auf Höhe der Nachricht ist, und nicht erst über der Blase selbst:
- * Der Pfeil liegt neben der Blase, also muss die empfindliche Fläche beide
- * umfassen. Läge sie nur auf der Blase, verschwände der Pfeil genau in dem
- * Moment, in dem man ihn ansteuert.
- */
 /**
  * Baut den Verlauf mit Datumstrennern.
  *
@@ -4252,12 +4446,6 @@ function pruefeDmAntworten(rows) {
 }
 
 /**
- * @param {boolean} reveal  Nur beim Antippen durch Ansem selbst. Beim
- *   Nachladen wegen einer eingehenden Nachricht darf sich das Gespräch nicht
- *   von allein über den Posteingang schieben – sonst springt ihm die Ansicht
- *   unter dem Daumen weg, während er die Liste durchgeht.
- */
-/**
  * Zeichnet Kopfzeile und Verlauf eines Gesprächs. Rein aus dem Speicher,
  * ohne Netz – damit ein Wechsel sofort sichtbar ist.
  */
@@ -4440,7 +4628,7 @@ async function markiereGelesen(wallet) {
     .eq('wallet', wallet).eq('from_admin', false).eq('read_by_admin', false);
 
   if (error) {
-    console.warn('[dms] gelesen-Vermerk fehlgeschlagen:', error.message);
+    console.warn('[dms] read receipt failed:', error.message);
     if (eintrag && vorher > 0) {
       eintrag.unread = vorher;
       renderThreads();
@@ -4522,13 +4710,6 @@ $('#btn-versteckt').addEventListener('click', () => {
 });
 
 /**
- * Ansems Regler für die DM-Schwelle.
- *
- * Kennt die Datenbank die Spalte noch nicht (Frontend liegt vor der
- * Migration), fehlt sie in app_config schlicht. Dann verschwindet das Feld,
- * statt einen Wert anzubieten, den niemand speichern kann.
- */
-/**
  * Holt die aktuelle Schwelle nach. Schlägt es fehl – kein Netz, Spalte noch
  * nicht da – bleibt der zuletzt bekannte Wert stehen. Die verbindliche
  * Prüfung sitzt ohnehin in der Datenbank; hier geht es nur um die Anzeige.
@@ -4604,6 +4785,13 @@ function renderDmMin() {
  */
 let dmMinLaeuft = false;
 
+/**
+ * Ansems Regler für die DM-Schwelle.
+ *
+ * Kennt die Datenbank die Spalte noch nicht (Frontend liegt vor der
+ * Migration), fehlt sie in app_config schlicht. Dann verschwindet das Feld,
+ * statt einen Wert anzubieten, den niemand speichern kann.
+ */
 async function speichereDmMin() {
   const input = $('#dm-min-input');
   const bisher = Number(state.cfg.min_dm_usd ?? 0);
@@ -4788,15 +4976,6 @@ $('#admin-dm-form').addEventListener('submit', async (e) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Sitzung beim Start wiederherstellen.
- *
- * Zwei Dinge sind hier wichtig. Erstens: Nur ein wirklich abgelaufenes oder
- * abgelehntes Token führt zum Abmelden – ein Netzwackler darf niemanden
- * hinauswerfen, denn der Weg zurück kostet Geld. Zweitens: Solange noch
- * weniger als die Hälfte der Laufzeit übrig ist, wird still verlängert. Wer
- * regelmäßig vorbeischaut, bezahlt genau einmal.
- */
-/**
  * Den Service Worker anmelden. Er macht die Seite ablegbar und fängt kurze
  * Funklöcher ab – nicht mehr. Scheitert er, läuft alles normal weiter.
  *
@@ -4816,11 +4995,8 @@ $('#admin-dm-form').addEventListener('submit', async (e) => {
  * Test tut das – hat gar keine andere Wahl, als ihn dort einzuschalten.
  */
 const SW_ERZWUNGEN = new URLSearchParams(location.search).get('sw') === '1';
-const AUF_EIGENEM_RECHNER =
-  ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname);
-
 if ('serviceWorker' in navigator) {
-  if (AUF_EIGENEM_RECHNER && !SW_ERZWUNGEN) {
+  if (NUR_HIER && !SW_ERZWUNGEN) {
     navigator.serviceWorker.getRegistrations()
       .then((rs) => Promise.all(rs.map((r) => r.unregister())))
       .then(() => (self.caches ? caches.keys() : []))
@@ -4828,7 +5004,7 @@ if ('serviceWorker' in navigator) {
       .catch(() => { /* Nichts abzumelden. */ });
   } else {
     navigator.serviceWorker.register('/sw.js')
-      .catch((e) => console.warn('[pwa] Service Worker nicht registriert:', e.message));
+      .catch((e) => console.warn('[pwa] service worker not registered:', e.message));
   }
 }
 
@@ -4921,19 +5097,19 @@ $('#btn-team').addEventListener('click', () => {
     try {
       const r = await callFunction('verify', { action: 'renew' }, true);
       state.jwt = r.token;
-      localStorage.setItem(TOKEN_KEY, r.token);
+      schreib(TOKEN_KEY, r.token);
       state.me = r.profile;
     } catch (e) {
       // Bei 401 ist die Sitzung endgültig vorbei, sonst einfach weitermachen.
       if (/expired|too old|Not verified/i.test(e.message)) { logout(); return; }
-      console.warn('Verlängerung fehlgeschlagen, Sitzung läuft weiter:', e.message);
+      console.warn('[session] renewal failed, continuing:', e.message);
     }
   }
 
   try {
     await enterApp();
   } catch (e) {
-    console.error('Start fehlgeschlagen:', e.message);
+    console.error('[start] failed:', e.message);
     if (/JWT|token|expired/i.test(e.message)) { logout(); return; }
     // Kein Rauswurf: Es kann genauso gut ein kurzer Ausfall sein.
     zeigeLogin();

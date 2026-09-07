@@ -42,7 +42,27 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const css = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
+const cssRoh = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
+
+/* Kommentare raus, bevor irgendetwas nach Waehlern sucht.
+   ---------------------------------------------------------------------------
+   Diese Reihe liest das Blatt mit regulaeren Ausdruecken, und die kennen keine
+   Kommentare. Ein Kommentar zwischen zwei Regeln wurde deshalb als Teil des
+   naechsten Waehlers gelesen: Aus
+
+     .composer input {
+     .../* min-width: 0 - ohne das ragt "Send" ... *\/
+     .composer input {
+
+   wurde ein Waehler, der mit "/* min-width" anfaengt, und die Pruefung meldete
+   ein fehlendes Autofill fuer ein Feld, das es gar nicht gibt.
+
+   Das ist keine Kleinigkeit: Eine Reihe, die beim Hinzufuegen eines Kommentars
+   rot wird, erzieht dazu, keine Kommentare zu schreiben.
+
+   Der Ausdruck ist nicht gierig und laesst Zeilenumbrueche zu. Ein "/*" in
+   einer Zeichenkette gibt es in diesem Blatt nicht. */
+const css = cssRoh.replace(/\/\*[\s\S]*?\*\//g, '');
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 // Die paar Zeilen aus app.js, die data-tastatur setzen – woertlich, damit der
 // Test nicht seine eigene Fassung prueft. Ohne sie gaebe es die

@@ -1,4 +1,4 @@
-project_id = "ansem-hub"
+project_id = "sized"
 
 [functions.verify]
 # Muss ohne Login erreichbar sein – hier entsteht die Session ja erst.
@@ -12,4 +12,14 @@ verify_jwt = false
 [functions.holdings-webhook]
 # Helius kann kein Supabase-JWT mitschicken; die Function prüft stattdessen
 # den frei gewählten Auth-Header gegen WEBHOOK_SECRET.
+verify_jwt = false
+
+[functions.og]
+# Die Vorschaubilder fuer geteilte Abstimmungen. Der Crawler von X schickt kein
+# Supabase-JWT mit – ohne diese Zeile antwortet die Function ihm mit 401 und
+# ein geteilter Link zeigt keine Karte.
+#
+# Sie hat lange gefehlt, und niemandem ist es aufgefallen: Die Function war in
+# keiner der beiden READMEs erwaehnt und in dieser Datei auch nicht. Wer der
+# Anleitung folgte, rollte sie gar nicht erst aus.
 verify_jwt = false

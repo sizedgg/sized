@@ -68,7 +68,7 @@ server-side function can write.
 
 1. You type your Solana address. Nothing is connected.
 2. The server hands back an amount: a fixed base plus a random surcharge of up
-   to 0.0001 SOL, unique among all open challenges.
+   to 0.000999 SOL, unique among all open challenges.
 3. You send exactly that amount to the treasury address, from your own wallet
    app.
 4. The server watches the chain for a payment of exactly that amount and issues
@@ -134,7 +134,7 @@ with a valid token and an HTTP client could: forged sender, self-set vote
 weight, creating a poll without admin rights, reading someone else's DMs, and
 voting twice with the same balance across two wallets.
 
-Alongside those, `scripts/` holds around twenty more `test-*.mjs` that measure
+Alongside those, `scripts/` holds twenty-two more `test-*.mjs` that measure
 against the real `index.html` and the real stylesheet with Playwright — tabs,
 focus, page height, keyboard behaviour, touch targets, realtime channels. Run
 one with `node scripts/test-<name>.mjs`.
@@ -207,7 +207,7 @@ result. That is intended.
 counts messages per wallet per minute against spam.
 
 **The public Solana RPC is not enough.** Use your own endpoint (Helius,
-QuickNode, Triton) in production — login polls every four seconds.
+QuickNode, Triton) in production — the login polls with a 3/10/30 second backoff.
 
 **Price source.** Jupiter first, DexScreener as fallback. For an illiquid token
 the dollar value swings, and with it the weighting.

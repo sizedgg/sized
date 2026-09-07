@@ -1,9 +1,9 @@
 {
-  "name": "ansem-hub",
+  "name": "sized",
   "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "Token-gated Chat, Abstimmungen und DMs auf Supabase, Login per Solana-Zahlungsverifikation, ohne Wallet-Connect",
+  "description": "Token-gated Abstimmungen und DMs auf Supabase, Login per Solana-Zahlungsverifikation, ohne Wallet-Connect",
   "scripts": {
     "vendor": "esbuild node_modules/@supabase/supabase-js/dist/index.mjs --bundle --format=esm --platform=browser --minify --outfile=public/vendor/supabase.js",
     "serve": "node scripts/serve.mjs",
