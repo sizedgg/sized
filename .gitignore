@@ -40,6 +40,18 @@ supabase/.temp/
 # traegt die Platzhalter, daraus wird die eigene Fassung.
 public/config.js
 
+# Die Startkonfiguration mit den echten Adressen.
+#
+# Treasury und Adminwallet stehen im Betrieb ohnehin offen da – die Treasury
+# auf dem Anmeldebildschirm, die Adminwallet als Absender jeder Abstimmung.
+# Hier geht es um etwas anderes: Eine Adresse in diesem Verzeichnis ist eine
+# schriftliche Aussage darueber, WER hinter dem Projekt steht, und die wird
+# vom Betreiber gemacht und nicht von einer Konfigurationsdatei.
+#
+# scripts/start-konfiguration.example.sql traegt die Platzhalter und die
+# gesamte Begruendung; daraus wird die eigene Fassung.
+scripts/start-konfiguration.sql
+
 # Der Ordner, in dem geloeschte Sachen auf ihre Loeschung warten.
 _to_delete/
 
