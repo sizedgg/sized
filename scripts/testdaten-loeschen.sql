@@ -6,6 +6,11 @@
 -- Datenbank so da, als haette sie noch nie jemand benutzt: Ansems erste
 -- Abstimmung bekommt die 1, seine erste Nachricht ebenfalls.
 --
+-- ZWEI SCHRITTE. Dieses Skript raeumt die Datenbank. Die Vorschaubilder
+-- liegen nicht in der Datenbank, sondern im Storage, und der laesst sich per
+-- SQL nicht anfassen – dazu unten der Abschnitt "Die Vorschaubilder". Ohne
+-- ihn ist die Sache nicht erledigt, auch wenn hier alles auf 0 steht.
+--
 -- ----------------------------------------------------------------------------
 -- Warum truncate und nicht delete
 --
@@ -50,17 +55,36 @@ delete from public.challenges;
 -- du deine eigenen Testwallets lieber stehen laesst, streich diese Zeile.
 delete from public.wallets;
 
--- Die Vorschaubilder der Testabstimmungen.
---
--- Das ist die Zeile, die man vergisst, und sie faellt ausgerechnet in der
--- Oeffentlichkeit auf: Die Bilder heissen poll-<id>-v9.png und liegen in
--- einem oeffentlichen Eimer. Weil die Nummern gleich wieder bei 1 anfangen,
--- wuerde Ansems erste echte Abstimmung unter dem Bild einer Testabstimmung
--- auf X erscheinen – in der App sieht man davon nichts, nur im geteilten
--- Link.
-delete from storage.objects where bucket_id = 'og';
-
 commit;
+
+
+-- ----------------------------------------------------------------------------
+-- Die Vorschaubilder – der zweite Schritt, NICHT per SQL
+-- ----------------------------------------------------------------------------
+-- Hier stand einmal:
+--
+--   delete from storage.objects where bucket_id = 'og';
+--
+-- Das geht nicht. Supabase haengt einen Trigger vor storage.objects
+-- (storage.protect_delete) und weist jedes direkte delete ab:
+--
+--   ERROR: 42501: Direct deletion from storage tables is not allowed.
+--          Use the Storage API instead.
+--
+-- Und das zu Recht: Die Zeile in storage.objects ist nur der Eintrag im
+-- Verzeichnis, die Datei selbst liegt woanders. Wer die Zeile loescht, hat
+-- die Datei nicht geloescht, sondern nur unauffindbar gemacht – sie liegt
+-- weiter da und ist weiter oeffentlich abrufbar. Genau deshalb ist es
+-- gesperrt.
+--
+-- Stattdessen im Dashboard: Storage -> Eimer "og" -> alles markieren ->
+-- Delete. Es sind so viele Dateien, wie es Testabstimmungen gab.
+--
+-- WARUM DAS NICHT OPTIONAL IST, auch wenn in der App nichts davon zu sehen
+-- ist: Die Bilder heissen poll-<id>-v9.png, und die Nummern fangen nach
+-- diesem Skript wieder bei 1 an. Bleibt poll-1-v9.png liegen, erscheint
+-- Ansems erste echte Abstimmung auf X unter dem Bild einer Testabstimmung.
+-- Auffallen wuerde es zuerst in seiner Zeitleiste.
 
 
 -- ----------------------------------------------------------------------------
@@ -85,9 +109,15 @@ commit;
 -- ----------------------------------------------------------------------------
 -- Kontrolle
 -- ----------------------------------------------------------------------------
--- Die letzte Spalte ist die eigentliche Antwort auf die Frage "faengt Ansem
--- bei 1 an?". Sie fragt nicht, ob die Tabelle leer ist – sie fragt den
--- Zaehler, was er als naechstes ausgeben wuerde.
+-- Zwei Spalten verdienen einen zweiten Blick.
+--
+-- naechste_abstimmung_ist_1 fragt nicht, ob die Tabelle leer ist – sie fragt
+-- den Zaehler, was er als naechstes ausgeben wuerde. Das ist die eigentliche
+-- Antwort auf "faengt Ansem bei 1 an?".
+--
+-- vorschaubilder steht nach diesem Skript noch NICHT auf 0, denn die raeumt
+-- das Dashboard weg (siehe oben). Dieselbe Abfrage nach dem Aufraeumen dort
+-- noch einmal laufen lassen – dann muss sie 0 sagen.
 select
   (select count(*) from public.polls)        as abstimmungen,
   (select count(*) from public.poll_options) as antwortmoeglichkeiten,
