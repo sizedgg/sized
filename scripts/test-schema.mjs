@@ -1225,6 +1225,190 @@ const gelesen = await client.query(
 check('read_by_admin laesst sich nicht vom Client setzen',
   gelesen.rows[0].read_by_admin === false, String(gelesen.rows[0].read_by_admin));
 
+
+console.log('\n── Eine laufende Abstimmung aendert ihren Wortlaut nicht ──');
+
+// Der Fall: "A oder B?" bekommt dreissig Stimmen, dann wird die Frage zu
+// "C oder D?". Die Stimmen bleiben stehen und beantworten etwas anderes.
+//
+// Das ist kein RLS-Loch – Ansem DARF Abstimmungen aendern, er soll sie
+// schliessen und Fristen setzen koennen. Es geht um eine einzelne Spalte, und
+// genau dafuer gibt es Trigger statt Policies.
+//
+// Zur Rollenwahl: Alles hier laeuft als ADMIN, weil nur er ueberhaupt
+// schreiben darf. Wer nicht Admin ist, scheitert schon an der Policy – das
+// steht weiter oben und wird hier nicht wiederholt.
+await client.query('delete from public.polls');
+await client.query(`update public.wallets set ui_amount = 400000, usd_value = 5000
+                    where address = $1`, [WHALE]);
+
+const mitStimme = (await asWallet(ADMIN, async () => {
+  const p = await client.query(
+    `insert into public.polls (question) values ('A oder B?') returning id`);
+  await client.query(
+    `insert into public.poll_options (poll_id, label, idx)
+     values ($1,'A',0), ($1,'B',1)`, [p.rows[0].id]);
+  return p;
+})).rows[0].id;
+const ohneStimme = (await asWallet(ADMIN, async () => {
+  const p = await client.query(
+    `insert into public.polls (question) values ('Noch keine Stimme?') returning id`);
+  await client.query(
+    `insert into public.poll_options (poll_id, label, idx)
+     values ($1,'X',0), ($1,'Y',1)`, [p.rows[0].id]);
+  return p;
+})).rows[0].id;
+
+const optIds = (await client.query(
+  `select id from public.poll_options where poll_id = $1 order by idx`, [mitStimme]))
+  .rows.map((r) => r.id);
+await asWallet(WHALE, () => client.query(
+  `insert into public.votes (poll_id, option_id, wallet) values ($1, $2, $3)`,
+  [mitStimme, optIds[0], WHALE]));
+
+// --- ab der ersten Stimme gesperrt ---
+await expectFail('Frage nicht mehr aenderbar', ADMIN, () => client.query(
+  `update public.polls set question = 'C oder D?' where id = $1`, [mitStimme]));
+await expectFail('Antwortmoeglichkeit nicht mehr umbenennbar', ADMIN, () => client.query(
+  `update public.poll_options set label = 'C' where id = $1`, [optIds[0]]));
+await expectFail('Antwortmoeglichkeit nicht mehr loeschbar', ADMIN, () => client.query(
+  `delete from public.poll_options where id = $1`, [optIds[1]]));
+await expectFail('Antwortmoeglichkeit nicht mehr nachschiebbar', ADMIN, () => client.query(
+  `insert into public.poll_options (poll_id, label, idx) values ($1,'C',2)`, [mitStimme]));
+
+// --- was weiter gehen MUSS ---
+// Die Haelfte, die man beim Sperren kaputtmacht, ohne es zu merken: Eine
+// laufende Abstimmung zu schliessen ist der Normalfall.
+await asWallet(ADMIN, () => client.query(
+  `update public.polls set closed = true where id = $1`, [mitStimme]));
+check('Schliessen bleibt erlaubt',
+  (await client.query(`select closed from public.polls where id = $1`, [mitStimme]))
+    .rows[0].closed === true);
+
+await asWallet(ADMIN, () => client.query(
+  `update public.polls set closes_at = now() + interval '1 day' where id = $1`,
+  [mitStimme]));
+check('Frist setzen bleibt erlaubt',
+  (await client.query(`select closes_at from public.polls where id = $1`, [mitStimme]))
+    .rows[0].closes_at !== null);
+
+// Ein Formular schickt oft alle Felder mit, auch die unveraenderten. Wenn das
+// scheitert, kann Ansem eine laufende Abstimmung nicht mehr schliessen –
+// derselbe Schaden wie die Sperre selbst, nur andersherum.
+await asWallet(ADMIN, () => client.query(
+  `update public.polls set question = 'A oder B?', closed = true where id = $1`,
+  [mitStimme]));
+check('Frage unveraendert mitschreiben bleibt erlaubt',
+  (await client.query(`select question from public.polls where id = $1`, [mitStimme]))
+    .rows[0].question === 'A oder B?');
+
+await asWallet(ADMIN, () => client.query(
+  `update public.poll_options set idx = 5 where id = $1`, [optIds[0]]));
+check('Reihenfolge aendern bleibt erlaubt',
+  (await client.query(`select idx from public.poll_options where id = $1`, [optIds[0]]))
+    .rows[0].idx === 5);
+
+// --- ohne Stimme bleibt alles offen ---
+await asWallet(ADMIN, () => client.query(
+  `update public.polls set question = 'Ganz andere Frage?' where id = $1`, [ohneStimme]));
+check('Ohne Stimme ist die Frage frei aenderbar',
+  (await client.query(`select question from public.polls where id = $1`, [ohneStimme]))
+    .rows[0].question === 'Ganz andere Frage?');
+await asWallet(ADMIN, () => client.query(
+  `insert into public.poll_options (poll_id, label, idx) values ($1,'W',9)`, [ohneStimme]));
+check('Ohne Stimme laesst sich eine Antwortmoeglichkeit nachschieben',
+  (await client.query(`select count(*)::int n from public.poll_options where poll_id = $1`,
+    [ohneStimme])).rows[0].n === 3);
+
+// --- die ganze Abstimmung verwerfen bleibt erlaubt ---
+// Der Fremdschluessel raeumt Optionen und Stimmen mit ab, und dabei feuert der
+// Loeschtrigger auf poll_options ebenfalls. Wenn der nicht zwischen "Option
+// weg, Abstimmung bleibt" und "alles weg" unterscheidet, ist eine Abstimmung
+// mit Stimmen unloeschbar – und dann bleibt eine falsch gestellte Frage fuer
+// immer stehen.
+await asWallet(ADMIN, () => client.query(
+  `delete from public.polls where id = $1`, [mitStimme]));
+const nichtsMehrDa = await client.query(
+  `select (select count(*) from public.polls where id = $1)::int p,
+          (select count(*) from public.poll_options where poll_id = $1)::int o,
+          (select count(*) from public.votes where poll_id = $1)::int v`, [mitStimme]);
+check('Die ganze Abstimmung samt Stimmen loeschen bleibt erlaubt',
+  nichtsMehrDa.rows[0].p === 0 && nichtsMehrDa.rows[0].o === 0
+    && nichtsMehrDa.rows[0].v === 0,
+  `polls ${nichtsMehrDa.rows[0].p}, options ${nichtsMehrDa.rows[0].o}, `
+    + `votes ${nichtsMehrDa.rows[0].v}`);
+
+// --- Gegenprobe ---
+// Ohne die Trigger muessen alle vier Sperren durchgehen. Sonst misst der Block
+// oben etwas anderes – eine Policy zum Beispiel – und wuerde gruen bleiben,
+// wenn man die Migration ersatzlos entfernt.
+{
+  const p = (await asWallet(ADMIN, async () => {
+    const q = await client.query(
+      `insert into public.polls (question) values ('Gegenprobe?') returning id`);
+    await client.query(
+      `insert into public.poll_options (poll_id, label, idx) values ($1,'A',0)`,
+      [q.rows[0].id]);
+    return q;
+  })).rows[0].id;
+  const o = (await client.query(
+    `select id from public.poll_options where poll_id = $1`, [p])).rows[0].id;
+  await asWallet(WHALE, () => client.query(
+    `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
+    [p, o, WHALE]));
+
+  for (const t of ['trg_polls_frage_fest']) {
+    await client.query(`drop trigger ${t} on public.polls`);
+  }
+  for (const t of ['trg_optionen_label_fest', 'trg_optionen_nicht_loeschen',
+                   'trg_optionen_nicht_nachschieben']) {
+    await client.query(`drop trigger ${t} on public.poll_options`);
+  }
+
+  let durch = 0;
+  for (const sql of [
+    [`update public.polls set question = 'Umgedeutet?' where id = $1`, [p]],
+    [`update public.poll_options set label = 'C' where id = $1`, [o]],
+    [`insert into public.poll_options (poll_id, label, idx) values ($1,'C',2)`, [p]],
+    [`delete from public.poll_options where id = $1`, [o]],
+  ]) {
+    try { await asWallet(ADMIN, () => client.query(sql[0], sql[1])); durch += 1; }
+    catch { /* zaehlt nicht als durchgegangen */ }
+  }
+  check('Gegenprobe: ohne die Trigger geht alle vier wieder durch', durch === 4,
+    `${durch} von 4`);
+  const umgedeutet = await client.query(
+    `select question from public.polls where id = $1`, [p]);
+  check('Gegenprobe: die Frage liess sich tatsaechlich umschreiben',
+    umgedeutet.rows[0]?.question === 'Umgedeutet?', umgedeutet.rows[0]?.question);
+
+  // Wieder herstellen, damit ein spaeterer Block nicht auf einer halb
+  // entschaerften Datenbank arbeitet.
+  await client.query(fs.readFileSync(
+    path.join(root, 'supabase/migrations/20260907020000_abstimmung_nach_erster_stimme.sql'),
+    'utf8'));
+
+  // Und eine frische Stimme, bevor erneut geprueft wird.
+  //
+  // Hier lag der erste Anlauf falsch: Die Gegenprobe loescht oben die einzige
+  // Antwortmoeglichkeit, und der Fremdschluessel nimmt die Stimme mit. Danach
+  // hat die Abstimmung keine Stimme mehr – der Trigger LIESS die Frage also
+  // voellig zu Recht aendern, und der Test rief "kaputt". Ein Test, der die
+  // Vorbedingung seiner eigenen Behauptung zerstoert, sagt nichts ueber das
+  // Gepruefte aus.
+  const frisch = (await asWallet(ADMIN, () => client.query(
+    `insert into public.poll_options (poll_id, label, idx) values ($1,'D',3) returning id`,
+    [p]))).rows[0].id;
+  await asWallet(WHALE, () => client.query(
+    `insert into public.votes (poll_id, option_id, wallet) values ($1,$2,$3)`,
+    [p, frisch, WHALE]));
+  check('Vorbedingung: die Abstimmung hat wieder eine Stimme',
+    (await client.query(`select count(*)::int n from public.votes where poll_id = $1`, [p]))
+      .rows[0].n === 1);
+  await expectFail('Nach dem Wiedereinspielen sperrt der Trigger erneut', ADMIN,
+    () => client.query(`update public.polls set question = 'Nochmal?' where id = $1`, [p]));
+}
+
 console.log(`\n${failures === 0 ? '✅ Alle Prüfungen bestanden' : `❌ ${failures} Prüfung(en) fehlgeschlagen`}\n`);
 await client.end();
 process.exit(failures === 0 ? 0 : 1);
