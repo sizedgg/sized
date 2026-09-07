@@ -149,11 +149,32 @@ check('Menschen bekommen von /p/* eine echte Weiterleitung, keine Seite',
 console.log('\nUnd jetzt der Browser: hält die Seite die Regeln aus?\n');
 // ---------------------------------------------------------------------------
 
-// The placeholders point to a project that doesn't exist. For the
-// measurement, that becomes our own test server - so the requests actually
-// fire, and a too-tight connect-src would show up.
+// The host in connect-src becomes our own test server for the measurement -
+// so the requests actually fire, and a too-tight connect-src would show up.
+//
+// ---------------------------------------------------------------------------
+// Why the host is READ OUT instead of assumed
+//
+// This used to replace the literal DEIN-PROJEKT. That works as long as the
+// file in the repository still carries the placeholder - and it does not.
+// The real host has been in there since f5a41e5, which is the deployed state
+// and not a mistake: the README says the file names the project host openly.
+//
+// The consequence went unnoticed for a while because the copy this suite ran
+// against still had the placeholder. Against the file that is actually
+// committed, the substitution found nothing, the rule kept the real host, the
+// test server answered under a different one, and two checks failed - not
+// because the page is wrong, but because the rig was measuring a file it did
+// not have.
+//
+// So whatever stands in connect-src is what gets swapped. The test then works
+// with the placeholder and with a real host, and it says something about the
+// page either way.
 const PROJEKT = 'testprojekt.supabase.co';
-const cspTest = csp.replace(/DEIN-PROJEKT\.supabase\.co/g, PROJEKT);
+const CSP_HOST = /connect-src[^;]*?https:\/\/([a-zA-Z0-9.-]+\.supabase\.co)/.exec(csp)?.[1]
+  ?? 'DEIN-PROJEKT.supabase.co';
+const hostRaus = (text) => text.split(CSP_HOST).join(PROJEKT);
+const cspTest = hostRaus(csp);
 
 const TYPEN = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css',
@@ -179,8 +200,15 @@ const server = http.createServer((q, res) => {
   // sat there unnoticed for years.
   if (pfad === '/config.js') {
     return res.writeHead(200, { ...header, 'content-type': 'text/javascript' })
+      // Any supabase host in config.js becomes the test host - not just the
+      // one that stands in _headers. The two files can disagree: _headers
+      // carries the real project, config.js in the repository carries the
+      // placeholder. If only one of them were rewritten, the page would call
+      // a host the rule does not allow, and the violation would be a bug in
+      // this rig rather than a statement about the page.
       .end(fs.readFileSync(path.join(root, 'public', 'config.js'), 'utf8')
-        .replace(/DEIN-PROJEKT\.supabase\.co/g, PROJEKT));
+        .replace(/https:\/\/[a-zA-Z0-9.-]+\.supabase\.co/g, `https://${PROJEKT}`)
+        .replace(/wss:\/\/[a-zA-Z0-9.-]+\.supabase\.co/g, `wss://${PROJEKT}`));
   }
   for (const [k, v] of Object.entries(appHeader)) {
     if (k !== 'Content-Security-Policy') header[k] = v;
