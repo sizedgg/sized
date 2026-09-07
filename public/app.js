@@ -239,7 +239,8 @@ const state = {
   dmThreads: [],
   activeThread: null,
   challenge: null,
-  poller: null,
+  poller: null,      // fragt nach, ob die Zahlung angekommen ist (3s/10s/30s)
+  uhr: null,         // schreibt den Rest auf dem Zahlungsbildschirm, im Sekundentakt
   activeTab: 'polls',
   channels: {},
   reloadTimers: {},
@@ -1006,6 +1007,41 @@ function pollDelay(elapsedMs) {
   return 30_000;
 }
 
+/**
+ * Die Uhr auf dem Zahlungsbildschirm.
+ *
+ * Sie hat mit dem Nachfragen NICHTS zu tun, und genau daran lag der Fehler:
+ * Der Rest wurde nur dann neu geschrieben, wenn eine Antwort zurueckkam. Weil
+ * der Abstand zwischen den Anfragen waechst (3s, 10s, 30s), sprang die Anzeige
+ * mit – erst um drei Sekunden, nach fuenf Minuten um dreissig. Man wartet auf
+ * eine Ueberweisung und sieht eine Uhr, die stockt; das sieht kaputt aus, und
+ * in dem Moment ist Vertrauen das Einzige, was die Seite anzubieten hat.
+ *
+ * Warum kein setInterval(…, 1000): Browser halten 1000 ms nicht ein, sie
+ * garantieren nur MINDESTENS 1000. Die paar Millisekunden Verspaetung summieren
+ * sich, wandern gegen die echte Sekundengrenze – und irgendwann faellt eine
+ * Zahl aus: 24:59, 24:58, 24:56. Also derselbe Fehler in klein.
+ *
+ * Stattdessen wird jeder naechste Aufruf auf die naechste Sekundengrenze
+ * gelegt (left % 1000), plus 20 ms Sicherheitsabstand, damit er nicht knapp
+ * davor landet und dieselbe Zahl zweimal schreibt. Der Wert selbst wird immer
+ * aus deadline und Date.now() gerechnet, nie hochgezaehlt: Wer den Tab in den
+ * Hintergrund schiebt, wo Browser Zeitgeber ausbremsen, sieht beim
+ * Zurueckkommen sofort die richtige Zeit und nicht die aufgelaufene Differenz.
+ */
+const restText = (ms) =>
+  `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')} left`;
+
+function starteUhr(deadline) {
+  const zeichne = () => {
+    const left = Math.max(0, deadline - Date.now());
+    $('#pay-timer').textContent = restText(left);
+    if (left <= 0) return;
+    state.uhr = setTimeout(zeichne, (left % 1000) + 20);
+  };
+  zeichne();
+}
+
 function startPolling() {
   stopPolling();
   const id = state.challenge.challengeId;
@@ -1013,10 +1049,10 @@ function startPolling() {
   const deadline = new Date(state.challenge.expiresAt).getTime();
   const startedAt = Date.now();
 
+  starteUhr(deadline);
+
   const tick = async () => {
     const left = Math.max(0, deadline - Date.now());
-    $('#pay-timer').textContent =
-      `${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')} left`;
 
     try {
       const r = await callFunction('verify', {
@@ -1047,7 +1083,21 @@ function startPolling() {
   tick();
 }
 
-const stopPolling = () => { if (state.poller) clearTimeout(state.poller); state.poller = null; };
+/**
+ * Ein Ausschalter fuer beide Zeitgeber, nicht zwei.
+ *
+ * Es sind zwei voellig verschiedene Dinge – das Nachfragen und die Uhr – aber
+ * sie enden immer gemeinsam: bei bestaetigter Zahlung, bei Ablauf, beim
+ * Abmelden. Zwei Ausschalter waeren zwei Stellen, an denen man einen vergisst,
+ * und die vergessene Uhr laeuft dann unsichtbar weiter und schreibt in ein
+ * Feld, das niemand mehr ansieht.
+ */
+const stopPolling = () => {
+  if (state.poller) clearTimeout(state.poller);
+  if (state.uhr) clearTimeout(state.uhr);
+  state.poller = null;
+  state.uhr = null;
+};
 
 function logout() {
   loesche(TOKEN_KEY);
