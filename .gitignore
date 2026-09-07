@@ -68,6 +68,12 @@ supabase.tar.gz
 __pycache__/
 *.pyc
 
+# Rohaufnahmen und fertiges Video. Die Skripte, die beides erzeugen, liegen
+# in scripts/ und sind das, was hier hingehoert – ein 30-Sekunden-Video als
+# Binaerdatei im Verlauf ist es nicht.
+video-roh/
+sized-produktvideo.mp4
+
 # --- Nebenprodukte ---------------------------------------------------------
 .DS_Store
 *.log
