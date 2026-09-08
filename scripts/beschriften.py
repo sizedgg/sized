@@ -92,12 +92,14 @@ def main(planpfad):
     foto = Image.open(plan['foto']).convert('RGBA')
 
     if plan.get('wasserzeichen'):
-        # Zwischen der roten Linie (die auf der Hoehe von g['frei'] laeuft)
-        # und der obersten Blase, waagerecht mittig im Gespraechsfenster.
+        # Wohin, sagt der Aufrufer - er hat die Seite vor sich gemessen. Im
+        # Posteingang ist das die Luecke zwischen der roten Linie und der
+        # obersten Blase, in den Abstimmungen das Blatt unter der letzten
+        # Karte. Hier waere jede Zahl eine geratene.
+        w = plan['gassen']['wasser']
         foto = wasserzeichen(
             foto, plan['wasserzeichen'], ImageFont.truetype(MONO, WASSER * s),
-            plan['gassen']['fenstermitte'] * s,
-            (plan['gassen']['frei'] + plan['gassen']['blaseOben']) / 2 * s)
+            w['x'] * s, w['y'] * s)
 
     rand = RAND * s
     breite = foto.width + 2 * rand
@@ -111,13 +113,17 @@ def main(planpfad):
 
     gasse_links = int(rand + g['links'] * s)
     gasse_spalt = int(rand + g['spalt'] * s)
+    # Die rechte Gasse gibt es nur, wo rechts ueberhaupt Platz ist - im
+    # Posteingang laeuft die eine rechte Linie durch die Luecke zwischen
+    # Liste und Fenster, in den Abstimmungen neben der Karte.
+    gasse_rechts = int(rand + g.get('rechts', g['spalt']) * s)
     strich = int(STRICH * s)
 
     # Erst rechnen, dann zeichnen: die Satzkaesten der linken Spalte werden
     # gestapelt, und wo einer den naechsten stossen wuerde, ruecken beide
     # auseinander.
     gesetzt = []
-    unterkante = 0
+    unterkante = {'links': 0, 'rechts': 0}
     for e in plan['beschriftung']:
         k = plan['kaesten'][e['schluessel']]
         kasten = ganz([
@@ -129,9 +135,11 @@ def main(planpfad):
         mitte_kasten = (kasten[1] + kasten[3]) / 2
 
         oben = (g['frei'] * s if e['route'] == 'spalt' else mitte_kasten) - hoehe / 2
-        if e['seite'] == 'links':
-            oben = max(oben, unterkante + ABSTAND * s)
-            unterkante = oben + hoehe
+        # Gestapelt wird je Seite: zwei Saetze uebereinander sind unlesbar,
+        # und das faellt sonst erst im fertigen Bild auf.
+        if e['route'] != 'spalt':
+            oben = max(oben, unterkante[e['seite']] + ABSTAND * s)
+            unterkante[e['seite']] = oben + hoehe
 
         links = e['seite'] == 'links'
         x0 = AUSSEN * s if links else breite - rand + AUSSEN * s
@@ -172,6 +180,12 @@ def main(planpfad):
         if e['route'] == 'korridor':
             punkte = [(ab, mitte_satz), (gasse_links, mitte_satz),
                       (gasse_links, eintritt), (kasten[0], eintritt)]
+        elif e['route'] == 'rechts':
+            # Wie 'korridor', nur auf der anderen Seite: aus dem Kasten
+            # heraus in die Gasse neben der Karte, dort senkrecht auf die
+            # Hoehe des Satzes, dann hinaus.
+            punkte = [(kasten[2], eintritt), (gasse_rechts, eintritt),
+                      (gasse_rechts, mitte_satz), (ab, mitte_satz)]
         elif e['route'] == 'spalt':
             punkte = [(kasten[2], eintritt), (gasse_spalt, eintritt),
                       (gasse_spalt, mitte_satz), (ab, mitte_satz)]

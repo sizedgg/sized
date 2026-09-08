@@ -299,24 +299,34 @@ begin
   end loop;
 end $$;
 
--- --- three polls ------------------------------------------------------------
--- One running with a deadline, one running without, one closed. Those are the
--- three states the list can show, and a preview with three identical polls
--- would say nothing about any of them.
-insert into public.polls (question, closes_at, closed) values
-  ('What should the next stream focus on?', now() + interval '2 hours 59 minutes', false),
-  ('Should we do a weekly AMA?', null, false),
-  ('Change the ticker?', now() - interval '3 days', true);
+-- --- zwei Abstimmungen ------------------------------------------------------
+-- Eine laufende mit Frist, eine geschlossene. Das sind die beiden Zustaende,
+-- um die es in den Bildern geht: an der einen kann man noch etwas aendern, an
+-- der anderen nichts mehr.
+--
+-- Eine dritte, laufend OHNE Frist, stand hier und ist weg. Sie kostete im
+-- Bild eine ganze Karte fuer einen Unterschied, den man ihr nicht ansieht -
+-- eine Zeile weniger in der Kopfzeile. Den Zustand pruefen die Tests, die
+-- ihre Daten selbst mitbringen (scripts/test-poll-frist.mjs); ein Artikelbild
+-- braucht ihn nicht.
+--
+-- created_at ist gesetzt und nicht dem Zufall ueberlassen: die Liste
+-- sortiert danach, neueste zuerst, und ein Bild soll oben die laufende
+-- Frage mit Frist zeigen und darunter die geschlossene. Bei drei Polls mit
+-- derselben Einfuegezeit entscheidet sonst die Datenbank, und zwar bei
+-- jedem Lauf neu.
+insert into public.polls (question, closes_at, closed, created_at) values
+  ('Which chain should I cover next?',
+   now() + interval '5 hours 12 minutes', false, now() - interval '20 hours'),
+  ('Change the ticker?', now() - interval '3 days', true, now() - interval '6 days');
 
 insert into public.poll_options (poll_id, label, idx)
 select p.id, o.label, o.idx from public.polls p
 join (values
-  ('What should the next stream focus on?', 'Majors only — BTC, SOL, ETH', 1),
-  ('What should the next stream focus on?', 'Alt rotations and new listings', 2),
-  ('What should the next stream focus on?', 'On-chain flows and whale tracking', 3),
-  ('What should the next stream focus on?', 'Open Q&A with holders', 4),
-  ('Should we do a weekly AMA?', 'Yes, every Friday', 1),
-  ('Should we do a weekly AMA?', 'No, keep it spontaneous', 2),
+  ('Which chain should I cover next?', 'Solana', 1),
+  ('Which chain should I cover next?', 'Hyperliquid', 2),
+  ('Which chain should I cover next?', 'Base', 3),
+  ('Which chain should I cover next?', 'Monad', 4),
   ('Change the ticker?', 'Keep $ANSEM', 1),
   ('Change the ticker?', 'Something shorter', 2),
   ('Change the ticker?', 'Put it to a second vote', 3),
