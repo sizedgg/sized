@@ -10,6 +10,15 @@ Die Maße stammen aus dem 100er-Raster der Vorschau (scripts/vorschau-logo.mjs,
 Satz "gleich", Nummer 2) und stehen unten in BALKEN. Wer das Zeichen ändert,
 ändert es dort und hier – und in der Kopfzeile und im Favicon in index.html.
 
+Die FARBEN stehen hier nicht mehr. Sie kommen aus public/styles.css, aus
+--bg und --marke. Der Grund ist ein Fehler: beim Wechsel auf das helle Blatt
+wurden Kopfzeile, Favicon, Manifest und theme-color umgestellt, und diese
+Datei nicht – ihre zwei Zahlen waren die einzige Kopie der Palette außerhalb
+des Blattes. Wochen später zeigte der Startbildschirm noch das alte, dunkle
+Zeichen, und zwar nur dort, wo niemand hinsieht. Gelesen statt kopiert kann
+das nicht wieder passieren; test-pwa.mjs misst zusätzlich die fertigen
+Bildpunkte gegen dieselben zwei Werte.
+
 Zwei Sorten, beide werden gebraucht:
 
   * normal    – wird so angezeigt, wie sie ist
@@ -20,13 +29,42 @@ Zwei Sorten, beide werden gebraucht:
     python3 scripts/make-icons.py
 """
 import pathlib
+import re
+import sys
 from PIL import Image, ImageDraw
 
-OUT = pathlib.Path(__file__).resolve().parent.parent / "public" / "icons"
+WURZEL = pathlib.Path(__file__).resolve().parent.parent
+OUT = WURZEL / "public" / "icons"
 OUT.mkdir(parents=True, exist_ok=True)
 
-BG = (10, 11, 15, 255)        # --bg
-MARKE = (236, 239, 245, 255)  # --accent (Knochenweiss)
+BLATT = (WURZEL / "public" / "styles.css").read_text(encoding="utf-8")
+
+
+def farbe(name: str, tiefe: int = 0) -> tuple:
+    """Liest eine Farbvariable aus styles.css.
+
+    Folgt var(--x), weil --marke genau das ist: ein Verweis auf
+    --accent-fill. Eine Kopie des Wertes hier wäre wieder die Kopie, die
+    dieses Skript gerade losgeworden ist.
+    """
+    if tiefe > 4:
+        sys.exit(f"  {name}: Verweise drehen sich im Kreis")
+    treffer = re.search(rf"^\s*{re.escape(name)}\s*:\s*([^;]+);", BLATT, re.M)
+    if not treffer:
+        sys.exit(f"  {name} steht nicht in public/styles.css")
+    wert = treffer.group(1).strip()
+    verweis = re.fullmatch(r"var\(\s*(--[\w-]+)\s*\)", wert)
+    if verweis:
+        return farbe(verweis.group(1), tiefe + 1)
+    hex_wert = re.fullmatch(r"#([0-9a-fA-F]{6})", wert)
+    if not hex_wert:
+        sys.exit(f"  {name} ist kein sechsstelliger Hexwert, sondern: {wert}")
+    r, g, b = (int(hex_wert.group(1)[i:i + 2], 16) for i in (0, 2, 4))
+    return (r, g, b, 255)
+
+
+BG = farbe("--bg")
+MARKE = farbe("--marke")
 
 # Zwei Balken im 100er-Raster: x, y, Breite, Höhe, Eckenradius.
 # Beide stehen auf derselben Grundlinie bei y = 80.
@@ -78,6 +116,8 @@ def draw(size: int, mark_ratio: float, rounded: bool) -> Image.Image:
 
 
 def main():
+    print(f"\n  Grund  --bg    #{BG[0]:02x}{BG[1]:02x}{BG[2]:02x}")
+    print(f"  Zeichen --marke #{MARKE[0]:02x}{MARKE[1]:02x}{MARKE[2]:02x}\n")
     made = []
     for size in (180, 192, 512):
         # Normal: Zeichen füllt gut die Hälfte der Fläche.

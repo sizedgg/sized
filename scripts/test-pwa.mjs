@@ -133,6 +133,133 @@ check('apple-touch-icon ist verlinkt (iPhone nutzt nicht das Manifest)',
 check('theme-color gesetzt',
       await page.$eval('meta[name=theme-color]', (el) => Boolean(el.content)).catch(() => false));
 
+// ---------------------------------------------------------------------------
+// Die Farben der Icons
+// ---------------------------------------------------------------------------
+//
+// Alles ueber diesem Abschnitt prueft, DASS die Dateien da sind und die
+// richtige Kantenlaenge haben. Genau das war beim Wechsel auf das helle
+// Blatt der Fehler: fuenf gueltige PNG in der richtigen Groesse, jede
+// Pruefung gruen - und darin das alte, dunkle Zeichen, weil
+// scripts/make-icons.py seine eigene Kopie der Palette hatte. Auf dem
+// Startbildschirm sieht man es, sonst nirgends.
+//
+// Deshalb werden hier die Bildpunkte gegen dieselben zwei Variablen
+// gemessen, aus denen die Seite ihre Farben nimmt.
+
+/** Liest eine Farbvariable aus styles.css und folgt var(--x). */
+function cssFarbe(name, tiefe = 0) {
+  if (tiefe > 4) throw new Error(`${name}: Verweise drehen sich im Kreis`);
+  const treffer = blatt.match(new RegExp(`^\\s*${name}\\s*:\\s*([^;]+);`, 'm'));
+  if (!treffer) throw new Error(`${name} steht nicht in styles.css`);
+  const wert = treffer[1].trim();
+  const verweis = wert.match(/^var\(\s*(--[\w-]+)\s*\)$/);
+  if (verweis) return cssFarbe(verweis[1], tiefe + 1);
+  const hex = wert.match(/^#([0-9a-fA-F]{6})$/);
+  if (!hex) throw new Error(`${name} ist kein Hexwert: ${wert}`);
+  return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16));
+}
+
+const blatt = fs.readFileSync(path.join(pub, 'styles.css'), 'utf8');
+const BLATT_BG = cssFarbe('--bg');
+const BLATT_MARKE = cssFarbe('--marke');
+const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+
+// Zwei flaechige Farben, sonst nichts: die haeufigste ist der Grund, die
+// haeufigste weit davon entfernte ist das Zeichen. Nicht an einer festen
+// Stelle abgegriffen - eine Sonde an Punkt (x, y) haelt keine Aenderung an
+// BALKEN aus und misst dann Grund, wo Zeichen sein sollte.
+async function icon_farben(url) {
+  return page.evaluate(async (u) => {
+    const bild = await createImageBitmap(await (await fetch(u)).blob());
+    const c = new OffscreenCanvas(bild.width, bild.height);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(bild, 0, 0);
+    const d = ctx.getImageData(0, 0, bild.width, bild.height).data;
+
+    const zaehler = new Map();
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 250) continue;
+      const k = `${d[i]},${d[i + 1]},${d[i + 2]}`;
+      zaehler.set(k, (zaehler.get(k) ?? 0) + 1);
+    }
+    const sortiert = [...zaehler].sort((a, b) => b[1] - a[1]).map(([k, n]) => [k.split(',').map(Number), n]);
+    if (!sortiert.length) return null;
+    const [grund, grundN] = sortiert[0];
+    const weit = ([r, g, b]) => Math.abs(r - grund[0]) + Math.abs(g - grund[1]) + Math.abs(b - grund[2]) > 60;
+    const zeichen = sortiert.find(([f]) => weit(f));
+
+    // Wo liegt das Zeichen? Fuer die maskierbaren Icons ist das die
+    // eigentliche Frage: Android schneidet einen Kreis heraus.
+    let x0 = bild.width, y0 = bild.height, x1 = -1, y1 = -1;
+    if (zeichen) {
+      for (let y = 0; y < bild.height; y++) {
+        for (let x = 0; x < bild.width; x++) {
+          const i = (y * bild.width + x) * 4;
+          if (d[i + 3] < 250) continue;
+          if (!weit([d[i], d[i + 1], d[i + 2]])) continue;
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+    return {
+      groesse: bild.width,
+      grund, grundAnteil: grundN / (bild.width * bild.height),
+      zeichen: zeichen ? zeichen[0] : null,
+      zeichenAnteil: zeichen ? zeichen[1] / (bild.width * bild.height) : 0,
+      kasten: x1 < 0 ? null : { x0, y0, x1, y1 },
+    };
+  }, url);
+}
+
+const gleich = (a, b) => a && b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+for (const datei of ['icon-180.png', 'icon-192.png', 'icon-512.png',
+                     'maskable-192.png', 'maskable-512.png']) {
+  const m = await icon_farben(`${base}/icons/${datei}`);
+  if (!m) { check(`${datei} lesbar`, false); continue; }
+  check(`${datei}: Grund ist --bg ${hex(BLATT_BG)}`,
+        gleich(m.grund, BLATT_BG), `gemessen: ${hex(m.grund)}`);
+  check(`${datei}: Zeichen ist --marke ${hex(BLATT_MARKE)}`,
+        gleich(m.zeichen, BLATT_MARKE), `gemessen: ${m.zeichen ? hex(m.zeichen) : 'kein Zeichen gefunden'}`);
+  // Ohne das hier wuerde ein Bild mit drei blauen Bildpunkten in der Ecke
+  // die beiden Pruefungen darueber bestehen.
+  check(`${datei}: das Zeichen ist eine Flaeche, kein Rest`,
+        m.zeichenAnteil > 0.03, `Anteil: ${(m.zeichenAnteil * 100).toFixed(1)} %`);
+
+  if (datei.startsWith('maskable') && m.kasten) {
+    // Der sichere Bereich ist ein Kreis mit 80 % Durchmesser. Nicht die
+    // Ecken des Kastens messen, sondern seine Ecken gegen den Kreis: eine
+    // Ecke kann innerhalb der 80-%-Kante und trotzdem ausserhalb des
+    // Kreises liegen, und genau die schneidet ein Pixel-Launcher weg.
+    const r = m.groesse * 0.4, c = m.groesse / 2;
+    const k = m.kasten;
+    const ecken = [[k.x0, k.y0], [k.x1, k.y0], [k.x0, k.y1], [k.x1, k.y1]];
+    const weiteste = Math.max(...ecken.map(([x, y]) => Math.hypot(x - c, y - c)));
+    check(`${datei}: das Zeichen bleibt im sicheren Kreis`,
+          weiteste <= r, `weiteste Ecke ${weiteste.toFixed(0)} px, erlaubt ${r.toFixed(0)} px`);
+  }
+}
+
+// Gegenprobe: dieselbe Messung auf ein Bild mit der alten, dunklen Palette.
+// Wenn das hier nicht anschlaegt, misst der Block darueber nichts.
+{
+  const alt = await page.evaluate(async () => {
+    const c = new OffscreenCanvas(192, 192);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#0a0b0f'; ctx.fillRect(0, 0, 192, 192);
+    ctx.fillStyle = '#ecEFF5';   // das alte Knochenweiss
+    ctx.fillRect(60, 40, 70, 110);
+    const blob = await c.convertToBlob();
+    return new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+  });
+  const m = await icon_farben(alt);
+  check('Gegenprobe: das alte dunkle Zeichen wuerde auffallen',
+        !gleich(m.grund, BLATT_BG) && !gleich(m.zeichen, BLATT_MARKE),
+        `gemessen: Grund ${hex(m.grund)}, Zeichen ${m.zeichen ? hex(m.zeichen) : '-'}`);
+}
+
 // Load errors first: if the module aborts, the service worker never gets
 // registered - the check below would then wait forever. A test that hangs
 // doesn't tell you what's broken.

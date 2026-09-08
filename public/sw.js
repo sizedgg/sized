@@ -15,8 +15,13 @@
    every cache whose name is not this one, so a new name is what makes an
    installed app pick up the new shell - without it, a phone that already has
    the app keeps serving the old styles.css and never fetches the font files
-   at all. v3: the four font files joined the shell. */
-const CACHE = 'sized-shell-v3';
+   at all. v3: the four font files joined the shell. v4: the icons were
+   redrawn in the light palette - same file names, different pixels, so
+   nothing but a new cache name gets them onto a phone that already has
+   the app. (The tile on the home screen is a separate matter: the system
+   copies it once when the app is added and never looks again. That one
+   only changes if the app is removed and added back.) */
+const CACHE = 'sized-shell-v4';
 
 // Only the shell. config.js deliberately does NOT sit here: if the project
 // ever moves, no old address is allowed to get stuck in the cache.
