@@ -170,32 +170,20 @@ const KOPF_STIL = `
   .fuell { height: 100%; }
 `;
 
+// Eine Fassung, nicht drei.
+//
+// Ohne Markenzeichen: es steht bereits im Profilbild, und X legt das
+// unmittelbar links daneben. Zweimal dieselben zwei Balken in einem Blickfeld
+// sind keine Wiederholung, die etwas betont - sie lassen die Leiste aussehen,
+// als sei das Bild versehentlich zweimal eingesetzt worden.
 const KOEPFE = [
   {
-    key: 'a-wort-und-balken',
-    name: 'Schriftzug links, Abstimmung rechts',
+    key: 'wort',
+    name: 'Schriftzug und Zeile, ohne Zeichen',
     html: `<div class="platz"></div><div class="inhalt">
       <div>
-        <div class="wort"><span class="marke">${MARKE}</span><b>SIZED</b></div>
-        <div class="zeile2">Community votes, weighted by what you hold</div>
-      </div>
-      <div class="stapel">${balken([100, 46, 33, 29])}</div>
-    </div>`,
-  },
-  {
-    key: 'b-nur-balken',
-    name: 'Nur die Abstimmung — das Profilbild traegt die Marke schon',
-    html: `<div class="platz"></div><div class="inhalt">
-      <div class="stapel">${balken([100, 46, 33, 29])}</div>
-    </div>`,
-  },
-  {
-    key: 'c-nur-wort',
-    name: 'Nur Schriftzug und Zeile',
-    html: `<div class="platz"></div><div class="inhalt">
-      <div>
-        <div class="wort"><span class="marke">${MARKE}</span><b>SIZED</b></div>
-        <div class="zeile2">Community votes, weighted by what you hold</div>
+        <div class="wort"><b>SIZED</b></div>
+        <div class="zeile2">Community votes and DMs for $ANSEM</div>
       </div>
     </div>`,
   },
@@ -209,7 +197,7 @@ console.log(`\n  Profilbild  ${path.relative(root, profilDatei)}`);
 
 const koepfe = [];
 for (const k of KOEPFE) {
-  const d = await bild({ html: k.html, stil: KOPF_STIL }, 1500, 500, `sized-x-kopf-${k.key}.png`, 2);
+  const d = await bild({ html: k.html, stil: KOPF_STIL }, 1500, 500, 'sized-x-kopf.png', 2);
   koepfe.push({ ...k, datei: d });
   console.log(`  Kopfleiste  ${path.relative(root, d)}`);
 }
