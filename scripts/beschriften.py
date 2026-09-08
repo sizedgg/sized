@@ -110,8 +110,24 @@ def main(planpfad):
     for e, kasten, satzkasten, zeilen in gesetzt:
         d.rectangle(kasten, outline=ROT, width=strich)
         d.rectangle(satzkasten, outline=ROT, width=strich)
+        # Mittig, und zwar nach der TINTE, nicht nach der Zeilenhoehe.
+        #
+        # Eine Zeile ist 1,45 mal so hoch wie die Schrift; die Buchstaben
+        # stehen darin oben, der Rest ist Durchschuss. Wer den Text am
+        # oberen Rand plus Polster ansetzt, bekommt deshalb einen Satz, der
+        # im Kasten nach oben rutscht - bei einer einzelnen Zeile am
+        # deutlichsten, weil dort kein zweiter Satz den Eindruck ausgleicht.
+        #
+        # Also wird gemessen, wo die Buchstaben wirklich anfangen und
+        # aufhoeren, und dieser Block auf die Mitte des Kastens gesetzt.
+        kaesten_mitte = (satzkasten[1] + satzkasten[3]) / 2
+        oberste = min(i * zeilenhoehe + d.textbbox((0, 0), z, font=schrift)[1]
+                      for i, z in enumerate(zeilen))
+        unterste = max(i * zeilenhoehe + d.textbbox((0, 0), z, font=schrift)[3]
+                       for i, z in enumerate(zeilen))
+        start = kaesten_mitte - (oberste + unterste) / 2
         for i, zeile in enumerate(zeilen):
-            d.text((satzkasten[0] + POLSTER * s, satzkasten[1] + POLSTER * s + i * zeilenhoehe),
+            d.text((satzkasten[0] + POLSTER * s, start + i * zeilenhoehe),
                    zeile, font=schrift, fill=ROT)
 
         links = e['seite'] == 'links'

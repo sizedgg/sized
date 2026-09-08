@@ -81,31 +81,34 @@ update public.wallets set address = '7xK' || substr(address, 4)
 
 -- --- die Bestaende ----------------------------------------------------------
 --
--- Nach Rang statt gewuerfelt, und nach einer Zipf-Kurve: der r-groesste
--- Halter hat 160.000 / r^0.82 Dollar.
+-- Nach Rang statt gewuerfelt: eine Kurve mit BODEN. Der groesste Halter hat
+-- 800.000 Dollar, der fuenfhundertste genau 80.000, und dazwischen faellt
+-- es schnell und laeuft dann flach aus.
 --
---     1.   160.000        6.   36.000       14.   18.400
---     2.    90.600        8.   28.000       18.   15.000
---     3.    66.000       10.   24.000      100.    3.700
---     4.    51.000       12.   21.000      500.    1.000
+--     1.   800.000        6.   228.000       18.   134.000
+--     2.   466.000        8.   194.000       50.   101.000
+--     3.   356.000       10.   171.000      100.    91.000
+--     4.   295.000       14.   147.000      500.    80.000
 --
--- Der Grund ist die SPALTE im Posteingang. Vorher stand dort zwanzigmal
--- untereinander "$10K" - die Verteilung war zwar schief, aber ihr oberes
--- Ende lag so flach, dass die ersten fuenfzig Zeilen auf dieselbe gerundete
--- Zahl fielen. Eine Liste, die "sortiert nach Bestand" behauptet und dabei
--- zwanzigmal dieselbe Zahl zeigt, belegt das Gegenteil.
+-- Zwei Anforderungen stecken darin, und die zweite ist der Grund fuer den
+-- Boden:
 --
--- Der Exponent ist aus genau dieser Anforderung gerechnet und nicht
--- geschaetzt: oben ueber 150.000, in der achtzehnten Zeile - der letzten,
--- die auf ein Bild passt - 15.000. Das ist 0.82.
+--   Jede sichtbare Zeile eine andere Zahl. Vorher stand zwanzigmal
+--   untereinander "$10K" - eine Liste, die "sortiert nach Bestand"
+--   behauptet und dabei eine Zahl wiederholt, belegt das Gegenteil.
 --
--- Der Schwanz laeuft danach flach bis knapp ueber 1.000 aus, also bleiben
--- alle 500 ueber der Schwelle und der Posteingang ist voll. Die Summe aller
--- Bestaende liegt bei rund 1,8 Millionen - das ist die Zahl, an der die
--- Abstimmungen haengen, siehe die Beteiligung weiter unten.
+--   Der kleinste haelt 80.000. Ohne Boden liefe die Kurve gegen null, und
+--   die untere Haelfte der Liste stuende bei ein paar hundert Dollar.
+--
+-- Warum nicht einfach 80.000 bis 160.000: dann liegen die Zeilen ab der
+-- zehnten so dicht, dass sie wieder auf dieselbe gerundete Zahl fallen -
+-- $88K, $87K, $87K. Die Spanne muss gross sein, damit gerundet noch etwas
+-- uebrig bleibt.
 update public.wallets w
-   set usd_value = round((160000.0 * power(g.r, -0.82))::numeric, 2),
-       ui_amount = round((160000.0 * power(g.r, -0.82) * 1000)::numeric, 2)
+   set usd_value = round((80000 + 720000
+         * (power(g.r, -0.9) - power(500, -0.9)) / (1 - power(500, -0.9)))::numeric, 2),
+       ui_amount = round((80000 + 720000
+         * (power(g.r, -0.9) - power(500, -0.9)) / (1 - power(500, -0.9)))::numeric * 1000, 2)
   from (select address, row_number() over (order by md5(address)) as r
           from public.wallets
          where address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw') g
@@ -123,10 +126,22 @@ declare
   -- enden und gleich anfangen, stehen dort als dieselbe Zeile - und ein
   -- Posteingang, in dem viermal "can you look at t..." steht, sieht
   -- erfunden aus, weil er es dann auch ist.
+  -- Vierzig verschiedene Nachrichten, und die Liste bekommt sie der Reihe
+  -- nach statt zufaellig - siehe rang weiter unten.
+  --
+  -- Zwei Regeln, beide gepruefte (siehe den Block darunter):
+  --
+  --   Die ersten 16 Zeichen sind eindeutig. Mehr zeigt die Zeile im
+  --   Posteingang nicht, und ein Posteingang, in dem viermal
+  --   "can you look at t..." steht, sieht erfunden aus.
+  --
+  --   Mindestens 22 Zeichen. Kurze Zurufe - "gm", "ok", "wen poll" - fuellen
+  --   die Zeile nicht aus, und eine Liste, in der die Haelfte der Zeilen
+  --   nach drei Woertern aufhoert, sieht leer aus statt beschaeftigt.
   texte text[] := array[
-    'gm',
-    'wen poll',
-    'thanks for the answer earlier',
+    'good morning, first message here',
+    'when is the next poll going up',
+    'thanks for the answer earlier today',
     'quick one about the vesting schedule',
     'is the unlock linear or cliff based?',
     'any chance you do an AMA this month',
@@ -136,69 +151,97 @@ declare
     'what do you think about funding rates right now',
     'been waiting on this poll for two weeks haha',
     'is the treasury address the same as in the pinned post',
-    'ok, understood',
+    'ok, understood. that clears it up',
     'voted, and I moved half my bag after',
     'can you look at the numbers on the last poll',
     'my vote disappeared after I sold, is that expected?',
     'does the weight update live or once a day',
-    'great stream yesterday',
+    'great stream yesterday, the second half especially',
     'who runs this site, you or a team',
     'the card image shows an old number',
-    'how long does a poll stay open',
-    'asked twice already, sorry',
+    'how long does a poll usually stay open',
+    'asked twice already, sorry for the noise',
     'just here to say the sorting is smart',
-    'can I change my vote later',
+    'can I change my vote later or is it final',
     'why is my handle only three characters',
     'dm threshold seems high for smaller wallets',
-    'you should put the next one at 24h',
+    'you should put the next one at 24 hours',
     'screenshot of the poll went around btw',
     'reading the docs now, one thing is unclear',
     'found a typo on the login screen',
-    'no rush, whenever you have time',
-    'second time asking about the AMA',
+    'no rush on this, whenever you have time',
+    'second time asking about the AMA, sorry',
     'price feed looks stale on my side',
-    'everything works on mobile now, nice',
+    'everything works on mobile now, nice work',
     'which wallet do I send from, phantom?',
     'i think the closed polls should stay visible',
-    'up 3x since the first vote, thanks',
-    'are you keeping the ticker',
-    'long time lurker, first message',
-    'let me know if you want testers'
+    'up 3x since the first vote, thanks for that',
+    'are you keeping the ticker or changing it',
+    'long time lurker, first message here',
+    'let me know if you want testers for this'
   ];
   -- Ansems Antworten. Auch sie stehen in der Liste, mit "You:" davor, also
-  -- gilt dieselbe Regel fuer die ersten 16 Zeichen. Vierundzwanzig Stueck,
-  -- damit sich in den ersten zwei Dutzend Zeilen keine wiederholt.
+  -- gelten dieselben zwei Regeln. Vierundzwanzig Stueck, damit sich in den
+  -- ersten zwei Dutzend Zeilen keine wiederholt.
   antworten text[] := array[
     'will cover it in the next stream',
-    'yes',
+    'yes, that is the plan for now',
     'not yet, waiting on the numbers',
     'good question, short answer is no',
     'sending you something later today',
-    'seen it, thanks',
-    'that one is in the docs',
-    'fixed, thanks for flagging',
-    'next poll will answer that',
+    'seen it, thanks for writing in',
+    'that one is in the docs already',
+    'fixed, thanks for flagging it',
+    'next poll will answer that one',
     'same address as the pinned post',
     'it updates when the balance moves',
-    'no team, just me',
-    'friday, if the numbers hold',
+    'no team behind this, just me',
+    'friday, if the numbers hold up',
     'you can change it until it closes',
-    'appreciate it',
+    'appreciate it, means a lot',
     'I read everything here, even without replying',
-    'put it in the poll',
-    'checking now',
-    'keeping the ticker',
-    'give me a day',
+    'put it in the poll and we will see',
+    'checking now, give me an hour',
+    'keeping the ticker, that is settled',
+    'give me a day and I will look',
     'ask again after the unlock',
-    'on it',
+    'on it, should be done today',
     'screenshot it and send it over',
-    'makes sense, changing it'
+    'makes sense, changing it this week'
   ];
   n int;
   k int;
   saat bigint := 77771;
   gelesen boolean;
 begin
+  -- Die zwei Regeln von oben, nachgesehen statt geglaubt. Beide sind schon
+  -- einmal gebrochen worden, und beide Male stand das Ergebnis im Bild,
+  -- bevor es jemandem auffiel.
+  for k in 1..array_length(texte, 1) loop
+    if length(texte[k]) < 22 then
+      raise exception 'Nachricht % ist mit % Zeichen zu kurz fuer eine Zeile: %',
+        k, length(texte[k]), texte[k];
+    end if;
+    for n in 1..k - 1 loop
+      if left(texte[k], 16) = left(texte[n], 16) then
+        raise exception 'Nachricht % und % sehen in der Liste gleich aus: %',
+          n, k, left(texte[k], 16);
+      end if;
+    end loop;
+  end loop;
+  for k in 1..array_length(antworten, 1) loop
+    if length(antworten[k]) < 22 then
+      raise exception 'Antwort % ist mit % Zeichen zu kurz: %',
+        k, length(antworten[k]), antworten[k];
+    end if;
+    for n in 1..k - 1 loop
+      if left(antworten[k], 16) = left(antworten[n], 16) then
+        raise exception 'Antwort % und % sehen in der Liste gleich aus: %',
+          n, k, left(antworten[k], 16);
+      end if;
+    end loop;
+  end loop;
+
   -- rang: der Platz in der Liste, die Ansem sieht - sortiert nach Bestand,
   -- der groesste zuerst. Die LETZTE Nachricht eines Gespraechs wird danach
   -- vergeben und nicht gewuerfelt: nur die letzte steht im Posteingang, und
@@ -305,14 +348,17 @@ join lateral (
 ) o on true
 where p.question <> 'Change the ticker?'
   and w.address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw'
-  -- Nicht alle stimmen ab. Das ist keine Kosmetik, sondern die Bedingung
-  -- dafuer, dass auf keinem Balken mehr als eine Million steht.
+  -- Nicht alle stimmen ab. 62 Prozent ist eine Beteiligung, die man einer
+  -- Community abnimmt - und sie ist die einzige Stellschraube zwischen den
+  -- Bestaenden und der Laenge der Balken.
   --
-  -- Die Rechnung: alle 500 Halter zusammen haben rund 1,8 Millionen. Bei
-  -- der Frage mit ZWEI Antworten faellt davon knapp die Haelfte auf einen
-  -- Balken - bei voller Beteiligung waren das 1,11 Millionen. Mit dieser
-  -- Quote bleibt der laengste Balken darunter; nachgerechnet wird es unten,
-  -- und wenn es nicht stimmt, bricht die Saat ab statt ein Bild zu liefern.
+  -- Die Balken sind mit den Bestaenden mitgewachsen: die 500 Halter haben
+  -- zusammen rund 50 Millionen, also stehen auf einem Balken jetzt
+  -- Millionen statt Hunderttausende. Das ist die Rechnung, nicht das Bild:
+  -- ein Balken IST die Summe der Bestaende derer, die dafuer gestimmt
+  -- haben. Wer beides klein haben will - grosse Halter und kleine Balken -
+  -- muss die Beteiligung auf eine Handvoll Wallets druecken, und dann
+  -- stimmt die Zahl im Bild zwar, die Geschichte dahinter aber nicht mehr.
   and ('x' || substr(md5(w.address || 'teil'), 1, 2))::bit(8)::int % 100 < 62;
 
 insert into public.votes (poll_id, option_id, wallet, weight_tokens, weight_usd, created_at)
@@ -345,20 +391,28 @@ insert into public.poll_totals (poll_id, option_id, votes, usd)
 select v.poll_id, v.option_id, count(*), sum(v.weight_usd)
 from public.votes v group by v.poll_id, v.option_id;
 
--- Die Grenze, die diese Saat einzuhalten hat: auf keinem Balken steht mehr
--- als eine Million. Sie haengt an drei Zahlen, die an drei verschiedenen
--- Stellen stehen - der Obergrenze der Bestaende, der Beteiligung und der
--- Zahl der Antworten je Frage. Wer eine davon anfasst, merkt es hier und
--- nicht erst im fertigen Bild.
+-- Wie lang der laengste Balken geworden ist, schwarz auf weiss. Die Zahl
+-- haengt an drei Stellen zugleich - der Bestandskurve, der Beteiligung und
+-- der Zahl der Antworten je Frage -, und wer eine davon anfasst, soll sie
+-- hier sehen und nicht erst im fertigen Bild.
+--
+-- Abgebrochen wird nur bei etwas, das gar nicht sein kann: ein Balken, auf
+-- dem mehr steht, als alle Halter zusammen besitzen. Eine runde Grenze
+-- ("nicht ueber eine Million") stand hier vorher und war eine Meinung ueber
+-- das Bild, keine Aussage ueber die Daten - beim naechsten Dreh an der
+-- Kurve haette sie die Saat angehalten, ohne dass etwas falsch war.
 do $$
 declare
   groesster numeric;
+  alle numeric;
 begin
   select max(usd) into groesster from public.poll_totals;
-  if groesster > 1000000 then
-    raise exception 'Der laengste Balken steht bei % Dollar - ueber einer Million. '
-      'Beteiligung in den Stimmen senken oder die Bestandskurve flacher machen.',
-      round(groesster);
+  select sum(usd_value) into alle from public.wallets;
+  raise notice 'Laengster Balken: % Dollar, alle Bestaende zusammen: %',
+    round(groesster), round(alle);
+  if groesster > alle then
+    raise exception 'Ein Balken traegt % Dollar, alle Halter zusammen haben % - '
+      'das kann nur ein Rechenfehler sein.', round(groesster), round(alle);
   end if;
 end $$;
 
