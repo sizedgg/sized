@@ -61,20 +61,10 @@ begin
       saat := (saat * 1103515245 + 12345) % 2147483648;
       adr := adr || substr(b58, 1 + (saat % 58)::int, 1);
     end loop;
-    -- A long tail: many small holders, a few large ones. floor to a power
-    -- keeps the distribution lopsided the way a real one is.
-    saat := (saat * 1103515245 + 12345) % 2147483648;
-    -- Obergrenze 10.000 Dollar, nicht 2 Millionen.
-    --
-    -- Die Poll-Balken sind die Summe der Bestaende derer, die abgestimmt
-    -- haben. Bei 500 Stimmen und im Schnitt 462.000 Dollar stand auf dem
-    -- laengsten Balken 161 Millionen - eine Zahl, die niemand einer
-    -- Community abnimmt. Mit dieser Grenze liegt der Schnitt bei rund 2.300
-    -- und der laengste Balken unter einer Million.
-    --
-    -- Die Schiefe (Exponent 3.2) bleibt: eine Handvoll grosser Halter, ein
-    -- langer Schwanz kleiner. Das war nie das Problem, nur der Massstab.
-    wert := round((power((saat % 10000) / 10000.0, 3.2) * 10000 + 0.4)::numeric, 4);
+    -- Der Bestand wird hier nur belegt, nicht entschieden - die Kurve steht
+    -- eine Handbreit weiter unten und wird nach Rang vergeben. Zwei Stellen,
+    -- die beide Betraege setzen, waeren eine zu viel.
+    wert := 0;
     insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen)
     values (adr, wert * 1000, wert, 0.001,
             now() - (i || ' minutes')::interval,
@@ -88,6 +78,38 @@ update public.wallets set address = 'Km9' || substr(address, 4)
   where address in (select address from public.wallets order by address limit 2);
 update public.wallets set address = '7xK' || substr(address, 4)
   where address in (select address from public.wallets order by address desc limit 2);
+
+-- --- die Bestaende ----------------------------------------------------------
+--
+-- Nach Rang statt gewuerfelt, und nach einer Zipf-Kurve: der r-groesste
+-- Halter hat 160.000 / r^0.82 Dollar.
+--
+--     1.   160.000        6.   36.000       14.   18.400
+--     2.    90.600        8.   28.000       18.   15.000
+--     3.    66.000       10.   24.000      100.    3.700
+--     4.    51.000       12.   21.000      500.    1.000
+--
+-- Der Grund ist die SPALTE im Posteingang. Vorher stand dort zwanzigmal
+-- untereinander "$10K" - die Verteilung war zwar schief, aber ihr oberes
+-- Ende lag so flach, dass die ersten fuenfzig Zeilen auf dieselbe gerundete
+-- Zahl fielen. Eine Liste, die "sortiert nach Bestand" behauptet und dabei
+-- zwanzigmal dieselbe Zahl zeigt, belegt das Gegenteil.
+--
+-- Der Exponent ist aus genau dieser Anforderung gerechnet und nicht
+-- geschaetzt: oben ueber 150.000, in der achtzehnten Zeile - der letzten,
+-- die auf ein Bild passt - 15.000. Das ist 0.82.
+--
+-- Der Schwanz laeuft danach flach bis knapp ueber 1.000 aus, also bleiben
+-- alle 500 ueber der Schwelle und der Posteingang ist voll. Die Summe aller
+-- Bestaende liegt bei rund 1,8 Millionen - das ist die Zahl, an der die
+-- Abstimmungen haengen, siehe die Beteiligung weiter unten.
+update public.wallets w
+   set usd_value = round((160000.0 * power(g.r, -0.82))::numeric, 2),
+       ui_amount = round((160000.0 * power(g.r, -0.82) * 1000)::numeric, 2)
+  from (select address, row_number() over (order by md5(address)) as r
+          from public.wallets
+         where address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw') g
+ where w.address = g.address;
 
 -- --- the messages -----------------------------------------------------------
 do $$
@@ -282,7 +304,16 @@ join lateral (
   limit 1
 ) o on true
 where p.question <> 'Change the ticker?'
-  and w.address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw';
+  and w.address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw'
+  -- Nicht alle stimmen ab. Das ist keine Kosmetik, sondern die Bedingung
+  -- dafuer, dass auf keinem Balken mehr als eine Million steht.
+  --
+  -- Die Rechnung: alle 500 Halter zusammen haben rund 1,8 Millionen. Bei
+  -- der Frage mit ZWEI Antworten faellt davon knapp die Haelfte auf einen
+  -- Balken - bei voller Beteiligung waren das 1,11 Millionen. Mit dieser
+  -- Quote bleibt der laengste Balken darunter; nachgerechnet wird es unten,
+  -- und wenn es nicht stimmt, bricht die Saat ab statt ein Bild zu liefern.
+  and ('x' || substr(md5(w.address || 'teil'), 1, 2))::bit(8)::int % 100 < 62;
 
 insert into public.votes (poll_id, option_id, wallet, weight_tokens, weight_usd, created_at)
 select p.id, o.id, w.address, w.ui_amount, w.usd_value, now() - interval '4 days'
@@ -313,6 +344,23 @@ alter table public.dms enable trigger all;
 insert into public.poll_totals (poll_id, option_id, votes, usd)
 select v.poll_id, v.option_id, count(*), sum(v.weight_usd)
 from public.votes v group by v.poll_id, v.option_id;
+
+-- Die Grenze, die diese Saat einzuhalten hat: auf keinem Balken steht mehr
+-- als eine Million. Sie haengt an drei Zahlen, die an drei verschiedenen
+-- Stellen stehen - der Obergrenze der Bestaende, der Beteiligung und der
+-- Zahl der Antworten je Frage. Wer eine davon anfasst, merkt es hier und
+-- nicht erst im fertigen Bild.
+do $$
+declare
+  groesster numeric;
+begin
+  select max(usd) into groesster from public.poll_totals;
+  if groesster > 1000000 then
+    raise exception 'Der laengste Balken steht bei % Dollar - ueber einer Million. '
+      'Beteiligung in den Stimmen senken oder die Bestandskurve flacher machen.',
+      round(groesster);
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Ein Halter, mit dem man sich tatsaechlich anmelden kann

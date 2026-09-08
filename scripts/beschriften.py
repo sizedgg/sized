@@ -32,8 +32,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROT = (198, 40, 40, 255)
 GRUND = (245, 242, 236, 255)     # --bg, damit der Rand dasselbe Blatt ist
-RAND = 340                       # Spalte fuer die Saetze, in Punkten
+RAND = 380                       # Spalte fuer die Saetze, in Punkten
 LUFT = 5                         # Abstand des Kastens vom Element - eng
+AUSSEN = 26                      # Abstand der Satzkaesten vom Bildrand
 POLSTER = 9                      # Luft zwischen Text und seinem Rahmen
 STRICH = 2
 SCHRIFT = 15
@@ -75,7 +76,7 @@ def main(planpfad):
 
     schrift = ImageFont.truetype(MONO, SCHRIFT * s)
     zeilenhoehe = int(SCHRIFT * s * 1.45)
-    textbreite = rand - 2 * LUFT * s - 2 * POLSTER * s
+    textbreite = rand - 2 * AUSSEN * s - 2 * POLSTER * s
 
     gasse_links = int(rand + g['links'] * s)
     gasse_spalt = int(rand + g['spalt'] * s)
@@ -102,8 +103,8 @@ def main(planpfad):
             unterkante = oben + hoehe
 
         links = e['seite'] == 'links'
-        x0 = LUFT * s if links else breite - rand + LUFT * s
-        satzkasten = ganz([x0, oben, x0 + rand - 2 * LUFT * s, oben + hoehe])
+        x0 = AUSSEN * s if links else breite - rand + AUSSEN * s
+        satzkasten = ganz([x0, oben, x0 + rand - 2 * AUSSEN * s, oben + hoehe])
         gesetzt.append((e, kasten, satzkasten, zeilen))
 
     for e, kasten, satzkasten, zeilen in gesetzt:
