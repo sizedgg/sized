@@ -66,6 +66,20 @@ const abzug = () => page.evaluate(() => {
   // the product.
   const toast = document.querySelector('#toast');
   if (toast) toast.hidden = true;
+
+  // What is typed into a field is a PROPERTY, not an attribute - and
+  // outerHTML only writes attributes. Without this the threshold field came
+  // out of the snapshot showing its placeholder "0", while the list beside it
+  // was filtered at $1,000: a picture that contradicted itself, and the kind
+  // of thing somebody would have reported as a bug in the page.
+  for (const el of document.querySelectorAll('input, textarea')) {
+    el.setAttribute('value', el.value);
+    if (el.tagName === 'TEXTAREA') el.textContent = el.value;
+  }
+  for (const el of document.querySelectorAll('input[type=checkbox], input[type=radio]')) {
+    el.toggleAttribute('checked', el.checked);
+  }
+
   const app = document.querySelector('.app');
   // The topbar sits inside .app, so one subtree is enough. Buttons stay in
   // the markup: they do nothing here, but removing them would change the
