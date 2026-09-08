@@ -131,7 +131,19 @@ begin
               texte[1 + (saat % array_length(texte, 1))],
               w.ui_amount, w.usd_value,
               gelesen,
-              now() - ((saat % 20000) || ' minutes')::interval);
+              -- Aufsteigend innerhalb eines Gespraechs.
+              --
+              -- Vorher stand hier (saat % 20000), also fuer jede Nachricht
+              -- eine zufaellige Zeit - und die Liste zeigt sie in der
+              -- Reihenfolge, in der sie eingefuegt wurden. In den Bildern
+              -- stand dann "Today" ueber "Yesterday" und "Aug 30" darunter.
+              -- Der App war das nicht anzulasten, aber ansehen konnte man
+              -- das keinem.
+              --
+              -- (n - k) zaehlt rueckwaerts: die erste Nachricht ist die
+              -- aelteste. Die Streuung bleibt unter einem Tag (300 bis 900
+              -- Minuten), damit sie die Reihenfolge nicht umwirft.
+              now() - (((n - k) * 1440 + 300 + (saat % 600)) || ' minutes')::interval);
       -- Ansem answers in roughly every third conversation, and only on the
       -- ones already read - an unread thread with an answer under it would
       -- be a state that cannot occur.
@@ -142,7 +154,10 @@ begin
         values (w.address, true,
                 antworten[1 + (saat % array_length(antworten, 1))],
                 w.ui_amount, w.usd_value, true,
-                now() - ((saat % 8000) || ' minutes')::interval);
+                -- Die Antwort kommt zuletzt, also hoechstens 250 Minuten
+                -- zurueck - immer weniger als die 300, die die letzte
+                -- Nachricht des Halters mindestens alt ist.
+                now() - ((saat % 250) || ' minutes')::interval);
       end if;
     end loop;
   end loop;
@@ -227,6 +242,69 @@ alter table public.dms enable trigger all;
 insert into public.poll_totals (poll_id, option_id, votes, usd)
 select v.poll_id, v.option_id, count(*), sum(v.weight_usd)
 from public.votes v group by v.poll_id, v.option_id;
+
+-- ---------------------------------------------------------------------------
+-- Ein Halter, mit dem man sich tatsaechlich anmelden kann
+-- ---------------------------------------------------------------------------
+--
+-- Die 500 Adressen oben sind erfunden. Sie stehen in der Datenbank und sehen
+-- in der Liste richtig aus, aber verify() weist sie ab: isSolanaAddress
+-- verlangt base58, das zu genau 32 Bytes dekodiert, und das tun sie nicht.
+-- Fuer den Posteingang reicht das, dort stehen nur die ersten drei Zeichen -
+-- fuer eine Anmeldung nicht. Wer die Seite AUS DER SICHT eines Halters sehen
+-- will, kommt mit keiner von ihnen hinein.
+--
+-- Diese Adresse ist echtes base58 mit 32 Bytes und steht fest, damit sie
+-- nicht bei jedem Lauf wechselt: sha256('sized-artikel-halter-14').
+--
+-- Die 14 ist nicht willkuerlich. Der lokale Stapel erfindet den Bestand einer
+-- Wallet aus sha256 der Adresse (mockAmount in scripts/dev-stack.mjs) und
+-- ueberschreibt beim Anmelden, was hier eingetragen ist. Die erste gueltige
+-- Adresse landete auf 540 Dollar - unter min_dm_usd, also mit gesperrter
+-- Antwortzeile und "Hold at least $1,000" darunter. Gesucht wurde deshalb
+-- eine, die in der obersten Stufe landet: 21.007.410 Token, rund 88.000
+-- Dollar. Die Zahlen hier stimmen mit dem ueberein, was der Stapel gleich
+-- daraus macht - sonst zeigte die Liste einen anderen Betrag als der Kopf.
+insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen, priced_at)
+values ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', 21007410.0, 88231.0, 0.0042, now(), now() - interval '73 days', now())
+on conflict (address) do update
+  set ui_amount = excluded.ui_amount, usd_value = excluded.usd_value, price = excluded.price;
+
+alter table public.dms disable trigger all;
+insert into public.dms (wallet, from_admin, body, snap_tokens, snap_usd, read_by_admin, created_at)
+values
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'gm — been holding since the first week. is the unlock linear or cliff based?',
+   21007410.0, 88231.0, true, now() - interval '6 days'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   'linear, starts at the end of the month. nothing unlocks before that.',
+   0, 0, true, now() - interval '6 days' + interval '4 hours'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'appreciate it. that was the one thing the docs never said clearly',
+   21007410.0, 88231.0, true, now() - interval '6 days' + interval '5 hours'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'will you cover the new listing on stream?',
+   21007410.0, 88231.0, true, now() - interval '4 days'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   'probably friday. put it in the poll if you want it sooner.',
+   0, 0, true, now() - interval '4 days' + interval '90 minutes'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'done, added it. thanks',
+   21007410.0, 88231.0, true, now() - interval '4 days' + interval '2 hours'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'one more — are the weekly numbers the same snapshot the cards use?',
+   21007410.0, 88231.0, true, now() - interval '2 days'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   'same one. the card prints the timestamp, so you can tell which snapshot it was.',
+   0, 0, true, now() - interval '2 days' + interval '40 minutes'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'perfect, that answers it',
+   21007410.0, 88231.0, true, now() - interval '2 days' + interval '55 minutes'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'voted on the ticker one. keeping it.',
+   21007410.0, 88231.0, false, now() - interval '5 hours');
+alter table public.dms enable trigger all;
+
 
 commit;
 
