@@ -141,8 +141,8 @@ const fieldState = async (wahl) => {
 // --fokus. The value is written here as a literal, not a variable, so an
 // accidental change in the stylesheet shows up here instead of silently
 // going along with it.
-const FOKUS = 'rgb(139, 147, 167)';
-const RUHE  = 'rgb(38, 43, 57)';
+const FOKUS = 'rgb(157, 146, 126)';
+const RUHE  = 'rgb(49, 42, 32)';
 
 // All text fields on the page, not just the three from the poll box: a
 // page with two different focus colors doesn't have one, it has two
@@ -230,6 +230,11 @@ console.log('\nTastatur sieht den Ring, Maus nicht\n');
 // A button that's definitely visible and clickable.
 const BUTTON = '#btn-create-poll';
 
+// The shape before anything is focused - the reference for the check
+// further down.
+const rundungVorher = await page.evaluate((w) =>
+  getComputedStyle(document.querySelector(w)).borderRadius, BUTTON);
+
 await page.click(BUTTON);
 const nachKlick = await page.evaluate((w) => {
   const el = document.querySelector(w);
@@ -258,13 +263,13 @@ check('Der Ring hat dieselbe Farbe wie ein Feld im Fokus',
   nachTab.color === FOKUS, nachTab.color);
 // A fixed border-radius in the focus rule would turn round buttons square.
 check('Die Rundung des Knopfes bleibt im Fokus erhalten',
-  nachTab.rundung === '10px', nachTab.rundung);
+  nachTab.rundung === rundungVorher, `${rundungVorher} -> ${nachTab.rundung}`);
 
 // The ordering that's flipped twice already because something around it
 // moved: a field you're typing in must not be louder than the button that
 // submits it. Without this check, that only shows up once someone sees it -
 // and by then it's unclear which of the two values drifted.
-const GRUND_HEX = '#0a0b0f';
+const GRUND_HEX = '#0d0b08';
 const leuchtHex = (hex) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   return 0.2126 * kanal(r) + 0.7152 * kanal(g) + 0.0722 * kanal(b);

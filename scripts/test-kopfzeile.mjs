@@ -283,7 +283,12 @@ console.log('\nWas peek right steht\n');
   // The same color as everywhere else, checked against the list of four
   // hues from the stylesheet - not against a value copied down here. Whoever
   // changes the hues shouldn't have to touch anything here.
-  const tones = [...css.matchAll(/\.h\.t\d \{ color: (#[0-9a-f]{6}); \}/gi)]
+  //
+  // Read off --name-0..3 rather than the .h.tN rules: the values moved into
+  // the palette when the greys turned warm, and the rules now only hand
+  // them out. Matching on the rules found four var() references and no hues
+  // at all - the check went red without anything about the page being wrong.
+  const tones = [...css.matchAll(/--name-\d:\s*(#[0-9a-f]{6})/gi)]
     .map((m) => m[1]);
   check('Das Blatt kennt vier Namensfarben', tones.length === 4, tones.join(' '));
   const alsRgb = (hex) => 'rgb(' + (hex.replace('#', '').match(/../g) || [])

@@ -1,12 +1,12 @@
 :root {
-  --bg: #0a0b0f;
-  --bg-1: #101218;
-  --bg-2: #161923;
-  --bg-3: #1d212d;
-  --line: #262b39;
-  --text: #e7e9ee;
-  --dim: #8b93a7;
-  --dimmer: #5d657a;
+  --bg: #0d0b08;
+  --bg-1: #14120e;
+  --bg-2: #1c1913;
+  --bg-3: #252119;
+  --line: #312a20;
+  --text: #ece9e2;
+  --dim: #9d927e;
+  --dimmer: #6e6453;
   /* Bone white instead of Solana green. The reason is not taste: the name
      colors are blue, violet, rose and sand, and a saturated accent always
      comes too close to one of them - steel blue was even the exact color
@@ -16,14 +16,14 @@
 
      So every color here has exactly one job: neutral is action, gold
      is Ansem, red is a problem, the four muted tones are people. */
-  --accent: #eceff5;
+  --accent: #f2efe9;
   /* The same tone again, as a plain number triple. Reason: rgba() cannot
      take a color variable, only channels. Without this, every translucent
      spot would have to spell out the color value - and that is exactly how
      it was: "20, 241, 149" sat hardcoded in six places, and recoloring the
      page would have missed all of them. Change --accent, and this changes
      with it. */
-  --accent-rgb: 236, 239, 245;
+  --accent-rgb: 242, 239, 233;
   /* The same color, muted - for filled areas rather than strokes: the
      "Send"/"Start poll" button and your own bubble in a DM. Full bone white
      was too harsh there, not because of the hue but because of the area.
@@ -44,7 +44,7 @@
 
      9.2:1 for the dark text on it - well above the 4.5:1 a control needs
      to count as readable. */
-  --accent-fill: #aab2c2;
+  --accent-fill: #bab1a0;
   /* Amounts. A tone of its own, because none of the existing ones fit:
      --dim (6.4:1) was too quiet - the amount is the core of this page and
      it was ending up the palest thing on the line. --text (16.2:1) is too
@@ -57,7 +57,7 @@
      under white. It would have been tempting to reuse --accent-fill, which
      sits close by; but that tone belongs to filled areas. Recolor the
      button, and the amounts should not change color by accident. */
-  --worth: #b9c0d0;
+  --worth: #c8bfb0;
   /* The border of the field you're currently typing into.
 
      The value shares its number with --dim, but is deliberately its own
@@ -81,7 +81,7 @@
      6.4:1 sits well under the button and well over the 3:1 at which a
      border reliably reads as a state indicator. Resting state sits at
      1.4:1 - the jump stays large either way. */
-  --fokus: #8b93a7;
+  --fokus: #9d927e;
 
   /* --anteil used to live here, the color of the small line under the
      amount: first a vote count, later a percentage. Both are gone again,
@@ -120,7 +120,7 @@
      old translucent fill. That is the price of "exactly like X", and it's
      paid on purpose: X itself lands at 1.73:1, and the rest is missing
      only because our background is #0a0b0f and not pure black. */
-  --fuellung: #343639;
+  --fuellung: #3b352b;
   --fuellung-spitze: #2b5988;
 
   /* The message bubbles in the DMs - their own small set of colors.
@@ -205,7 +205,64 @@
      land at 2.57:1 there - practically invisible as a 6px dot. */
   --ungelesen: #4b9aea;
   --warn: #ff6b6b;
+  /* The text on a red border - one step lighter than the border itself, so
+     the message stays readable without the box turning into a wall of red. */
+  --warn-text: #ffc9c9;
   --gold: #ffcc4d;
+  /* The same tone again as channels, for the same reason as --accent-rgb:
+     the preview banner lays the gold over the page at 12% and draws its
+     border at 45%, and rgba() cannot take a colour variable. */
+  --gold-rgb: 255, 204, 77;
+
+  /* Surfaces that are not a flat --bg-N
+     ------------------------------------------------------------------------
+     Three places let the background show through: the login card, the top
+     bar, and the reply button under the pointer. They are translucent on
+     purpose - two of them have a blur behind them - which is why they
+     cannot simply be --bg-1.
+
+     They used to sit hardcoded in the rule that used them, and that had a
+     cost that only showed when the palette moved: the greys turned warm and
+     these three stayed cold, because nothing connected them to the palette.
+     Same story for the shadows and the four name tones below. Everything
+     that carries a colour now has a name here. */
+  --karte-grund: rgba(20, 18, 14, .82);
+  --topbar-grund: rgba(13, 11, 8, .85);
+  /* A lift, not a colour: whatever this sits on gets one step brighter. */
+  --auflage: rgba(255, 255, 255, .08);
+  /* The border of the row you just copied. Brief, clearly stronger than
+     --line, but it must not glow - see .pay-row.is-copied. */
+  --betont-rand: rgba(255, 255, 255, .45);
+  /* Two shadows, and they are not interchangeable: the first belongs to
+     things that hover ABOVE the page (the timing list, the tooltip), the
+     second to the toast, which is flatter and wider. */
+  --schatten-hoch: 0 12px 28px rgba(0, 0, 0, .55);
+  --schatten-toast: 0 8px 30px rgba(0, 0, 0, .5);
+  /* What sits ON the filled button: the page ground, so the label is a
+     cut-out rather than a second colour. Its own name because it is a job,
+     not a coincidence - the day the button stops being light-on-dark, this
+     line moves and --bg does not. */
+  --knopf-text: var(--bg);
+
+  /* The four people tones.
+     ------------------------------------------------------------------------
+     See .h.t0 further down for what they are and why there are four. The
+     VALUES live here because they belong to the palette; the rules down
+     there only hand them out. They are the one group that did NOT move when
+     the greys turned warm: a hue means a person here, and shifting it would
+     change who is who. */
+  --name-0: #8ab2dc;   /* blue   */
+  --name-1: #ad96dc;   /* violet */
+  --name-2: #dc94ad;   /* rose   */
+  --name-3: #dcc088;   /* sand   */
+  /* The tint on an unread row: --name-0 at 11.5%. Not a fifth background,
+     a wash - the row keeps its shape and only says "there is something
+     here". */
+  --ungelesen-fuellung: rgba(138, 178, 220, .115);
+  /* The timestamp inside your own bubble: the bubble's text colour, turned
+     down. Its own entry because on a lighter bubble it would have to be
+     turned down the other way. */
+  --dm-eigen-zeit: rgba(255, 255, 255, .72);
   /* The text column in the inbox - every preview reaches this far, and
      stops there too. See .thread-prev. */
   --vorschau: 20ch;
@@ -214,7 +271,31 @@
      the word or the gap without changing the math, and the edge frays again. */
   --du-breit: 4ch;
   --du-abstand: -.3rem;
-  --radius: 12px;
+  /* The corners.
+     ------------------------------------------------------------------------
+     Forty numbers used to sit in this file - 4, 5, 6, 8, 9, 10, 12, 16, 18 -
+     each decided on its own, and no way to change the page's shape without
+     going through all forty. They are three names now:
+
+       --radius        containers: cards, panels, fields, buttons
+       --radius-klein  small parts: chips, tags, scrollbar thumbs
+       --radius-innen  the inner edge of a container that carries a border,
+                       one pixel tighter than --radius. Its own name because
+                       subtracting a pixel from zero goes negative, and a
+                       negative radius is not zero - it is invalid, and the
+                       browser silently drops the whole declaration.
+
+     All three sit at 0: the page is right-angled. To get the rounding back,
+     these three lines are the entire change - 12px, 6px, 11px.
+
+     What is NOT in here, on purpose: 50% and 999px. A circle and a pill are
+     shapes in their own right, not corners on a box - the loading spinner,
+     the profile picture, the 6px unread dot, the preview banner. Round them
+     down with everything else and you get a square dot, which does not read
+     as a quieter dot, it reads as a bug. */
+  --radius: 0;
+  --radius-klein: 0;
+  --radius-innen: 0;
   /* The only font on the page - and since the poll card followed suit,
      the only one in the images too. See the reasoning at font-family
      below. */
@@ -377,7 +458,7 @@ code { font-family: var(--mono); }
 
 /* ---------------- Buttons ---------------- */
 .btn {
-  border: 1px solid transparent; border-radius: 10px;
+  border: 1px solid transparent; border-radius: var(--radius);
   padding: .6rem 1rem; cursor: pointer; background: var(--bg-3);
   transition: filter .15s, border-color .15s, background .15s;
   text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
@@ -403,7 +484,7 @@ code { font-family: var(--mono); }
   /* currentColor is switched transparent on the button - the ring
      therefore gets its color from the border color, which isn't touched
      by that. */
-  border-color: var(--bg); border-top-color: transparent;
+  border-color: var(--knopf-text); border-top-color: transparent;
 }
 .btn-ghost.laedt::after, .btn:not(.btn-primary).laedt::after {
   border-color: var(--text); border-top-color: transparent;
@@ -425,14 +506,14 @@ code { font-family: var(--mono); }
    So on desktop the button no longer has its own feedback on hover - just
    the mouse cursor. It still responds on press (.btn:active), and on
    phone, where there's no hover at all, nothing changes either way. */
-.btn-primary { background: var(--accent-fill); color: var(--bg); font-weight: 650; }
+.btn-primary { background: var(--accent-fill); color: var(--knopf-text); font-weight: 650; }
 .btn-primary:hover { filter: none; }
 .btn-outline { background: transparent; border-color: var(--line); color: var(--text); }
 .btn-ghost { background: transparent; color: var(--dim); border-color: transparent; padding: .45rem .7rem; }
 .btn-ghost:hover { color: var(--text); background: var(--bg-2); }
 .icon-btn {
   background: transparent; border: 1px solid var(--line); color: var(--dim);
-  width: 30px; height: 30px; border-radius: 8px; cursor: pointer; line-height: 1;
+  width: 30px; height: 30px; border-radius: var(--radius); cursor: pointer; line-height: 1;
 }
 .icon-btn:hover:not(:disabled) { color: var(--text); border-color: var(--dim); }
 /* Disabled means visibly disabled - without this difference a button
@@ -451,7 +532,7 @@ code { font-family: var(--mono); }
   display: inline-flex; align-items: center; gap: .35rem;
   color: inherit; text-decoration: none; flex: none;
   padding: .25rem var(--marke-luft); margin-left: calc(-1 * var(--marke-luft));
-  border-radius: 8px;
+  border-radius: var(--radius);
   transition: background .15s;
 }
 .brand.brand-link:hover { background: var(--bg-2); }
@@ -511,7 +592,7 @@ code { font-family: var(--mono); }
   appearance: none; background: none; border: 0;
   color: var(--dimmer); font: inherit; font-size: .82rem;
   letter-spacing: .04em; cursor: pointer;
-  min-height: 44px; padding: 0 .8rem; border-radius: 8px;
+  min-height: 44px; padding: 0 .8rem; border-radius: var(--radius);
 }
 .soon-link:hover, .soon-link:focus-visible { color: var(--dim); }
 
@@ -519,8 +600,8 @@ code { font-family: var(--mono); }
   /* Centers the card without clipping it when space runs short - see the
      reasoning at .login above. */
   margin-block: auto;
-  width: min(520px, 100%); background: rgba(16, 18, 24, .82);
-  border: 1px solid var(--line); border-radius: 18px; padding: 2rem;
+  width: min(520px, 100%); background: var(--karte-grund);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 2rem;
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
 /* Brand mark: glyph and word in one row. As flex, not inline text, because
@@ -553,7 +634,7 @@ code { font-family: var(--mono); }
 .field { display: block; margin-bottom: 1rem; }
 .field span { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dimmer); margin-bottom: .4rem; }
 .field input {
-  width: 100%; padding: .75rem .9rem; border-radius: 10px;
+  width: 100%; padding: .75rem .9rem; border-radius: var(--radius);
   background: var(--bg); border: 1px solid var(--line); font-family: var(--mono); font-size: .9rem;
 }
 .field input:focus { outline: none; }
@@ -647,7 +728,7 @@ code { font-family: var(--mono); }
 .login:has(#step-install:not([hidden])) .foot-note { display: none; }
 
 .field textarea {
-  width: 100%; padding: .7rem .9rem; border-radius: 10px; resize: vertical;
+  width: 100%; padding: .7rem .9rem; border-radius: var(--radius); resize: vertical;
   background: var(--bg); border: 1px solid var(--line);
   font-family: var(--mono); font-size: .82rem; overflow-wrap: anywhere;
 }
@@ -656,7 +737,7 @@ code { font-family: var(--mono); }
 
 .sign-block {
   background: var(--bg); border: 1px solid var(--line);
-  border-radius: 10px; padding: .6rem .8rem; margin-bottom: .9rem;
+  border-radius: var(--radius); padding: .6rem .8rem; margin-bottom: .9rem;
 }
 .sign-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .35rem; }
 .sign-message {
@@ -679,7 +760,7 @@ code { font-family: var(--mono); }
 .pay-row {
   display: grid; grid-template-columns: 1fr auto; align-items: center;
   gap: .25rem .6rem; width: 100%; text-align: left;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
   padding: .7rem .8rem; margin-bottom: .6rem; cursor: pointer;
   font: inherit; color: inherit;
   transition: border-color .15s, background .15s;
@@ -697,7 +778,7 @@ code { font-family: var(--mono); }
    the background stays as it is, and the row keeps its shape.
 
    How brief, that lives in app.js (KOPIERT_MS). */
-.pay-row.is-copied { border-color: rgba(255, 255, 255, .45); }
+.pay-row.is-copied { border-color: var(--betont-rand); }
 /* Nothing gets selected in the copy row.
    ----------------------------------------------------------------------------
    The whole row is a button: tap it, it copies. A blue selection next to
@@ -737,7 +818,7 @@ code { font-family: var(--mono); }
 .why {
   background: var(--bg); border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
-  border-radius: 10px; padding: .75rem .9rem; margin-bottom: 1rem;
+  border-radius: var(--radius); padding: .75rem .9rem; margin-bottom: 1rem;
 }
 .why p { margin: 0; font-size: .88rem; color: var(--dim); }
 .why strong { color: var(--text); }
@@ -777,7 +858,7 @@ code { font-family: var(--mono); }
 .glyph {
   display: inline-flex; vertical-align: -.2em; color: var(--accent);
   background: var(--bg-3); border: 1px solid var(--line);
-  border-radius: 6px; padding: .1rem .25rem; margin: 0 .1rem;
+  border-radius: var(--radius-klein); padding: .1rem .25rem; margin: 0 .1rem;
 }
 
 .waiting { display: flex; align-items: center; gap: .55rem; margin: 1.1rem 0 .8rem; font-size: .88rem; color: var(--dim); }
@@ -852,7 +933,7 @@ code { font-family: var(--mono); }
   display: grid; grid-template-columns: 1fr auto 1fr;
   align-items: center; gap: 1rem;
   padding: calc(.7rem + env(safe-area-inset-top, 0px)) calc(1rem + env(safe-area-inset-right, 0px)) .7rem calc(1rem + env(safe-area-inset-left, 0px));
-  border-bottom: 1px solid var(--line); background: rgba(10, 11, 15, .85);
+  border-bottom: 1px solid var(--line); background: var(--topbar-grund);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 5;
 }
 /* Without this, the grid cell would stretch the brand mark to the whole
@@ -870,7 +951,7 @@ code { font-family: var(--mono); }
 
 .tabs { display: flex; gap: .25rem; }
 .tab {
-  background: transparent; border: 1px solid transparent; border-radius: 9px;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
   padding: .45rem .95rem; color: var(--dim); cursor: pointer; position: relative;
 }
 /* The "s" in "DMs". For everyone except Ansem it disappears, space and
@@ -931,10 +1012,10 @@ code { font-family: var(--mono); }
   position: absolute; right: calc(100% + .55rem); top: 50%;
   transform: translateY(-50%);
   z-index: 30; white-space: nowrap;
-  background: var(--bg-1); border: 1px solid var(--line); border-radius: 9px;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--radius);
   padding: .45rem .7rem;
   font-size: .8rem; color: var(--dim);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, .55);
+  box-shadow: var(--schatten-hoch);
 }
 /* It appears while the pointer sits on the picture, and disappears the
    moment it moves off. One rule, no state - a class set by a click used
@@ -1014,7 +1095,7 @@ code { font-family: var(--mono); }
 .poll-list::-webkit-scrollbar { width: 0; height: 0; }
 
 .scroll::-webkit-scrollbar { width: 5px; }
-.scroll::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 3px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: var(--radius-klein); }
 /* And in the inbox, no browser scrollbar at all, but a custom line of our
    own next to it.
    ----------------------------------------------------------------------------
@@ -1055,7 +1136,7 @@ code { font-family: var(--mono); }
      it IS the edge. Sitting inside, it looked like something floating in
      the column; this way it belongs to the border. */
   position: absolute; right: -1px; top: 0;
-  width: 4px; height: 40px; border-radius: 2px;
+  width: 4px; height: 40px; border-radius: var(--radius-klein);
   background: color-mix(in srgb, var(--dimmer) 70%, var(--bg-1));
   pointer-events: none;
   opacity: 0; transition: opacity .35s ease;
@@ -1080,10 +1161,10 @@ code { font-family: var(--mono); }
    tell them apart. With 58 cubed = 195,112 possible handles, that only
    starts happening at a noticeable rate at a few thousand users, and the
    full address is in the message's tooltip. */
-.h.t0 { color: #8ab2dc; }   /* blue   */
-.h.t1 { color: #ad96dc; }   /* violet */
-.h.t2 { color: #dc94ad; }   /* rose   */
-.h.t3 { color: #dcc088; }   /* sand   */
+.h.t0 { color: var(--name-0); }
+.h.t1 { color: var(--name-1); }
+.h.t2 { color: var(--name-2); }
+.h.t3 { color: var(--name-3); }
 
 /* Ansem shows the same three characters as everyone else - but always in
    this one color, the accent. It's the brightest one on the page and
@@ -1125,7 +1206,7 @@ input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .filter-group {
   display: flex; align-items: center; gap: .3rem;
-  background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px; padding: .2rem .5rem;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--radius); padding: .2rem .5rem;
 }
 .filter-group input { width: 86px; background: transparent; border: 0; outline: none; font-family: var(--mono); font-size: .82rem; }
 /* And the replacement for that outline: none - it was missing for a long
@@ -1225,7 +1306,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   display: inline-flex; align-items: center; justify-content: center;
   margin-left: .3rem; vertical-align: -.15em;
   background: none; border: 0; color: var(--dimmer); cursor: pointer;
-  font-size: .95rem; line-height: 1; padding: .1rem .3rem; border-radius: 6px;
+  font-size: .95rem; line-height: 1; padding: .1rem .3rem; border-radius: var(--radius-klein);
   opacity: 0; pointer-events: none;
   transition: opacity .12s, color .12s, background .12s;
 }
@@ -1238,7 +1319,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    surface, the button would be a dark hole instead of a highlight. A
    translucent white is one step brighter than whatever it sits on, on any
    background. */
-.reply-btn:hover { color: var(--accent); background: rgba(255, 255, 255, .08); }
+.reply-btn:hover { color: var(--accent); background: var(--auflage); }
 /* No permission to write, no need for a reply button either. */
 .no-write .reply-btn { display: none; }
 /* As long as the database doesn't have the reply column, there's no
@@ -1317,7 +1398,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   width: fit-content; max-width: 100%;
   padding: .5rem .7rem; margin-top: .7rem;
   background: var(--bg-1); border: 1px solid var(--line);
-  border-left: 3px solid var(--accent); border-radius: 10px;
+  border-left: 3px solid var(--accent); border-radius: var(--radius);
   font-size: .86rem; color: var(--dim); min-width: 0;
 }
 .reply-bar-mark { color: var(--accent); flex: none; }
@@ -1394,7 +1475,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    hit area wasn't tappable. Affects iPhone SE 1, old Android devices,
    split screen, and iOS display zoom. */
 .composer input {
-  flex: 1; min-width: 0; padding: .7rem .9rem; border-radius: 10px;
+  flex: 1; min-width: 0; padding: .7rem .9rem; border-radius: var(--radius);
   background: var(--bg-1); border: 1px solid var(--line);
 }
 .composer input:focus { outline: none; }
@@ -1409,7 +1490,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   display: flex; align-items: center; gap: .6rem;
   padding: .8rem .9rem; margin-top: .7rem;
   border: 1px solid var(--line); border-top-color: var(--line);
-  border-radius: 10px; background: var(--bg-1);
+  border-radius: var(--radius); background: var(--bg-1);
   font-size: .9rem; color: var(--dim);
 }
 .gate .lock { color: var(--dimmer); flex: none; display: inline-flex; }
@@ -1553,7 +1634,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 
 #poll-admin-felder { display: flex; flex-direction: column; gap: .5rem; }
 .poll-admin input {
-  padding: .6rem .8rem; border-radius: 9px; background: var(--bg); border: 1px solid var(--line);
+  padding: .6rem .8rem; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--line);
   transition: border-color .15s;
 }
 /* These three fields were the only ones on the page with no focus rule of
@@ -1657,7 +1738,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    the longest label is "Minutes" - but they didn't add up at 390px. */
 .lz-feld {
   flex: 1; min-width: 0; position: relative;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
   transition: border-color .15s;
 }
 .lz-name { display: block; font-size: .72rem; color: var(--dimmer); }
@@ -1717,12 +1798,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
      leaves some air at the bottom: the list opens DOWNWARD, and at 17rem
      its edge sat ten pixels past the bottom of the screen. */
   max-height: 14rem; overflow-y: auto; overscroll-behavior: contain;
-  background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px;
-  padding: .25rem; box-shadow: 0 12px 28px rgba(0, 0, 0, .55);
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: .25rem; box-shadow: var(--schatten-hoch);
   scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent;
 }
 .lz-liste::-webkit-scrollbar { width: 8px; }
-.lz-liste::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+.lz-liste::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: var(--radius-klein); }
 /* Full width, thumb height.
    ---------------------------------------------------------------------------
    Measured at 27 x 32px - a target the size of a pea, sixty of them
@@ -1734,7 +1815,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    this changes nothing visible except a bigger hit area. */
 .lz-eintrag {
   display: block; width: 100%; text-align: left;
-  min-height: 44px; padding: .28rem .6rem; border-radius: 5px; cursor: pointer;
+  min-height: 44px; padding: .28rem .6rem; border-radius: var(--radius-klein); cursor: pointer;
   font-family: var(--mono); font-size: .88rem; color: var(--dim);
 }
 /* The marker is what the arrow keys point at - not the selection. It
@@ -1890,7 +1971,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    better. test-polls-tab.mjs checks the math on every run. */
 .opt-bar {
   position: relative; border: 1px solid var(--line);
-  border-radius: 9px; overflow: hidden; min-height: 44px; display: flex; align-items: center;
+  border-radius: var(--radius); overflow: hidden; min-height: 44px; display: flex; align-items: center;
   transition: background .15s;
 }
 /* Under the pointer, the AREA gets brighter, not the border.
@@ -2055,7 +2136,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 }
 .opt-num .held { display: block; color: var(--text); font-size: .95rem; font-weight: 650; }
 .opt.leads .opt-num .held { color: var(--accent); }
-.closed-tag { font-size: .68rem; background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; }
+.closed-tag { font-size: .68rem; background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius-klein); padding: 0 .3rem; }
 
 /* The time remaining in a poll's header.
    Brighter than the rest of the row (--dim instead of --dimmer): what's
@@ -2118,7 +2199,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 .thread-list { display: flex; flex-direction: column; min-height: 0; }
 #thread-items {
   flex: 1; min-height: 0;
-  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+  border-radius: 0 0 var(--radius-innen) var(--radius-innen);
 }
 
 /* The whole block stays put while scrolling, not just the heading. With
@@ -2137,7 +2218,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   /* Its own top corners, now that the column no longer clips. Minus the
      border width, or the rounding sits a pixel too far out and the border
      shows through at the corner. */
-  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  border-radius: var(--radius-innen) var(--radius-innen) 0 0;
 }
 .thread-head {
   padding: .7rem .8rem; border-bottom: 1px solid var(--line);
@@ -2173,7 +2254,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   font-size: .74rem; color: var(--dimmer);
 }
 .btn-mini {
-  font-size: .72rem; padding: .18rem .45rem; border-radius: 6px;
+  font-size: .72rem; padding: .18rem .45rem; border-radius: var(--radius-klein);
   min-height: 0; flex: none;
 }
 /* A dimming for hidden rows used to sit here: they were mixed in among
@@ -2219,7 +2300,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    the last one wins. A conversation under the pointer and an open
    conversation should show their own background, not the blue one.
    Reorder these and you flip the behavior. */
-.thread.is-unread { background: rgba(138, 178, 220, .115); }
+.thread.is-unread { background: var(--ungelesen-fuellung); }
 /* Unread is shown twice: a tinted row and brighter text. The text part
    used to be --dim against --dimmer; now that the preview row itself
    sits at --dim, that would no longer be a difference. Hence one step
@@ -2403,7 +2484,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   /* 18px instead of 12: on X, the bubbles are so round that a one-line
      one is almost a capsule. Not 999px - that would turn a three-line
      bubble into a sausage. 18 handles both cases. */
-  border: 0; border-radius: 18px;
+  border: 0; border-radius: var(--radius);
   background: var(--dm-fremd);
   color: var(--dm-fremd-text);
 }
@@ -2447,11 +2528,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 /* --dimmer isn't visible on the blue anymore. So the timestamp uses the
    same color as the text next to it, just turned down - the same ratio
    as in the dark bubble, just mixed the other way around. */
-.msg.dm.mine .time { color: rgba(255, 255, 255, .72); }
+.msg.dm.mine .time { color: var(--dm-eigen-zeit); }
 /* A link on blue: white and underlined. --worth would be nearly invisible
    there. */
-.msg.dm.mine .body a { color: #fff; }
-.msg.dm.mine .body a:hover { color: #fff; }
+.msg.dm.mine .body a { color: var(--dm-eigen-text); }
+.msg.dm.mine .body a:hover { color: var(--dm-eigen-text); }
 
 /* ---- The reply: header and quote bubble, both OUTSIDE the message bubble ----
    That's how X does it. The gain isn't just visual: inside the bubble,
@@ -2468,7 +2549,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
      everything from that. */
   display: block; width: auto; max-width: 78%;
   margin: 0; padding: .35rem .85rem;
-  border: 0; border-radius: 16px;
+  border: 0; border-radius: var(--radius);
   background: var(--dm-fremd); color: var(--dm-zitat-text);
   font-size: .86rem; text-align: left;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2524,10 +2605,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 /* ---------------- Toast ---------------- */
 .toast {
   position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
-  background: var(--bg-3); border: 1px solid var(--line); border-radius: 10px;
-  padding: .6rem 1rem; font-size: .86rem; z-index: 50; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: .6rem 1rem; font-size: .86rem; z-index: 50; box-shadow: var(--schatten-toast);
 }
-.toast.err { border-color: var(--warn); color: #ffc9c9; }
+.toast.err { border-color: var(--warn); color: var(--warn-text); }
 
 /* ==========================================================================
    Phone
@@ -2789,7 +2870,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 
   /* --- Login --- */
   .login { padding: 1.2rem .8rem; justify-content: flex-start; padding-top: 2.2rem; }
-  .login-card { padding: 1.3rem 1.1rem; border-radius: 16px; }
+  .login-card { padding: 1.3rem 1.1rem; border-radius: var(--radius); }
   .brand { font-size: 1.25rem; margin-bottom: 1.1rem; }
   .field input { font-size: 16px; min-height: 48px; }
   .login .btn { min-height: 48px; }
@@ -2830,7 +2911,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   position: fixed; left: 50%; bottom: .8rem; transform: translateX(-50%);
   z-index: 40; max-width: min(560px, calc(100% - 1.6rem));
   padding: .5rem .85rem; border-radius: 999px;
-  background: rgba(255, 204, 77, .12); border: 1px solid rgba(255, 204, 77, .45);
+  background: rgba(var(--gold-rgb), .12); border: 1px solid rgba(var(--gold-rgb), .45);
   color: var(--gold); font-size: .78rem; text-align: center;
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); pointer-events: none;
 }

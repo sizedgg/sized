@@ -2540,7 +2540,13 @@ function truncate(ctx, text, maxW) {
  */
 const IMAGE_WIDTH = 1600;   // points; the canvas is twice as large
 const BILD_SKALA = 2;
-const BILD_ECKE = 28;
+/* The corners in the image, the same three names the stylesheet carries -
+   see the block at --radius in styles.css. Zero: the card is right-angled
+   like the page. The logo mark keeps its rounding, because it is a mark and
+   not a box. */
+const BILD_ECKE = 0;
+const BALKEN_ECKE = 0;   /* an answer bar */
+const SCHILD_ECKE = 0;   /* the CLOSED tag */
 
 /**
  * The version of the card image. BUMP THIS when the look changes.
@@ -2559,7 +2565,7 @@ const BILD_ECKE = 28;
  * have to match, or the card points at a file that doesn't exist, and the
  * link gets the fallback card instead.
  */
-const CARD_VERSION = 9;
+const CARD_VERSION = 10;
 
 /** The card image's filename in storage - defined in one place, not three. */
 const cardFile = (id) => `poll-${id}-v${CARD_VERSION}.png`;
@@ -2847,7 +2853,7 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
     ctx.font = `600 15px ${mono}`;
     const w = ctx.measureText('CLOSED').width + 18;
     ctx.fillStyle = color.balken;
-    roundedRect(ctx, x, y + 8, w, 26, 5);
+    roundedRect(ctx, x, y + 8, w, 26, SCHILD_ECKE);
     ctx.fill();
     ctx.strokeStyle = color.linie;
     ctx.lineWidth = 1;
@@ -2918,7 +2924,7 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
     // neutral. Next to --bg-3, the empty part then looked like a second,
     // blue-tinted bar sitting behind the first - two boxes instead of one
     // bar in a track.
-    roundedRect(ctx, margin, y, content, optH, 13);
+    roundedRect(ctx, margin, y, content, optH, BALKEN_ECKE);
     // The leading bar used to have a second, brighter 2px border here.
     // That's gone since the fill became a color: being in the lead is now
     // communicated by the blue, and saying the same thing twice doesn't
@@ -2947,7 +2953,7 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
     const fillB = Math.max(0, Math.min(1, o.share)) * content;
     if (fillB > 1) {
       ctx.save();
-      roundedRect(ctx, margin, y, content, optH, 13);
+      roundedRect(ctx, margin, y, content, optH, BALKEN_ECKE);
       ctx.clip();
       ctx.fillStyle = spitze ? color.fuellungSpitze : color.fuellung;
       ctx.fillRect(margin, y, fillB, optH);
