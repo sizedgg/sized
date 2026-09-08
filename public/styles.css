@@ -896,7 +896,20 @@ code { font-family: var(--mono); }
    exactly what made it flash before. */
 .pay-row.is-copied .copy-hint { color: var(--dim); }
 .pay-value { grid-column: 1 / -1; overflow-wrap: anywhere; }
-.pay-value.big { font-size: 1.3rem; color: var(--accent); font-weight: 600; letter-spacing: .01em; }
+/* The amount carries no colour of its own - the same ink as the address
+   below it.
+   ---------------------------------------------------------------------------
+   It used to be --accent, on the reasoning that the amount is the core of
+   this screen. It is, and it stays the most prominent thing here: 1.3rem
+   against .88, and 600 against 400. Size and weight say that; a third
+   signal on top said it again in a different language.
+
+   What the colour cost: the two rows are the same KIND of thing - a value
+   to copy, one per row - and colouring one of them made them look like two
+   different kinds. And on a light ground it got worse rather than better,
+   because the accent there is a warm ochre and the address next to it is
+   near-black. */
+.pay-value.big { font-size: 1.3rem; color: var(--text); font-weight: 600; letter-spacing: .01em; }
 .mono-sm { font-size: .88rem; color: var(--text); line-height: 1.6; letter-spacing: .02em; }
 
 /* ---------------- Startbildschirm-Schritt ---------------- */
@@ -3009,15 +3022,39 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 /* ---------------- Admin preview ----------------
    Sits fixed at the bottom edge and is deliberately noticeable: a surface
    that looks like Ansem's but has none of his permissions has to explain
-   itself - or the save errors it produces get mistaken for bugs. */
+   itself - or the save errors it produces get mistaken for bugs.
+
+   It can be closed, and that is not a softening of the warning but the same
+   trade the demo-mode bar lost (see the note at PREVIEW_ADMIN in app.js): a
+   permanent bar across the bottom edge ends up in every screenshot and every
+   recording of this preview, which is what the preview is FOR. Closing is a
+   deliberate act, so the sentence has been read by then; and it comes back
+   on the next page load, so nobody inherits a hidden warning.
+
+   pointer-events stays none on the bar itself and is switched on only for
+   the close button. The bar floats over the content, and a strip that
+   swallows clicks meant for what is underneath is worse than a bar that is
+   merely visible. */
 .preview-flag {
   position: fixed; left: 50%; bottom: .8rem; transform: translateX(-50%);
   z-index: 40; max-width: min(560px, calc(100% - 1.6rem));
-  padding: .5rem .85rem; border-radius: 999px;
+  padding: .5rem .4rem .5rem .85rem; border-radius: 999px;
   background: rgba(var(--gold-rgb), .12); border: 1px solid rgba(var(--gold-rgb), .45);
   color: var(--gold); font-size: .78rem; text-align: center;
+  display: flex; align-items: center; gap: .5rem;
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); pointer-events: none;
 }
+.flag-zu {
+  pointer-events: auto; cursor: pointer;
+  background: transparent; border: 0; color: inherit;
+  font: inherit; font-size: 1rem; line-height: 1;
+  /* 28px, not the 44 a finger needs: this sits on a developer's own machine
+     on localhost, and a 44px circle next to a one-line hint would be bigger
+     than the hint. */
+  width: 28px; height: 28px; border-radius: 999px; flex: none;
+  opacity: .75;
+}
+.flag-zu:hover { opacity: 1; background: rgba(var(--gold-rgb), .16); }
 
 /* ---- Touch hit areas, independent of width ---------------------------
    The block above hangs off (max-width: 760px). But a phone in landscape
