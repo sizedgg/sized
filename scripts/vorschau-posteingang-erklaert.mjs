@@ -215,6 +215,8 @@ const { kaesten, gassen } = await page.evaluate(() => {
       links: liste.x - 14,
       spalt: (liste.x + liste.w + fenster.x) / 2,
       frei: (verlauf.y + (ersteBlase ? ersteBlase.y : verlauf.y + 200)) / 2,
+      // Mitte des Gespraechsfensters - dort steht das Wasserzeichen.
+      fenstermitte: fenster.x + fenster.w / 2,
       blaseOben: ersteBlase ? ersteBlase.y : null,
       verlaufOben: verlauf.y,
     },
