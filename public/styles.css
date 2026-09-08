@@ -1,12 +1,12 @@
 :root {
-  --bg: #0d0b08;
-  --bg-1: #14120e;
-  --bg-2: #1c1913;
-  --bg-3: #252119;
-  --line: #312a20;
-  --text: #ece9e2;
-  --dim: #9d927e;
-  --dimmer: #6e6453;
+  --bg: #0a0b0f;
+  --bg-1: #101218;
+  --bg-2: #161923;
+  --bg-3: #1d212d;
+  --line: #262b39;
+  --text: #e7e9ee;
+  --dim: #8b93a7;
+  --dimmer: #5d657a;
   /* Bone white instead of Solana green. The reason is not taste: the name
      colors are blue, violet, rose and sand, and a saturated accent always
      comes too close to one of them - steel blue was even the exact color
@@ -16,14 +16,14 @@
 
      So every color here has exactly one job: neutral is action, gold
      is Ansem, red is a problem, the four muted tones are people. */
-  --accent: #f2efe9;
+  --accent: #eceff5;
   /* The same tone again, as a plain number triple. Reason: rgba() cannot
      take a color variable, only channels. Without this, every translucent
      spot would have to spell out the color value - and that is exactly how
      it was: "20, 241, 149" sat hardcoded in six places, and recoloring the
      page would have missed all of them. Change --accent, and this changes
      with it. */
-  --accent-rgb: 242, 239, 233;
+  --accent-rgb: 236, 239, 245;
   /* The same color, muted - for filled areas rather than strokes: the
      "Send"/"Start poll" button and your own bubble in a DM. Full bone white
      was too harsh there, not because of the hue but because of the area.
@@ -44,7 +44,7 @@
 
      9.2:1 for the dark text on it - well above the 4.5:1 a control needs
      to count as readable. */
-  --accent-fill: #bab1a0;
+  --accent-fill: #aab2c2;
   /* Amounts. A tone of its own, because none of the existing ones fit:
      --dim (6.4:1) was too quiet - the amount is the core of this page and
      it was ending up the palest thing on the line. --text (16.2:1) is too
@@ -57,7 +57,7 @@
      under white. It would have been tempting to reuse --accent-fill, which
      sits close by; but that tone belongs to filled areas. Recolor the
      button, and the amounts should not change color by accident. */
-  --worth: #c8bfb0;
+  --worth: #b9c0d0;
   /* The border of the field you're currently typing into.
 
      The value shares its number with --dim, but is deliberately its own
@@ -81,7 +81,7 @@
      6.4:1 sits well under the button and well over the 3:1 at which a
      border reliably reads as a state indicator. Resting state sits at
      1.4:1 - the jump stays large either way. */
-  --fokus: #9d927e;
+  --fokus: #8b93a7;
 
   /* --anteil used to live here, the color of the small line under the
      amount: first a vote count, later a percentage. Both are gone again,
@@ -120,7 +120,7 @@
      old translucent fill. That is the price of "exactly like X", and it's
      paid on purpose: X itself lands at 1.73:1, and the rest is missing
      only because our background is #0a0b0f and not pure black. */
-  --fuellung: #3b352b;
+  --fuellung: #343639;
   --fuellung-spitze: #2b5988;
 
   /* The message bubbles in the DMs - their own small set of colors.
@@ -221,13 +221,15 @@
      purpose - two of them have a blur behind them - which is why they
      cannot simply be --bg-1.
 
-     They used to sit hardcoded in the rule that used them, and that had a
-     cost that only showed when the palette moved: the greys turned warm and
-     these three stayed cold, because nothing connected them to the palette.
-     Same story for the shadows and the four name tones below. Everything
-     that carries a colour now has a name here. */
-  --karte-grund: rgba(20, 18, 14, .82);
-  --topbar-grund: rgba(13, 11, 8, .85);
+     They used to sit hardcoded in the rule that used them, and the cost of
+     that only showed when the palette was moved for a trial run: the ground
+     changed and these three stayed where they were, because nothing
+     connected them to it. Same story for the shadows and the four name
+     tones below. Everything that carries a colour has a name here now, so
+     that changing the page's colour is a change to this block and nothing
+     else. */
+  --karte-grund: rgba(16, 18, 24, .82);
+  --topbar-grund: rgba(10, 11, 15, .85);
   /* A lift, not a colour: whatever this sits on gets one step brighter. */
   --auflage: rgba(255, 255, 255, .08);
   /* The border of the row you just copied. Brief, clearly stronger than
@@ -248,9 +250,7 @@
      ------------------------------------------------------------------------
      See .h.t0 further down for what they are and why there are four. The
      VALUES live here because they belong to the palette; the rules down
-     there only hand them out. They are the one group that did NOT move when
-     the greys turned warm: a hue means a person here, and shifting it would
-     change who is who. */
+     there only hand them out. */
   --name-0: #8ab2dc;   /* blue   */
   --name-1: #ad96dc;   /* violet */
   --name-2: #dc94ad;   /* rose   */
