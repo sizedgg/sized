@@ -70,7 +70,7 @@ const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
  * only once, so a new number is the only way to make existing polls redraw
  * their card.
  */
-const CARD_VERSION = 11;
+const CARD_VERSION = 12;
 
 /**
  * The page for the crawler.

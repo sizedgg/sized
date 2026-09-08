@@ -82,7 +82,10 @@ const daten = await page.evaluate(async () => {
   const x0 = (B - gesamt) / 2;
   const y0 = H / 2 - 96;
 
-  ctx.fillStyle = v('--accent');
+  // --marke, not --accent: the mark has had a name of its own since it
+  // stopped simply being the accent colour. The poll cards made the same
+  // mistake and drew the logo in --accent while the site had already moved on.
+  ctx.fillStyle = v('--marke');
   rr(x0, y0 + 38 * e, 18 * e, 26 * e, 9 * e); ctx.fill();
   rr(x0 + 24 * e, y0, 18 * e, 64 * e, 9 * e); ctx.fill();
   ctx.font = `700 ${Math.round(height * .82)}px ${v('--mono')}`;

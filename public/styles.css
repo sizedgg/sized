@@ -136,10 +136,10 @@
      brightness (ΔE 16.9 against the card, versus 13.8). */
   --fuellung: #ded8c8;
   --fuellung-spitze: #ccdcef;
-  /* The brand mark. Deliberately a reference and not a copy: the mark IS the
-     winning bar's colour, and two identical values in two places stop being
-     identical the first time one of them is touched. See .brand-mark. */
-  --marke: var(--fuellung-spitze);
+  /* The brand mark. A reference and not a copy, so the two can never drift
+     apart - but it points at the filled BUTTON now, not at the winning bar.
+     See .brand-mark for what changed and why. */
+  --marke: var(--accent-fill);
 
   /* The message bubbles in the DMs - their own small set of colors.
      ------------------------------------------------------------------------
@@ -687,23 +687,25 @@ code { font-family: var(--mono); }
    without maintaining two sizes.
    fill="currentColor" in the SVG means: the color comes from here, and a
    change to the accent color reaches the glyph along with it. */
-/* The mark carries the colour of the winning answer.
+/* The mark carries the colour of the filled buttons.
    ---------------------------------------------------------------------------
-   Not the accent, and not a value of its own: literally --fuellung-spitze, so
-   the two can never drift apart. That was the decision - the logo is the
-   colour of a poll that has been won.
+   Not a value of its own: literally --accent-fill, the same blue as Continue
+   and Send, so the two can never drift apart. Recolour the button and the
+   logo follows.
 
-   Measured, and stated here because it is unusual: #ccdcef against the page
-   ground is 1.25:1. As a BAR that value is right, because it is a surface
-   with text on top and has to stay pale. As a mark it is a shape with nothing
-   on top, and at 1.25:1 the shape is barely there. That is the intent, not an
-   oversight - do not "fix" it by darkening it, and if it ever has to be
-   darkened, change --marke here rather than the bar.
+   It pointed at --fuellung-spitze before, and the reasoning was good on its
+   own terms - the logo is the colour of a poll that has been won. What that
+   decision could not survive was the number: the winning bar has to stay pale
+   because it is a surface with a line of text lying on it, and a pale fill is
+   1.25:1 against the page. As a bar that is correct. As a mark it is a shape
+   with nothing on top, and at 1.25:1 there is no shape.
 
-   It read 1.12:1 when this was decided; the bar has since gone one step
-   darker for reasons of its own (see --fuellung-spitze) and dragged the mark
-   with it, which is exactly what the reference is for. Still nowhere near
-   the 3:1 a shape needs, so nothing about the decision has changed. */
+   So the mark went to the other end of the same blue. --accent-fill is
+   6.52:1 on the page ground, 6.98:1 on a card, 6.17:1 on the darker surface
+   the top bar shows under a hover - it reads everywhere, and it still ties
+   the logo to something rather than being a colour nobody can account for.
+
+   The bar keeps its own value; the two are simply no longer the same thing. */
 .brand-mark {
   display: block; height: 1.05em; flex: none;
   color: var(--marke);

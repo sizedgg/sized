@@ -362,38 +362,37 @@ console.log('\nDas Blau kommt erst zum Schluss\n');
 // ITSELF, read from the same stylesheet the card draws from: whatever
 // --fuellung-spitze happens to be, this finds that colour and nothing else.
 // Antialiased edges are why it is a distance and not an equality.
-// Two things had to change here, and both were the instrument being wrong
-// rather than the card.
+// "Noticeably more blue than red" worked for exactly as long as the leading
+// fill was the only blue in the palette. On paper it is not - the accent, the
+// buttons and the mark are all blue - and the old rule found 346 blue pixels
+// on an open card and called them a declaration. They were the logo.
 //
-// 1. "Noticeably more blue than red" worked for exactly as long as the
-//    leading fill was the only blue in the palette. On paper it is not: the
-//    accent is a dark blue, the mark a pale one. The old rule found 346 blue
-//    pixels on an open card and called them a declaration - they were the
-//    logo. So this matches the fill ITSELF, read from the same stylesheet the
-//    card draws from. Antialiasing is why it is a distance, not an equality.
+// So nothing here counts "blue" any more. Each colour is looked up by NAME in
+// the same stylesheet the card draws from and then matched as itself, which
+// means this keeps working through the next palette too. Antialiasing is why
+// it is a distance and not an equality.
 //
-// 2. Matching the fill exactly is not enough either, because the mark now
-//    carries that very value (--marke references --fuellung-spitze - that was
-//    the decision, see styles.css). The colour is therefore on every card,
-//    open or closed, up in the header. The claim was never about the header:
-//    it is that the WINNER'S BAR is not painted before the poll closes. So
-//    the header comes out of the frame.
-//
-// Measured, so the boundary is not a guess: on an open card the matching
-// pixels sit at y 80..109, which is the logo and nothing else. On a closed
-// one they run 80..496 - logo plus bars. 168 (a fifth of the 838px card)
-// sits clear of the first and well above the second.
+// The card is still split at a line, and that is worth keeping even though
+// the mark no longer carries the bar's colour: it lets the two claims be made
+// separately - no winner's fill DOWN in the answers, and a mark that is
+// actually drawn UP in the header. Measured rather than guessed: the logo
+// occupies y 80..109 of the 838px card, the bars run to 496. A fifth of the
+// height sits clear of the first and well above the second.
 const KOPFBAND = 0.2;
 
-const blauImBild = (poll) => page.evaluate(async ({ p, anteil }) => {
-  const roh = getComputedStyle(document.documentElement)
-    .getPropertyValue('--fuellung-spitze').trim();
-  const soll = roh.startsWith('#')
-    ? [1, 3, 5].map((i) => parseInt(roh.slice(i, i + 2), 16))
-    : roh.match(/\d+/g).slice(0, 3).map(Number);
+const farbenImBild = (poll) => page.evaluate(async ({ p, anteil }) => {
+  const wert = (name) => {
+    const roh = getComputedStyle(document.documentElement)
+      .getPropertyValue(name).trim();
+    return roh.startsWith('#')
+      ? [1, 3, 5].map((i) => parseInt(roh.slice(i, i + 2), 16))
+      : roh.match(/\d+/g).slice(0, 3).map(Number);
+  };
+  const fuellung = wert('--fuellung-spitze');
+  const marke = wert('--marke');
   const c = await window.drawPoll(p, { fuerKarte: true });
   const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-  const treffer = (von, bis) => {
+  const treffer = (soll, von, bis) => {
     let n = 0;
     for (let y = von; y < bis; y++) {
       for (let x = 0; x < c.width; x++) {
@@ -406,11 +405,16 @@ const blauImBild = (poll) => page.evaluate(async ({ p, anteil }) => {
     return n;
   };
   const grenze = Math.round(c.height * anteil);
-  return { balken: treffer(grenze, c.height), kopf: treffer(0, grenze) };
+  return {
+    balken: treffer(fuellung, grenze, c.height),
+    marke: treffer(marke, 0, grenze),
+    // The two must not BE the same colour, or neither number means anything.
+    gleich: fuellung.every((v, i) => Math.abs(v - marke[i]) <= 6),
+  };
 }, { p: poll, anteil: KOPFBAND });
 
-const offenBlau = await blauImBild(CASES.normal);
-const zuBlau = await blauImBild(CASES.shut);
+const offenBlau = await farbenImBild(CASES.normal);
+const zuBlau = await farbenImBild(CASES.shut);
 check('Eine laufende Abstimmung hat kein Blau auf den Balken',
   offenBlau.balken === 0, `${offenBlau.balken} blaue Punkte unter dem Kopf`);
 // The counter-check belongs here too: without it, the check above would
@@ -420,17 +424,26 @@ check('Eine geschlossene sehr wohl – und zwar flächig',
 
 // And the same thing one level deeper: it hinges on closing, not on this
 // particular poll happening to have different numbers.
-const gedreht = await blauImBild({ ...CASES.normal, closed: true });
+const gedreht = await farbenImBild({ ...CASES.normal, closed: true });
 check('Dieselbe Abstimmung, nur shut, bekommt ihr Blau',
   gedreht.balken > 10000, `${gedreht.balken} blaue Punkte`);
 
-// The cut itself needs a check, otherwise it is just a number that makes the
-// test pass. Above the line the colour has to BE there on an open card - that
-// is the mark, drawn in the winner's colour on purpose. If this ever goes to
-// zero, either the mark stopped following --marke or the band slipped, and in
-// both cases the check above would be green for the wrong reason.
-check('Über dem Schnitt liegt sie auch bei laufender Abstimmung – das ist die Marke',
-  offenBlau.kopf > 100, `${offenBlau.kopf} Punkte im Kopf`);
+// The cut needs its own checks, otherwise it is just a number that makes the
+// test pass.
+//
+// Above the line the MARK has to be there, in --marke, even on an open card.
+// The card used to draw the logo in --accent while the site had already moved
+// to --marke, and nothing caught it: the shared image quietly disagreed with
+// the page it came from. If this goes to zero, either the card stopped
+// following the token or the band slipped.
+check('Über dem Schnitt steht die Marke, auch bei laufender Abstimmung',
+  offenBlau.marke > 100, `${offenBlau.marke} Punkte im Kopf`);
+// And the whole split only tells you anything while the two colours can be
+// told apart. --marke pointed at --fuellung-spitze for a while, and during
+// that time "no winner's fill on an open card" was unprovable from the pixels
+// alone - the logo carried the same value. It points at --accent-fill now.
+check('Marke und fuehrende Fuellung sind unterscheidbare Farben',
+  !offenBlau.gleich, offenBlau.gleich ? 'identisch' : 'verschieden');
 
 // The calculation lives in ONE place, because the list and the card would
 // otherwise drift apart: a shared image would then show a winner the page

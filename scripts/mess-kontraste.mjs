@@ -134,6 +134,13 @@ const PAARE = [
   ['Betrag/Grund',          '--worth',       '--bg',    4.5, 'dieselbe Spalte ohne Panel'],
   ['Knopfschrift',          '--knopf-text',  '--accent-fill', 4.5, 'Beschriftung auf "Senden"'],
   ['Akzent als Strich',     '--accent',      '--bg-1',  3.0, 'Rahmen und Verweise'],
+  // The mark was deliberately unmeasurable for a while: it carried the
+  // winning bar's colour, which is pale because it has text lying on it, and
+  // at 1.25:1 on the paper there was no shape to measure. It points at the
+  // filled button now, so it can be held to what a shape needs - 3:1, the
+  // same floor as any other graphic that is not text.
+  ['Marke',                 '--marke',       '--bg',    3.0, 'die zwei Balken neben SIZED'],
+  ['Marke auf der Karte',   '--marke',       '--bg-1',  3.0, 'dieselbe im Anmeldefenster'],
   ['Fokusrahmen',           '--fokus',       '--bg-1',  3.0, 'das Feld, in das gerade getippt wird'],
   ['Ruherahmen',            '--line',        '--bg-1',  1.2, 'Feld ohne Fokus - darf leise sein'],
   ['Balken',                '--fuellung',    '--bg-1',  1.3, 'gefuellter Teil einer Antwort'],

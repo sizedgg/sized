@@ -2575,7 +2575,7 @@ const SCHILD_ECKE = 0;   /* the CLOSED tag */
  * have to match, or the card points at a file that doesn't exist, and the
  * link gets the fallback card instead.
  */
-const CARD_VERSION = 11;
+const CARD_VERSION = 12;
 
 /** The card image's filename in storage - defined in one place, not three. */
 const cardFile = (id) => `poll-${id}-v${CARD_VERSION}.png`;
@@ -2685,7 +2685,7 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
     // The mark has its own name since it stopped being the accent. Without
     // this line the card kept drawing the logo in --accent and the shared
     // image quietly disagreed with the site it came from.
-    marke: cssWert('--marke') || '#ccdcef',
+    marke: cssWert('--marke') || '#24598c',
   };
 
   // Compute before drawing: the height isn't settled until it's clear how
