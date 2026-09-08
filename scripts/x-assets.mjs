@@ -123,18 +123,16 @@ async function bild(inhalt, breite, hoehe, datei, skala) {
 // gross - ein Wort darin waere ein grauer Fleck. Die Marke ist hochkant
 // (42 zu 64), also entscheidet ihre HOEHE, und sie bleibt bei 34 % der Kante
 // weit innerhalb des Kreises, den X ausschneidet.
-const PROFIL = {
-  html: `<div class="mitte"><span class="marke">${MARKE}</span></div>`,
-  stil: `
-    html, body { height: 100%; }
-    .mitte { width: 100%; height: 100%; display: grid; place-items: center; }
-    /* 136 von 400 - in Punkten, nicht in Prozent: eine Prozenthoehe braucht
-       eine feste Elternhoehe, und die hatte body nicht. Bei 42 zu 64 ist die
-       Marke damit 89 breit und bleibt weit im Kreis, den X ausschneidet
-       (Radius 200, die Ecke der Marke liegt bei 81 vom Mittelpunkt). */
-    .marke { height: 136px; }
-  `,
-};
+// Das Zeichen, in der Farbe der Knoepfe. Kein Schriftzug: X zeigt das Bild in
+// der Zeitleiste mit 48 Punkten Kante, und fuenf Buchstaben darin sind je
+// unter 8 Punkte breit.
+const PROFILE = [
+  {
+    key: '', name: 'Das Zeichen',
+    html: `<div class="mitte"><span class="marke">${MARKE}</span></div>`,
+    stil: '.marke { height: 136px; }',
+  },
+];
 
 // --- Die Kopfleiste, drei Fassungen ----------------------------------------
 //
@@ -159,12 +157,20 @@ const KOPF_STIL = `
      .platz beginnt. Die Pruefung unten misst genau diese Ecke.
      120 rechts statt 90: bei 90 lief der laengste Balken so dicht an die
      Kante, dass es nach einem Beschnitt aussah statt nach Absicht. */
-  .inhalt { flex: 1; display: flex; align-items: center; gap: 64px;
-            padding-right: 120px; }
-  .wort { display: flex; align-items: center; gap: 18px; }
-  .wort .marke { height: 58px; }
-  .wort b { font-weight: 700; font-size: 62px; letter-spacing: .16em; }
-  .zeile2 { font-size: 24px; color: ${C.dim}; letter-spacing: .02em; margin-top: 14px; }
+  /* Mittig statt linksbuendig. Der Platzhalter links bleibt trotzdem
+     stehen: er haelt die Ecke frei, ueber die X das Profilbild legt, und
+     ohne ihn wuerde "mittig" die Mitte der ganzen Leiste meinen statt die
+     Mitte der Flaeche, die man tatsaechlich sieht. */
+  .inhalt { flex: 1; display: flex; align-items: center; justify-content: center;
+            gap: 64px; padding-right: 120px; }
+  .inhalt > div { text-align: center; }
+  .wort { justify-content: center; }
+  /* 44 Punkte: bei 34 Zeichen und der Laufweite einer Monoschrift (rund
+     0,6 em) sind das etwa 900 Punkte Breite. Nutzbar sind 1080 - die 1500
+     abzueglich der 300 fuer das Profilbild und 120 rechts. Bei 52 waere die
+     Zeile 1060 breit und lehnte an beiden Raendern an. Nachgemessen wird
+     unten, nicht hier geschaetzt. */
+  .satz { font-size: 44px; color: ${C.text}; letter-spacing: .02em; }
   .stapel { flex: 1; display: flex; flex-direction: column; gap: 12px; }
   .zeile { height: 42px; background: transparent; }
   .fuell { height: 100%; }
@@ -176,15 +182,21 @@ const KOPF_STIL = `
 // unmittelbar links daneben. Zweimal dieselben zwei Balken in einem Blickfeld
 // sind keine Wiederholung, die etwas betont - sie lassen die Leiste aussehen,
 // als sei das Bild versehentlich zweimal eingesetzt worden.
+// Nur der Satz. Kein Schriftzug, kein Zeichen.
+//
+// Beides steht ohnehin unmittelbar daneben: X setzt den Kontonamen unter die
+// Leiste und das Profilbild darueber. Eine Kopfleiste, die "SIZED" noch
+// einmal sagt, sagt dreimal dasselbe - und der einzige Platz, an dem etwas
+// Neues stehen kann, ist damit belegt.
+//
+// Deshalb traegt der Satz jetzt auch Textfarbe statt --dim: er war eine
+// Unterzeile, als der Schriftzug ueber ihm stand. Jetzt ist er die Zeile.
 const KOEPFE = [
   {
-    key: 'wort',
-    name: 'Schriftzug und Zeile, ohne Zeichen',
+    key: 'satz',
+    name: 'Nur die Zeile, mittig',
     html: `<div class="platz"></div><div class="inhalt">
-      <div>
-        <div class="wort"><b>SIZED</b></div>
-        <div class="zeile2">Community votes and DMs for $ANSEM</div>
-      </div>
+      <div class="satz">Community votes and DMs for $ANSEM</div>
     </div>`,
   },
 ];
@@ -192,8 +204,18 @@ const KOEPFE = [
 console.log('\n── Aus public/ gelesen ──\n');
 for (const [k, v] of Object.entries(C)) console.log(`  --${k.padEnd(10)} ${v}`);
 
-const profilDatei = await bild(PROFIL, 400, 400, 'sized-x-profil.png', 2);
-console.log(`\n  Profilbild  ${path.relative(root, profilDatei)}`);
+const profile = [];
+for (const pf of PROFILE) {
+  const d = await bild({
+    html: pf.html,
+    stil: `html, body { height: 100%; }
+           .mitte { width: 100%; height: 100%; display: grid; place-items: center; }
+           ${pf.stil}`,
+  }, 400, 400, 'sized-x-profil.png', 2);
+  profile.push({ ...pf, datei: d });
+  console.log(`  Profilbild  ${path.relative(root, d)}`);
+}
+const profilDatei = profile[0].datei;
 
 const koepfe = [];
 for (const k of KOEPFE) {
@@ -255,17 +277,20 @@ const lies = async (datei) => {
 };
 
 console.log('\n── Nachgemessen ──\n');
-const profil = await lies(profilDatei);
-console.log(`  Profil ${profil.breite}x${profil.hoehe}, Grund rgb(${profil.grund.join(', ')})`);
-// Die Marke muss im eingeschriebenen Kreis liegen, sonst schneidet X sie an.
-const r = profil.breite / 2;
-const ecken = [[profil.minX, profil.minY], [profil.maxX, profil.minY],
-  [profil.minX, profil.maxY], [profil.maxX, profil.maxY]];
-const weiteste = Math.max(...ecken.map(([x, y]) => Math.hypot(x - r, y - r)));
-console.log(`  ${weiteste < r * 0.92 ? '✓' : '✗'} Marke im runden Ausschnitt`
-  + ` — weiteste Ecke ${Math.round(weiteste)} von ${Math.round(r)}`);
-
-let schlecht = weiteste < r * 0.92 ? 0 : 1;
+let schlecht = 0;
+let profil = null;
+for (const pf of profile) {
+  const m = await lies(pf.datei);
+  if (!profil) profil = m;
+  // Alles muss im eingeschriebenen Kreis liegen, sonst schneidet X es an.
+  const r = m.breite / 2;
+  const ecken = [[m.minX, m.minY], [m.maxX, m.minY], [m.minX, m.maxY], [m.maxX, m.maxY]];
+  const weiteste = Math.max(...ecken.map(([x, y]) => Math.hypot(x - r, y - r)));
+  const ok = weiteste < r * 0.92;
+  if (!ok) schlecht++;
+  console.log(`  ${ok ? '✓' : '✗'} Profil ${pf.key.padEnd(10)} ${m.breite}x${m.hoehe}, `
+    + `Grund rgb(${m.grund.join(', ')}), weiteste Ecke ${Math.round(weiteste)} von ${Math.round(r)}`);
+}
 for (const k of koepfe) {
   const m = await lies(k.datei);
   const s2 = m.breite / 1500;           // die Datei ist doppelt so gross
@@ -285,24 +310,31 @@ await pp.setContent(`<!doctype html><meta charset="utf-8"><style>
   body { margin: 0; background: #101218; width: 1180px; font-family: ui-monospace, monospace; }
   h2 { color: #e7e9ee; font-size: 15px; margin: 0; padding: 16px 16px 6px; letter-spacing: .02em; }
   p { color: #8b93a7; font-size: 12px; margin: 0; padding: 0 16px 8px; }
-  .kopf { width: 1148px; display: block; margin: 0 16px 4px; }
+  .reihe { display: flex; gap: 26px; padding: 0 16px 14px; align-items: flex-start; }
+  .reihe figure { margin: 0; }
+  .reihe img { width: 150px; border-radius: 50%; display: block; }
+  .reihe .klein { width: 48px; margin-top: 8px; }
+  .reihe figcaption { color: #8b93a7; font-size: 11px; padding-top: 6px; }
   .zusammen { position: relative; width: 1148px; margin: 0 16px 10px; }
   .zusammen img.k { width: 100%; display: block; }
   .zusammen img.p { position: absolute; left: 3.4%; bottom: -6%; width: 15%;
                     border-radius: 50%; border: 5px solid #101218; }
 </style>
-  <h2>Profilbild — 800 x 800, rund beschnitten</h2>
-  <p>In der Zeitleiste 48 Punkte gross. Deshalb kein Schriftzug darin.</p>
-  <div style="padding:0 16px 12px">
-    <img src="data:image/png;base64,${b64(profilDatei)}"
-         style="width:180px;border-radius:50%;display:block">
+  <h2>Profilbild — drei Fassungen</h2>
+  <p>Gross, und daneben in 48 Punkten: so gross zeigt X es in der Zeitleiste.</p>
+  <div class="reihe">
+    ${profile.map((pf) => `<figure>
+      <img src="data:image/png;base64,${b64(pf.datei)}">
+      <img class="klein" src="data:image/png;base64,${b64(pf.datei)}">
+      <figcaption>${pf.name}</figcaption>
+    </figure>`).join('')}
   </div>
-  ${koepfe.map((k) => `
-    <h2>${k.key.replace(/^([a-z])-/, '$1) ')} · ${k.name}</h2>
+  ${koepfe.map((k) => profile.map((pf) => `
+    <h2>Kopfleiste, Schrift mittig — mit Profilbild „${pf.name}"</h2>
     <div class="zusammen">
       <img class="k" src="data:image/png;base64,${b64(k.datei)}">
-      <img class="p" src="data:image/png;base64,${b64(profilDatei)}">
-    </div>`).join('')}
+      <img class="p" src="data:image/png;base64,${b64(pf.datei)}">
+    </div>`).join('')).join('')}
 `);
 await pp.waitForTimeout(400);
 await pp.screenshot({ path: path.join(OUT, 'vergleich.png'), fullPage: true });
