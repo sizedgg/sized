@@ -79,7 +79,10 @@ if (ansem.istAdmin !== true) {
 }
 
 const ctx = await browser.newContext({
-  viewport: { width: 1280, height: 900 }, deviceScaleFactor: SKALA,
+  // Etwas niedriger als die 900 der anderen Artikelbilder: der Verlauf
+  // steht unten, und bei 900 klafft ueber der ersten Blase ein halbes Bild
+  // Papier.
+  viewport: { width: 1280, height: 820 }, deviceScaleFactor: SKALA,
 });
 const page = await ctx.newPage();
 await page.addInitScript((t) => { try { localStorage.setItem('ansem_jwt', t); } catch { /* egal */ } }, ansem.jwt);
@@ -134,9 +137,10 @@ if (!/3 conversations hidden/.test(verborgenText)) {
   throw new Error(`Die Zeile fuer Verborgenes sagt: "${verborgenText}"`);
 }
 
-// Ein Gespraech offen, und zwar eines mit Hin und Her - ein Fenster, in dem
-// nur eine Seite geschrieben hat, zeigt Ansems eigene Blase nicht.
-const LANG = 'xKGwnf2uA3U1W5JZQjryzqCM8PcoSFaZpFg5YTpRkTQP';
+// Das eine Gespraech, das in der Saat von Hand geschrieben ist: vier
+// Nachrichten, ein Hin und Her, und es ergibt aufgeklappt einen Sinn. Die
+// 500 gewuerfelten sind fuer die Liste gemacht, nicht zum Aufklappen.
+const LANG = 'Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs';
 await page.click(`.thread[data-wallet="${LANG}"]`);
 await page.waitForSelector('.dm-row', { timeout: 20_000 });
 await page.waitForTimeout(900);
@@ -163,8 +167,31 @@ const { kaesten, gassen } = await page.evaluate(() => {
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, w: r.width, h: r.height };
   };
+  // Welche Zeilen beschriftet werden, wird gesucht und nicht gezaehlt.
+  // Feste Nummern trafen zweimal daneben: einmal eine Zeile, deren
+  // Vorschau "gm" war - ein Kasten um zwei Buchstaben zeigt nicht, was
+  // "abgeschnitten" heisst -, und einmal eine mit dem blauen Punkt fuer
+  // Ungelesenes, der im Kasten um den Betrag mit drinsteht.
+  //
+  // Gesucht wird deshalb nach dem, was die Zeile zeigen soll:
+  //   Vorschau  eine wirklich abgeschnittene, und ohne "You:" davor - der
+  //             Satz daneben redet von der Nachricht des anderen.
+  //   Kuerzel   irgendeine darueber, aber nicht die erste: ueber der ersten
+  //             sitzt der Kasten um die verborgenen Gespraeche.
+  //   Betrag    eine aus der Mitte, ungelesen kommt nicht in Frage.
   const zeilen = [...document.querySelectorAll('#thread-items .thread')];
-  const mitte = zeilen[Math.min(7, zeilen.length - 1)];
+  // Abgeschnitten wird in der Vorlage, nicht im Text: im Element steht der
+  // ganze Satz, die drei Punkte macht CSS. Also wird gemessen, ob er
+  // hineinpasst, statt im Text nach Punkten zu suchen - danach zu suchen
+  // war der erste Versuch, und er fand nie etwas.
+  const abgeschnitten = (z) => {
+    const v = z.querySelector('.thread-prev');
+    return Boolean(v) && v.scrollWidth > v.clientWidth + 1 && !z.querySelector('.thread-du');
+  };
+  const vorschauZeile = zeilen.find((z, i) => i >= 3 && abgeschnitten(z));
+  const kuerzelZeile = zeilen.find((z, i) => i >= 1 && z !== vorschauZeile);
+  const betragZeile = zeilen.find((z, i) =>
+    i >= 9 && z !== vorschauZeile && z !== kuerzelZeile && !z.classList.contains('is-unread'));
 
   const liste = rect(document.querySelector('.thread-list'));
   const fenster = rect(document.querySelector('.thread-view'));
@@ -175,9 +202,9 @@ const { kaesten, gassen } = await page.evaluate(() => {
     kaesten: {
       schwelle: rect(document.querySelector('#dm-min-row')),
       verborgen: rect(document.querySelector('#thread-versteckt')),
-      vorschau: rect(zeilen[0]?.querySelector('.thread-prev')),
-      kuerzel: rect(zeilen[3]?.querySelector('.h')),
-      betrag: rect(mitte?.querySelector('.w')),
+      kuerzel: rect(kuerzelZeile?.querySelector('.h')),
+      vorschau: rect(vorschauZeile?.querySelector('.thread-prev')),
+      betrag: rect(betragZeile?.querySelector('.w')),
       verbergen: rect(document.querySelector('#btn-hide-thread')),
     },
     // Die Gassen, durch die die Linien laufen. Gemessen und nicht geraten:
@@ -195,6 +222,22 @@ const { kaesten, gassen } = await page.evaluate(() => {
 });
 for (const [name, k] of Object.entries(kaesten)) {
   if (!k || k.w < 4 || k.h < 4) throw new Error(`Kasten "${name}" ist leer oder winzig: ${JSON.stringify(k)}`);
+}
+
+// Zwei rote Kaesten, die sich schneiden, sind der eine Fehler, den man
+// diesem Bild sofort ansieht. Die 5 Punkte Luft sind dieselben, die
+// beschriften.py um das Element legt - wer sie dort aendert, aendert sie
+// hier mit.
+const LUFT = 5;
+const eintraege = Object.entries(kaesten);
+for (let i = 0; i < eintraege.length; i++) {
+  for (let j = i + 1; j < eintraege.length; j++) {
+    const [na, a] = eintraege[i];
+    const [nb, b] = eintraege[j];
+    const ueber = (p, q) => p.x - LUFT < q.x + q.w + LUFT && q.x - LUFT < p.x + p.w + LUFT
+      && p.y - LUFT < q.y + q.h + LUFT && q.y - LUFT < p.y + p.h + LUFT;
+    if (ueber(a, b)) throw new Error(`Die Kaesten "${na}" und "${nb}" schneiden sich`);
+  }
 }
 // Die Linie zum Betrag laeuft waagerecht durch das Fenster. Wenn dort keine
 // Luft ueber der ersten Blase ist, faehrt sie mitten durch eine Nachricht -
@@ -218,10 +261,12 @@ const BESCHRIFTUNG = [
     text: 'Conversations he put away. One click brings them back.' },
   // eintritt: die Linie faehrt oben in den Kasten, nicht mittig - auf
   // halber Hoehe liefe sie durch das Kuerzel links daneben.
-  { schluessel: 'vorschau', seite: 'links', route: 'korridor', eintritt: 0.16,
-    text: 'The last message, cut short.' },
   { schluessel: 'kuerzel', seite: 'links', route: 'korridor',
     text: 'Who wrote: the first three characters of their address.' },
+  // eintritt: die Linie faehrt oben in den Kasten, nicht mittig - auf
+  // halber Hoehe liefe sie durch das Kuerzel links daneben.
+  { schluessel: 'vorschau', seite: 'links', route: 'korridor', eintritt: 0.16,
+    text: 'The last message, cut short.' },
   { schluessel: 'betrag', seite: 'rechts', route: 'spalt',
     text: 'What that wallet holds. The inbox is sorted by it, largest first.' },
   { schluessel: 'verbergen', seite: 'rechts', route: 'direkt',

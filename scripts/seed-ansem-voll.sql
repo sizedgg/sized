@@ -93,40 +93,99 @@ update public.wallets set address = '7xK' || substr(address, 4)
 do $$
 declare
   w record;
+  -- Vierzig verschiedene Nachrichten, und die Liste bekommt sie der Reihe
+  -- nach statt zufaellig - siehe rang weiter unten.
+  --
+  -- Der Massstab ist nicht der Satz, sondern seine ersten 16 Zeichen: mehr
+  -- zeigt die Zeile im Posteingang nicht. Zwei Saetze, die verschieden
+  -- enden und gleich anfangen, stehen dort als dieselbe Zeile - und ein
+  -- Posteingang, in dem viermal "can you look at t..." steht, sieht
+  -- erfunden aus, weil er es dann auch ist.
   texte text[] := array[
     'gm',
     'wen poll',
-    'thanks for the reply',
+    'thanks for the answer earlier',
     'quick one about the vesting schedule',
-    'I sold half my bag last week and now I am not sure that was right',
-    'Is the unlock linear or cliff based? I have been trying to work this out from the docs and cannot tell',
+    'is the unlock linear or cliff based?',
     'any chance you do an AMA this month',
-    'appreciate the answer earlier',
-    'sent you the details',
-    'will you cover the new listing on stream',
-    'checking',
-    'holding since the first week, just wanted to say the tool is good',
-    'whatsthetickerforthenewoneiseeeverywhere',
-    'can you look at this',
-    'what do you think about the funding rates right now',
+    'sent you the details on telegram',
+    'will you cover the new listing on stream?',
+    'holding since the first week, the tool is good',
+    'what do you think about funding rates right now',
     'been waiting on this poll for two weeks haha',
-    'is the treasury address the same one as in the pinned post',
-    'ok'
+    'is the treasury address the same as in the pinned post',
+    'ok, understood',
+    'voted, and I moved half my bag after',
+    'can you look at the numbers on the last poll',
+    'my vote disappeared after I sold, is that expected?',
+    'does the weight update live or once a day',
+    'great stream yesterday',
+    'who runs this site, you or a team',
+    'the card image shows an old number',
+    'how long does a poll stay open',
+    'asked twice already, sorry',
+    'just here to say the sorting is smart',
+    'can I change my vote later',
+    'why is my handle only three characters',
+    'dm threshold seems high for smaller wallets',
+    'you should put the next one at 24h',
+    'screenshot of the poll went around btw',
+    'reading the docs now, one thing is unclear',
+    'found a typo on the login screen',
+    'no rush, whenever you have time',
+    'second time asking about the AMA',
+    'price feed looks stale on my side',
+    'everything works on mobile now, nice',
+    'which wallet do I send from, phantom?',
+    'i think the closed polls should stay visible',
+    'up 3x since the first vote, thanks',
+    'are you keeping the ticker',
+    'long time lurker, first message',
+    'let me know if you want testers'
   ];
+  -- Ansems Antworten. Auch sie stehen in der Liste, mit "You:" davor, also
+  -- gilt dieselbe Regel fuer die ersten 16 Zeichen. Vierundzwanzig Stueck,
+  -- damit sich in den ersten zwei Dutzend Zeilen keine wiederholt.
   antworten text[] := array[
     'will cover it in the next stream',
     'yes',
-    'not yet - waiting on the numbers',
+    'not yet, waiting on the numbers',
     'good question, short answer is no',
     'sending you something later today',
-    'seen it, thanks'
+    'seen it, thanks',
+    'that one is in the docs',
+    'fixed, thanks for flagging',
+    'next poll will answer that',
+    'same address as the pinned post',
+    'it updates when the balance moves',
+    'no team, just me',
+    'friday, if the numbers hold',
+    'you can change it until it closes',
+    'appreciate it',
+    'I read everything here, even without replying',
+    'put it in the poll',
+    'checking now',
+    'keeping the ticker',
+    'give me a day',
+    'ask again after the unlock',
+    'on it',
+    'screenshot it and send it over',
+    'makes sense, changing it'
   ];
   n int;
   k int;
   saat bigint := 77771;
   gelesen boolean;
 begin
-  for w in select address, ui_amount, usd_value from public.wallets
+  -- rang: der Platz in der Liste, die Ansem sieht - sortiert nach Bestand,
+  -- der groesste zuerst. Die LETZTE Nachricht eines Gespraechs wird danach
+  -- vergeben und nicht gewuerfelt: nur die letzte steht im Posteingang, und
+  -- nur dort faellt eine Wiederholung auf. So sind die oberen vierzig
+  -- Zeilen verschieden, ohne dass irgendwo eine Zufallszahl "meistens"
+  -- verschieden sein muss.
+  for w in select address, ui_amount, usd_value,
+                  row_number() over (order by ui_amount desc, address) as rang
+           from public.wallets
            where address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw'
            order by address loop
     saat := (saat * 1103515245 + 12345) % 2147483648;
@@ -138,7 +197,9 @@ begin
       insert into public.dms (wallet, from_admin, body, snap_tokens, snap_usd,
                               read_by_admin, created_at)
       values (w.address, false,
-              texte[1 + (saat % array_length(texte, 1))],
+              case when k = n
+                   then texte[1 + ((w.rang - 1) % array_length(texte, 1))::int]
+                   else texte[1 + (saat % array_length(texte, 1))] end,
               w.ui_amount, w.usd_value,
               gelesen,
               -- Aufsteigend innerhalb eines Gespraechs.
@@ -162,7 +223,7 @@ begin
         insert into public.dms (wallet, from_admin, body, snap_tokens, snap_usd,
                                 read_by_admin, created_at)
         values (w.address, true,
-                antworten[1 + (saat % array_length(antworten, 1))],
+                antworten[1 + ((w.rang - 1) % array_length(antworten, 1))::int],
                 w.ui_amount, w.usd_value, true,
                 -- Die Antwort kommt zuletzt, also hoechstens 250 Minuten
                 -- zurueck - immer weniger als die 300, die die letzte
@@ -330,6 +391,50 @@ alter table public.dms enable trigger all;
 --
 -- Bei 1.000 bleiben rund die Haelfte der 500 Wallets uebrig. Das reicht fuer
 -- eine volle Liste und stimmt mit dem ueberein, was daneben steht.
+
+-- --- das eine Gespraech, das im Artikelbild offen steht -------------------
+--
+-- Die 500 gewuerfelten Gespraeche sind fuer die LISTE gemacht: eine Zeile,
+-- sechzehn Zeichen, mehr sieht man von ihnen nie. Aufgeklappt taugen sie
+-- nicht - dort stehen vier Saetze untereinander, die nichts miteinander zu
+-- tun haben, und das faellt sofort auf.
+--
+-- Also eines von Hand: vier Nachrichten, ein Hin und Her, und es erklaert
+-- nebenbei genau das, worum sich die Seite dreht - das Gewicht folgt dem
+-- Bestand, bis die Abstimmung schliesst.
+--
+-- Der Bestand wird nicht gesetzt, sondern gerechnet: knapp unter den
+-- neuntgroessten. Damit steht das Gespraech mitten in der sichtbaren Liste
+-- statt ganz oben - eine feste Zahl waere nach jeder Aenderung an der
+-- Verteilung wieder woanders.
+insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen, priced_at)
+select 'Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', t.ui_amount - 1, (t.ui_amount - 1) / 1000.0, 0.001,
+       now(), now() - interval '61 days', now()
+  from (select ui_amount from public.wallets order by ui_amount desc offset 8 limit 1) t
+on conflict (address) do update
+  set ui_amount = excluded.ui_amount, usd_value = excluded.usd_value, price = excluded.price;
+
+alter table public.dms disable trigger all;
+insert into public.dms (wallet, from_admin, body, snap_tokens, snap_usd, read_by_admin, created_at)
+select v.wallet, v.from_admin, v.body, v.snap_tokens, v.snap_usd, v.gelesen, v.wann
+  from public.wallets w
+  cross join lateral (values
+    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs'::text, false,
+     'if I sell half my bag after voting, does my vote shrink or stay?',
+     w.ui_amount, w.usd_value, true, now() - interval '2 days'),
+    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', true,
+     'it shrinks. the number follows the balance until the poll closes.',
+     0::numeric, 0::numeric, true, now() - interval '2 days' + interval '2 hours'),
+    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', false,
+     'makes sense. that is why the closed ones freeze then',
+     w.ui_amount, w.usd_value, true, now() - interval '28 hours'),
+    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', true,
+     'exactly. after that nothing moves.',
+     0::numeric, 0::numeric, true, now() - interval '27 hours')
+  ) as v(wallet, from_admin, body, snap_tokens, snap_usd, gelesen, wann)
+ where w.address = 'Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs';
+alter table public.dms enable trigger all;
+
 
 commit;
 
