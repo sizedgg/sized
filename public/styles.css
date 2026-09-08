@@ -2130,9 +2130,27 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 /* flex: none - the amount is the last thing to give, if anything does.
    Combined with min-width: 0 on .opt-label, that means: the text yields,
    the number stays intact. Reversed, it would be wrong. */
+/* line-height as a LENGTH, and the same length the answer next to it gets.
+   ---------------------------------------------------------------------------
+   1.25 sat here, left over from when this block held two stacked lines - the
+   amount and the vote count under it. The second line is gone (see --anteil
+   further up), and what stayed behind was a line box 18 px tall next to a
+   label 23 px tall. Both start at the same top edge, because .opt-text aligns
+   to flex-start - so the shorter box ended up with its middle 2 px higher
+   than the answer's, and the amount looked like it was sitting up.
+
+   Measured: label centre 22 px from the top of a 44 px bar, amount centre
+   20 px.
+
+   Not fixed with align-self: center, which would centre the amount in the
+   ROW - fine on one line, but on a wrapped answer it would float beside the
+   second line, which is the thing .opt-text avoids on purpose. A line box of
+   the same height fixes the middle without moving the top: one line of body
+   text, written as the root size times the body's line-height rather than as
+   22.5px, so it follows if either one ever changes. */
 .opt-num {
   margin-left: auto; flex: none; white-space: nowrap;
-  font-family: var(--mono); text-align: right; line-height: 1.25;
+  font-family: var(--mono); text-align: right; line-height: calc(1rem * 1.5);
 }
 .opt-num .held { display: block; color: var(--text); font-size: .95rem; font-weight: 650; }
 .opt.leads .opt-num .held { color: var(--accent); }

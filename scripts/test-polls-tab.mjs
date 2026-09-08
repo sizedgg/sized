@@ -994,6 +994,29 @@ const phoneLine = await handy.evaluate(() => {
     // a wrapped block. So the gap between the two, line by line.
     versatz: amounts.map((b, i) => Math.round(
       b.getBoundingClientRect().top - labels[i].getBoundingClientRect().top)),
+    // The MIDDLE, not the top edge.
+    //
+    // The check above compares top edges, and it stayed green while the
+    // amount sat two pixels high: .opt-num carried line-height 1.25, left
+    // over from when a second line lived under the amount. Its line box was
+    // 18 px against the answer's 23 - same top edge, two different middles.
+    //
+    // Measured only where the statement means something: an answer on ONE
+    // line, where "in the middle of the bar" is well defined. On a wrapped
+    // answer the amount belongs beside the FIRST line, which is what
+    // versatz above is for.
+    mitten: amounts.map((b, i) => {
+      const bar = b.closest('.opt').querySelector('.opt-bar').getBoundingClientRect();
+      const bb = b.querySelector('.held').getBoundingClientRect();
+      const lb = labels[i].getBoundingClientRect();
+      const rund = (n) => Math.round(n * 10) / 10;
+      return {
+        einzeilig: lb.height <= 25,
+        betrag: rund(bb.top + bb.height / 2 - bar.top),
+        label: rund(lb.top + lb.height / 2 - bar.top),
+        balken: rund(bar.height / 2),
+      };
+    }),
   };
 });
 await handy.close();
@@ -1010,6 +1033,18 @@ check('Und keine Zahl in zwei Zeilen zerrissen',
 check('Und jeder Betrag steht auf Hoehe der ersten Zeile seiner Antwort',
   phoneLine.versatz.every((v) => Math.abs(v) <= 2),
   phoneLine.versatz.join(' / ') + ' px Versatz');
+
+const einzeiler = phoneLine.mitten.filter((m) => m.einzeilig);
+// Without this line the two checks below would be green on an empty set -
+// the classic test that reports "ok" while measuring nothing.
+check('Vorbedingung: mindestens eine einzeilige Antwort dabei',
+  einzeiler.length > 0, `${einzeiler.length} von ${phoneLine.mitten.length}`);
+check('Bei einzeiligen Antworten sitzt der Betrag genau in der Balkenmitte',
+  einzeiler.every((m) => Math.abs(m.betrag - m.balken) <= 0.5),
+  einzeiler.map((m) => `${m.betrag} gegen ${m.balken}`).join(' / '));
+check('Und auf derselben Mitte wie die Antwort daneben',
+  einzeiler.every((m) => Math.abs(m.betrag - m.label) <= 0.5),
+  einzeiler.map((m) => `${m.betrag} gegen ${m.label}`).join(' / '));
 
 await browser.close();
 server.close();
