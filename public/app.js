@@ -2544,6 +2544,12 @@ const BILD_SKALA = 2;
    see the block at --radius in styles.css. Zero: the card is right-angled
    like the page. The logo mark keeps its rounding, because it is a mark and
    not a box. */
+/* Every weight drawPoll() sets on the canvas. Kept next to the corner
+   constants because it belongs to the same thing: what the image is made of.
+   If a font line in drawPoll ever asks for a weight that is not in here, the
+   card is drawn in the fallback for that one line and nothing says so -
+   scripts/test-schrift.mjs compares the two lists for exactly that reason. */
+const KARTEN_SCHNITTE = ['400', '500', '600', '650', '700'];
 const BILD_ECKE = 0;
 const BALKEN_ECKE = 0;   /* an answer bar */
 const SCHILD_ECKE = 0;   /* the CLOSED tag */
@@ -2607,7 +2613,25 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
   // 600px wide anyway; 1600 is already two and a half times that.
   // Without this wait, the first call measures against the fallback font
   // and the text ends up too wide or too narrow in the image afterward.
-  try { await document.fonts?.ready; } catch { /* proceed unwaited then */ }
+  //
+  // ready alone is NOT enough since the page ships its own font. It resolves
+  // when every font the browser has already started loading has settled - and
+  // a weight nothing on the page happens to be showing was never started.
+  // The 600 cut is exactly that case: it is used here for the CLOSED tag and
+  // almost nowhere else, so on a page without a closed poll it would still be
+  // unloaded when this runs. A canvas does not trigger a font load either; it
+  // silently draws the fallback. So every cut the card uses is requested
+  // explicitly first, THEN we wait.
+  //
+  // A canvas does not care about the size in the load() call - the weight is
+  // what selects the file - so one size for all of them is enough.
+  try {
+    const familie = getComputedStyle(document.documentElement)
+      .getPropertyValue('--mono').trim() || 'monospace';
+    await Promise.all(KARTEN_SCHNITTE.map((g) =>
+      document.fonts.load(`${g} 40px ${familie}`)));
+    await document.fonts?.ready;
+  } catch { /* proceed unwaited then */ }
 
   const S = fuerKarte ? 1 : BILD_SKALA;
   const B = IMAGE_WIDTH;

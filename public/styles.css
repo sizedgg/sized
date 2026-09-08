@@ -298,8 +298,62 @@
   --radius-innen: 0;
   /* The only font on the page - and since the poll card followed suit,
      the only one in the images too. See the reasoning at font-family
-     below. */
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+     below.
+
+     IBM Plex Mono ships with the site now; ui-monospace stays behind it as
+     the fallback for the moment before the file has loaded, and for anyone
+     who blocks web fonts.
+
+     Why a file at all, when ui-monospace costs nothing: because it is not
+     one font. It resolves to SF Mono on a Mac and an iPhone, to Roboto Mono
+     on Android and to Consolas on Windows - three different faces with
+     three different widths for the same amount. On a page whose content is
+     a column of figures, that is not a detail: the column is only a column
+     because every digit is the same width, and "the same width" was true
+     per device, not across them. The image posted to X was drawn in
+     whatever the poster's machine happened to have.
+
+     The price is honest and small: four files, 59 KB in total, fetched once
+     and then cached. No CSP change - font-src 'self' was already set, which
+     is also why the files have to live here and cannot come from Google.
+     The licence sits next to them in public/fonts/, because the OFL
+     requires it to travel with the font. */
+  --mono: 'IBM Plex Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   The font files
+   ---------------------------------------------------------------------------
+   Four weights, because the page asks for five - 400, 500, 600, 650, 700 -
+   and 650 lands on the 700 cut by the CSS matching rules. Anything above
+   500 looks upward first, so a separate 650 file would never be chosen.
+
+   font-display: swap, not block. Block hides all text until the file is
+   there, and on this page that would mean an empty payment screen with an
+   amount somebody is waiting for. Swap shows the fallback first and
+   exchanges it - the text reflows a little, which is the smaller of the two
+   evils. The 400 weight is preloaded in index.html, so the swap usually
+   happens before the first frame.
+   --------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-400.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-500.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-600.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-700.woff2') format('woff2');
+  font-weight: 700; font-style: normal; font-display: swap;
 }
 
 * { box-sizing: border-box; }

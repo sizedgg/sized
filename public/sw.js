@@ -11,7 +11,12 @@
  * an old version for days, with nobody noticing why.
  */
 
-const CACHE = 'sized-shell-v2';
+/* Bump this whenever the SHELL list changes. The activate handler deletes
+   every cache whose name is not this one, so a new name is what makes an
+   installed app pick up the new shell - without it, a phone that already has
+   the app keeps serving the old styles.css and never fetches the font files
+   at all. v3: the four font files joined the shell. */
+const CACHE = 'sized-shell-v3';
 
 // Only the shell. config.js deliberately does NOT sit here: if the project
 // ever moves, no old address is allowed to get stuck in the cache.
@@ -26,6 +31,14 @@ const SHELL = [
   // immediately in the header, not only after a response from the server:
   // without this, a dead zone would leave an empty circle there. 3.5 KB.
   '/ansem.jpg',
+  // The font. Without these four, the installed app falls back to the
+  // system's monospace when offline - and that is a different face with
+  // different widths, so the whole column of figures shifts. 59 KB, fetched
+  // once at install.
+  '/fonts/ibm-plex-mono-400.woff2',
+  '/fonts/ibm-plex-mono-500.woff2',
+  '/fonts/ibm-plex-mono-600.woff2',
+  '/fonts/ibm-plex-mono-700.woff2',
 ];
 
 self.addEventListener('install', (e) => {

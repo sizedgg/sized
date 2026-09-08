@@ -101,6 +101,56 @@ check('Das CLOSED-Schild zeichnet mit SCHILD_ECKE',
 // Except the logo: two rounded bars are what the mark IS.
 check('Die Logomarke bleibt rund', /roundedRect\(ctx, margin \+ 24 \* e, y, 18 \* e, 64 \* e, 9 \* e\)/.test(appJs));
 
+console.log('\nDie Schriftdateien\n');
+
+// A font is the one asset that fails silently. A missing image leaves a hole
+// somebody notices; a missing .woff2 makes the browser fall through to the
+// system's monospace, which looks almost right - and every figure on the
+// page is then a different width than it was designed for, without an error
+// anywhere.
+const sw = fs.readFileSync(path.join(root, 'public', 'sw.js'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+const da = (rel) => fs.existsSync(path.join(root, 'public', rel));
+
+const faces = [...css.matchAll(/@font-face\s*\{[^}]*url\('([^']+)'\)[^}]*font-weight:\s*(\d+)/g)]
+  .map((m) => ({ pfad: m[1], gewicht: m[2] }));
+check('Das Blatt bindet Schriftdateien ein', faces.length > 0, `${faces.length} Schnitte`);
+const fehlend = faces.filter((f) => !da(f.pfad)).map((f) => f.pfad);
+check('Und jede davon liegt auch da', fehlend.length === 0,
+  fehlend.join(', ') || faces.map((f) => f.gewicht).join(', '));
+
+// The page asks for five weights - 400, 500, 600, 650, 700 - and 650 lands
+// on 700 by the CSS matching rules. So four files have to be there; a
+// missing 600 would quietly be drawn at 700.
+const gewichte = faces.map((f) => f.gewicht).sort();
+check('Alle vier Schnitte sind dabei',
+  ['400', '500', '600', '700'].every((g) => gewichte.includes(g)), gewichte.join(', '));
+
+// The licence has to travel with the font - that is what the OFL asks for,
+// and it is the kind of file that gets left behind in a copy.
+check('Die Lizenz liegt bei der Schrift',
+  fs.readdirSync(path.join(root, 'public', 'fonts')).some((f) => /^LICENSE/i.test(f)));
+
+// Preload: without it the browser only learns about the font once the sheet
+// is parsed, and every figure shifts on the first frame.
+const vorgeladen = /<link[^>]+rel="preload"[^>]+href="\/([^"]+\.woff2)"/.exec(html)?.[1];
+check('Die Textschrift wird vorgeladen', Boolean(vorgeladen), vorgeladen ?? 'keine');
+check('Und die vorgeladene Datei gibt es', vorgeladen ? da(vorgeladen) : false, vorgeladen ?? '');
+check('Der Vorlader traegt crossorigin',
+  /rel="preload"[^>]*\.woff2"[^>]*crossorigin/.test(html));
+
+// Offline: the installed app serves its shell from the cache. A font that is
+// not in the list is fetched from the network - and in a dead zone it is not
+// fetched at all.
+const imShell = faces.filter((f) => sw.includes(`/${f.pfad}`)).length;
+check('Alle Schriftdateien stehen im Cache des Service Workers',
+  imShell === faces.length, `${imShell} von ${faces.length}`);
+// And the cache name has to have moved, or an installed app keeps the old
+// list and never asks for the new files at all.
+check('Der Cache-Name ist nicht mehr v2',
+  !/const CACHE = 'sized-shell-v2'/.test(sw),
+  /const CACHE = '([^']+)'/.exec(sw)?.[1] ?? 'keiner');
+
 console.log('\nDie Kartenversion steht in zwei Dateien und muss uebereinstimmen\n');
 
 const vApp = /const CARD_VERSION = (\d+);/.exec(appJs)?.[1];

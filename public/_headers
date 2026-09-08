@@ -148,6 +148,27 @@
 # effect again. Just don't assume it is doing anything right now.
 # ===========================================================================
 
+# ===========================================================================
+# The font files
+#
+# They are immutable: the name carries the weight, and a different cut gets
+# a different name. So the browser never has to ask again - a year is the
+# maximum the standard allows, and "immutable" tells it not even to
+# revalidate on a reload.
+#
+# Why this matters more here than for a picture: the font is on the critical
+# path. Every figure on the page is drawn with it, and while it is being
+# fetched the text is set in a fallback with different widths. Once is
+# unavoidable. Once per visit would not be.
+#
+# If the font is ever replaced, the file has to get a new NAME - overwriting
+# it under the same name would leave everyone who has been here before with
+# the old one for a year.
+# ===========================================================================
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /p/*
   Content-Type: text/html; charset=utf-8
 

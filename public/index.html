@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SIZED</title>
+<!-- The body font, ahead of the stylesheet.
+     Without this the browser only learns the font exists once styles.css
+     has been parsed - by which time the first frame is drawn in the
+     fallback and every figure on the page shifts when the real file
+     arrives. Only the 400 weight: it carries the text, and preloading four
+     files to save one reflow is a worse trade than the reflow.
+     crossorigin is required even for a same-origin font preload; without
+     it the browser fetches the file a second time. -->
+<link rel="preload" href="/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='29 16 42 64' fill='%23eceff5'><rect x='29' y='54' width='18' height='26' rx='9'/><rect x='53' y='16' width='18' height='64' rx='9'/></svg>">
 
