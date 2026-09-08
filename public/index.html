@@ -573,6 +573,20 @@
        doesn't interrupt, it reports at the next breath. -->
   <div id="toast" class="toast" role="status" hidden></div>
 
+  </div>
+</div>
+
+
+<!-- AUSSERHALB von #app, und das ist keine Formsache.
+     ==========================================================================
+     .app traegt transform: translateY(var(--versatz)). Ein Transform - auch
+     translateY(0px) - macht das Element zum Bezugsrahmen fuer alles, was
+     darin position: fixed ist. Der Dialog lag darin und war deshalb nicht
+     1600 breit, sondern 1180: genau die Spaltenbreite von .app, mit 210
+     Punkten ungedimmtem Papier links und rechts daneben. inset: 0 stimmte,
+     es bezog sich nur auf den falschen Kasten.
+
+     Hier draussen bezieht es sich auf das Fenster. -->
   <!-- The look at the card before it is saved.
        ========================================================================
        Desktop only. On a phone the download goes through navigator.share,
@@ -580,9 +594,10 @@
        front of that would be two previews of the same picture.
 
        A plain <div> and not <dialog>: showModal() puts the element in the top
-       layer, where ::backdrop is the only way to dim the page and
-       backdrop-filter behaves differently across browsers. The blur here is
-       the same one the top bar uses, and it should stay the same one.
+       layer, where ::backdrop is the only way to dim the page, and that
+       is a harder surface to keep in step with the rest of the sheet.
+       The page behind is dimmed, not blurred - the reasoning sits at
+       .dialog-grund in styles.css.
 
        aria-modal with role="dialog", labelled by its own heading. The button
        inside gets focus when it opens and the focus goes back to the poll's
@@ -604,8 +619,6 @@
       <button id="bild-dialog-laden" type="button" class="btn btn-primary">Download PNG</button>
     </div>
   </div>
-</div>
-
 
 <script src="/app.js" type="module"></script>
 </body>

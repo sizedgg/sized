@@ -181,12 +181,18 @@
   --accent-2: #1f4e7a;
   --accent-2-rgb: 31, 78, 122;
   /* The dot next to the amount when a conversation is unread.
-     X's DM blue, already measured above at --dm-eigen and out of a job
-     since the bubble switched to --fuellung-spitze. It is brighter and
-     more saturated than anything else blue on the page, and that's the
-     point: 6.34:1 on the list background, while --fuellung-spitze would
-     land at 2.57:1 there - practically invisible as a 6px dot. */
-  --ungelesen: #8a5a12;
+     ------------------------------------------------------------------------
+     --accent-fill, the same blue as the buttons and the mark. Not a value of
+     its own: the note at --accent-fill says that tone belongs to filled
+     areas, and a 6px dot is nothing but filled area.
+
+     It was an amber before, left over from the palette where blue was not
+     available for it. 6.98:1 on the list background - a dot that small has
+     to carry on colour alone, it has no shape to be recognised by.
+
+     Not --fuellung-spitze: that one is 2.57:1 there, and at six pixels that
+     is not a mark, it is a smudge. */
+  --ungelesen: var(--accent-fill);
   --warn: #a83228;
   /* The text on a red border - one step lighter than the border itself, so
      the message stays readable without the box turning into a wall of red. */
@@ -246,7 +252,12 @@
   /* The tint on an unread row: --name-0 at 11.5%. Not a fifth background,
      a wash - the row keeps its shape and only says "there is something
      here". */
-  --ungelesen-fuellung: rgba(138, 90, 18, .09);
+  /* Die leicht getoente Zeile hinter einer ungelesenen Nachricht. Dieselben
+     Kanaele wie --accent-fill (#24598c) - als Literal, weil es dafuer keinen
+     -rgb-Namen gibt. Ein blauer Punkt auf einer bernsteinfarben getoenten
+     Zeile saehe aus wie ein vergessener Wert; sichtbar ist der Unterschied
+     kaum (1.13 gegen 1.14:1 zur Liste), stimmig schon. */
+  --ungelesen-fuellung: rgba(36, 89, 140, .09);
   /* The timestamp inside your own bubble: the bubble's text colour, turned
      down. Its own entry because on a lighter bubble it would have to be
      turned down the other way. */
@@ -2761,11 +2772,21 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    is open has to be readable; leaving it underneath would have hidden
    exactly the messages this dialog can produce. */
 .dialog-grund {
+  /* inset: 0 bezieht sich auf das Fenster - aber nur, solange dieses Element
+     nicht in .app liegt. Dort traegt ein transform, und ein Transform wird
+     zum Bezugsrahmen fuer alles fixed darin. Deshalb steht der Dialog in
+     index.html ausserhalb von #app; die Begruendung im Langen steht dort. */
   position: fixed; inset: 0; z-index: 55;
   display: grid; place-items: center;
   padding: 1.5rem;
+  /* Kein backdrop-filter mehr.
+     Die Seite dahinter wird abgedunkelt, nicht unscharf. Der Weichzeichner
+     war da, weil die Kopfzeile einen hat - aber der sitzt hinter einem
+     schmalen Streifen, der mitscrollt, und hier lag er ueber der ganzen
+     Seite. Was darunter liegt, ist die Liste, aus der die Karte kommt; sie
+     unkenntlich zu machen, waehrend man ihr Bild prueft, nimmt einem den
+     Vergleich weg. */
   background: rgba(var(--schatten-rgb), .38);
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .dialog-karte {
   width: min(560px, 100%);

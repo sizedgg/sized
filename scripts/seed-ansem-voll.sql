@@ -64,7 +64,17 @@ begin
     -- A long tail: many small holders, a few large ones. floor to a power
     -- keeps the distribution lopsided the way a real one is.
     saat := (saat * 1103515245 + 12345) % 2147483648;
-    wert := round((power((saat % 10000) / 10000.0, 3.2) * 2000000 + 0.4)::numeric, 4);
+    -- Obergrenze 10.000 Dollar, nicht 2 Millionen.
+    --
+    -- Die Poll-Balken sind die Summe der Bestaende derer, die abgestimmt
+    -- haben. Bei 500 Stimmen und im Schnitt 462.000 Dollar stand auf dem
+    -- laengsten Balken 161 Millionen - eine Zahl, die niemand einer
+    -- Community abnimmt. Mit dieser Grenze liegt der Schnitt bei rund 2.300
+    -- und der laengste Balken unter einer Million.
+    --
+    -- Die Schiefe (Exponent 3.2) bleibt: eine Handvoll grosser Halter, ein
+    -- langer Schwanz kleiner. Das war nie das Problem, nur der Massstab.
+    wert := round((power((saat % 10000) / 10000.0, 3.2) * 10000 + 0.4)::numeric, 4);
     insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen)
     values (adr, wert * 1000, wert, 0.001,
             now() - (i || ' minutes')::interval,
@@ -255,56 +265,71 @@ from public.votes v group by v.poll_id, v.option_id;
 -- will, kommt mit keiner von ihnen hinein.
 --
 -- Diese Adresse ist echtes base58 mit 32 Bytes und steht fest, damit sie
--- nicht bei jedem Lauf wechselt: sha256('sized-artikel-halter-14').
+-- nicht bei jedem Lauf wechselt: sha256('sized-artikel-halter-12').
 --
--- Die 14 ist nicht willkuerlich. Der lokale Stapel erfindet den Bestand einer
+-- Die 12 ist nicht willkuerlich. Der lokale Stapel erfindet den Bestand einer
 -- Wallet aus sha256 der Adresse (mockAmount in scripts/dev-stack.mjs) und
 -- ueberschreibt beim Anmelden, was hier eingetragen ist. Die erste gueltige
 -- Adresse landete auf 540 Dollar - unter min_dm_usd, also mit gesperrter
 -- Antwortzeile und "Hold at least $1,000" darunter. Gesucht wurde deshalb
--- eine, die in der obersten Stufe landet: 21.007.410 Token, rund 88.000
--- Dollar. Die Zahlen hier stimmen mit dem ueberein, was der Stapel gleich
+-- eine, die in der Stufe landet, die zur neuen Obergrenze passt:
+-- 2.409.958 Token, rund 10.100 Dollar - also am oberen Ende der Halter,
+-- aber nicht ausserhalb ihrer Groessenordnung. Die Zahlen hier stimmen mit dem ueberein, was der Stapel gleich
 -- daraus macht - sonst zeigte die Liste einen anderen Betrag als der Kopf.
 insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen, priced_at)
-values ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', 21007410.0, 88231.0, 0.0042, now(), now() - interval '73 days', now())
+values ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', 2409958.0, 10122.0, 0.0042, now(), now() - interval '73 days', now())
 on conflict (address) do update
   set ui_amount = excluded.ui_amount, usd_value = excluded.usd_value, price = excluded.price;
 
 alter table public.dms disable trigger all;
 insert into public.dms (wallet, from_admin, body, snap_tokens, snap_usd, read_by_admin, created_at)
 values
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
    'gm — been holding since the first week. is the unlock linear or cliff based?',
-   21007410.0, 88231.0, true, now() - interval '6 days'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   2409958.0, 10122.0, true, now() - interval '6 days'),
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', true,
    'linear, starts at the end of the month. nothing unlocks before that.',
    0, 0, true, now() - interval '6 days' + interval '4 hours'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
    'appreciate it. that was the one thing the docs never said clearly',
-   21007410.0, 88231.0, true, now() - interval '6 days' + interval '5 hours'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   2409958.0, 10122.0, true, now() - interval '6 days' + interval '5 hours'),
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
    'will you cover the new listing on stream?',
-   21007410.0, 88231.0, true, now() - interval '4 days'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   2409958.0, 10122.0, true, now() - interval '4 days'),
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', true,
    'probably friday. put it in the poll if you want it sooner.',
    0, 0, true, now() - interval '4 days' + interval '90 minutes'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
    'done, added it. thanks',
-   21007410.0, 88231.0, true, now() - interval '4 days' + interval '2 hours'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   2409958.0, 10122.0, true, now() - interval '4 days' + interval '2 hours'),
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
    'one more — are the weekly numbers the same snapshot the cards use?',
-   21007410.0, 88231.0, true, now() - interval '2 days'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   2409958.0, 10122.0, true, now() - interval '2 days'),
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', true,
    'same one. the card prints the timestamp, so you can tell which snapshot it was.',
    0, 0, true, now() - interval '2 days' + interval '40 minutes'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
    'perfect, that answers it',
-   21007410.0, 88231.0, true, now() - interval '2 days' + interval '55 minutes'),
-  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   2409958.0, 10122.0, true, now() - interval '2 days' + interval '55 minutes'),
+  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
    'voted on the ticker one. keeping it.',
-   21007410.0, 88231.0, false, now() - interval '5 hours');
+   2409958.0, 10122.0, false, now() - interval '5 hours');
 alter table public.dms enable trigger all;
 
+
+-- Die Schwelle bleibt bei 1.000, und der Versuch, sie mitzuskalieren, ist
+-- hier gestanden und wieder verschwunden.
+--
+-- Die Ueberlegung war: bei einer Obergrenze von 10.000 sind 1.000 Dollar die
+-- obere Haelfte, also filtert die Liste haerter als vorher. Also runter auf
+-- 250. Das FILTERT auch tatsaechlich - aber app.js hat mit MIN_DM_THRESHOLD
+-- eine harte Untergrenze von 1.000, und das Feld im Posteingang zeigt
+-- deshalb weiter "1.000", egal was in der Tabelle steht. Ergebnis waeren
+-- Gespraeche ab 250 Dollar unter einer Beschriftung, die 1.000 behauptet -
+-- ein Widerspruch, den man einem Artikelbild ansieht.
+--
+-- Bei 1.000 bleiben rund die Haelfte der 500 Wallets uebrig. Das reicht fuer
+-- eine volle Liste und stimmt mit dem ueberein, was daneben steht.
 
 commit;
 

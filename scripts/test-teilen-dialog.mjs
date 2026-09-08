@@ -312,6 +312,62 @@ console.log('\nAuf dem Handy nicht\n');
   await ctx.close();
 }
 
+// --- 5d. Der Schleier deckt das ganze Fenster ------------------------------
+//
+// Gemeldet als "weisse Balken am Rand": links und rechts blieben 210 Punkte
+// ungedimmtes Papier stehen. inset: 0 stimmte, es bezog sich nur auf den
+// falschen Kasten - .app traegt transform: translateY(var(--versatz)), und
+// ein Transform wird zum Bezugsrahmen fuer alles, was darin fixed ist. Der
+// Dialog lag darin und war damit so breit wie die Spalte, nicht wie das
+// Fenster.
+//
+// Die Testseite hat kein .app, also wird die Lage hier nachgestellt -
+// einmal draussen, einmal drin. Ohne die zweite Haelfte sagt die erste nur,
+// dass position: fixed funktioniert, und nicht, wovor sie schuetzt.
+console.log('\nDer Schleier deckt das ganze Fenster\n');
+{
+  const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.addScriptTag({ content: skript });
+
+  const frei = await page.evaluate(() => {
+    const d = document.getElementById('bild-dialog');
+    d.hidden = false;
+    const r = d.getBoundingClientRect();
+    d.hidden = true;
+    return { x: r.x, breite: r.width, fenster: innerWidth };
+  });
+  check('Er beginnt am linken Fensterrand', frei.x === 0, `x = ${frei.x}`);
+  check('Und ist so breit wie das Fenster',
+    Math.round(frei.breite) === frei.fenster, `${Math.round(frei.breite)} von ${frei.fenster}`);
+
+  const drin = await page.evaluate(() => {
+    const huelle = document.createElement('div');
+    huelle.className = 'app';
+    document.body.appendChild(huelle);
+    const d = document.getElementById('bild-dialog');
+    huelle.appendChild(d);
+    d.hidden = false;
+    const r = d.getBoundingClientRect();
+    d.hidden = true;
+    document.body.appendChild(d);
+    huelle.remove();
+    return { x: r.x, breite: r.width, fenster: innerWidth };
+  });
+  check('Gegenprobe: in .app waere er es nicht',
+    drin.x > 0 && Math.round(drin.breite) < drin.fenster,
+    `x = ${Math.round(drin.x)}, ${Math.round(drin.breite)} von ${drin.fenster}`);
+
+  const filter = await page.evaluate(() => {
+    const cs = getComputedStyle(document.getElementById('bild-dialog'));
+    return cs.backdropFilter || cs.webkitBackdropFilter || 'none';
+  });
+  check('Die Seite dahinter wird abgedunkelt, nicht verschwommen',
+    filter === 'none', filter);
+  await ctx.close();
+}
+
 // --- 6. Der Zeitstempel selbst ----------------------------------------------
 console.log('\nDer Zeitstempel\n');
 {
