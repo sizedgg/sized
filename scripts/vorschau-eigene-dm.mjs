@@ -27,7 +27,7 @@ import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 //
 // Run with: node scripts/vorschau-eigene-dm.mjs helligkeit
 const BRIGHT = [
-  ['#c6ccd8', '60 %', 'Der Ton des Send-Knopfs. Auf einer Blase zu hell, sagt André.'],
+  ['#c6ccd8', '60 %', 'Der Ton des Send-Knopfs. Auf einer Blase zu hell, heisst es.'],
   ['#b9c0ce', '52 %', 'Eine Stufe tiefer.'],
   ['#aab2c2', '44 %', 'Eingebaut. Deutlich heller als der Grund, ohne zu leuchten.'],
   ['#9aa3b5', '36 %', 'Noch eine Stufe. Nähert sich einem mittleren Grau.'],

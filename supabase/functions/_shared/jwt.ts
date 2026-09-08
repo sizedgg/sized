@@ -79,6 +79,17 @@ export async function verifyWalletJwt(
     const payload = JSON.parse(new TextDecoder().decode(fromB64url(parts[1])));
     if (typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null;
     if (typeof payload.wallet !== 'string' || !payload.wallet) return null;
+    // Und es muss eines UNSERER Token sein.
+    //
+    // Unterschrieben wird mit dem JWT-Geheimnis des Supabase-Projekts, und
+    // das benutzt Supabase auch selbst. Ohne diese zwei Zeilen wuerde jedes
+    // andere Token, das mit demselben Geheimnis unterschrieben ist und
+    // zufaellig ein Feld "wallet" traegt, hier durchgehen. Heute gibt es so
+    // eines nicht - aber die Pruefung kostet zwei Zeilen, und der Weg von
+    // "gibt es nicht" zu "gibt es jetzt" ist eine eingeschaltete
+    // Anmeldemethode im Supabase-Dashboard.
+    if (payload.aud !== 'authenticated') return null;
+    if (payload.app_metadata?.provider !== 'solana-payment') return null;
     return {
       wallet: payload.wallet,
       isAdmin: payload.is_admin === true,

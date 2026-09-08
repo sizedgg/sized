@@ -1,12 +1,12 @@
 -- ============================================================================
--- The three cron jobs that keep the amounts current
+-- The four cron jobs: three keep the amounts current, one cleans up
 --
 -- To be run in the Supabase dashboard under SQL Editor. First replace
 -- DEIN_CRON_SECRET below with the real value - the same one that sits in
 -- CRON_SECRET in the edge function secrets.
 --
--- Why three and not one: an amount is quantity x price, and the two behave
--- completely differently. The quantity only changes when someone moves
+-- Why three for the amounts and not one: an amount is quantity x price, and
+-- the two behave completely differently. The quantity only changes when someone moves
 -- tokens - the webhook reports that within seconds. The price changes
 -- constantly, but is the same for every wallet. Reading every wallet from
 -- the chain individually every minute would, at 1000 wallets, be 1.4
@@ -21,7 +21,7 @@ do $$
 begin
   perform cron.unschedule(jobname)
   from cron.job
-  where jobname in ('price-tick', 'refresh-voters', 'refresh-holdings');
+  where jobname in ('price-tick', 'refresh-voters', 'refresh-holdings', 'aufraeumen');
 end $$;
 
 -- 1. Price tick: ONE price fetch, one statement, all wallets at once.
@@ -56,5 +56,22 @@ select cron.schedule('refresh-holdings', '* * * * *', $$
   );
 $$);
 
--- Check: there must be exactly three rows, each with active = true.
+-- 4. Aufraeumen, einmal taeglich um 03:12 UTC.
+--
+--    Kein http_post: das ist reines SQL, die Funktion steht in der Datenbank
+--    (Wanderung 20260908020000). Die Uhrzeit ist krumm, damit dieser Auftrag
+--    nicht zusammen mit den drei Minutenauftraegen anlaeuft.
+--
+--    Was geloescht wird und warum es nichts aufweicht, steht im Kopf der
+--    Wanderung - vor allem, warum eine 30 Tage alte Unterschrift keine
+--    Anmeldung mehr einloesen kann.
+select cron.schedule('aufraeumen', '12 3 * * *', $$
+  select * from app.aufraeumen(30);
+$$);
+
+-- Check: there must be exactly four rows, each with active = true.
 select jobname, schedule, active from cron.job order by jobname;
+
+-- Und einmal von Hand, um zu sehen, dass es laeuft. Beim ersten Mal auf einer
+-- frischen Datenbank steht ueberall 0 - das ist die richtige Antwort.
+select * from app.aufraeumen(30);

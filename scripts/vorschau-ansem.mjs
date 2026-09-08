@@ -14,8 +14,8 @@
 // recognizability has to come from somewhere else: from color, from a
 // surface, from a mark.
 //
-// Gold is out because André doesn't like it - and it already had a
-// neighbor anyway: .h.t3 (sand, #dcc088) isn't far off.
+// Gold is out because the owner of the site doesn't like it - and it
+// already had a neighbor anyway: .h.t3 (sand, #dcc088) isn't far off.
 //
 // Produces preview/ansem-im-chat.png
 // ============================================================================

@@ -31,9 +31,23 @@ export interface TreasuryPayment {
   slot: number;
   sender: string;
   lamports: number;
+  /**
+   * When the payment landed, in seconds since the epoch - straight from the
+   * chain, not from our clock.
+   *
+   * The matching needs it: a payment may only settle a challenge that
+   * existed BEFORE it. Without that comparison an old, still unbooked
+   * payment from someone else's wallet can be claimed by a challenge opened
+   * later, and whoever opened that challenge gets a session for a wallet
+   * that is not theirs. See scanTreasury in verify/index.ts.
+   *
+   * null only for transactions so old that the node has dropped the time -
+   * that cannot happen for a payment made minutes ago.
+   */
+  blockTime: number | null;
 }
 
-interface SignatureInfo { signature: string; slot: number; err: unknown }
+interface SignatureInfo { signature: string; slot: number; err: unknown; blockTime?: number | null }
 
 /**
  * How many detail queries a single scan makes at most - and how many of
@@ -105,6 +119,7 @@ export async function recentTreasuryPayments(
         slot: tx.slot ?? s.slot,
         sender: info.source,
         lamports: Number(info.lamports),
+        blockTime: tx.blockTime ?? s.blockTime ?? null,
       }; // one transfer per transaction is enough
     }
     return null;

@@ -77,6 +77,14 @@ self.addEventListener('fetch', (e) => {
   // hand X an old question and old numbers.
   if (url.pathname.startsWith('/p/')) return;
 
+  // config.js auch nicht.
+  //
+  // Oben steht, die Datei liege bewusst NICHT in der Shell, damit sich keine
+  // alte Adresse festsetzt. Der Fetch-Teil hat sie danach trotzdem
+  // mitgenommen: er legt jede erfolgreiche Antwort ab. Zieht das Projekt um,
+  // haette die alte Adresse beim naechsten Netzhaenger wieder gegolten.
+  if (url.pathname === '/config.js') return;
+
   e.respondWith(
     fetch(e.request)
       .then((res) => {
@@ -87,6 +95,20 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request).then((hit) => hit || caches.match('/index.html'))),
+      // Der Ersatz aus dem Zwischenspeicher - und die Seite nur fuer eine
+      // Seite.
+      //
+      // Vorher kam bei jedem Fehlschlag /index.html zurueck, auch fuer
+      // /app.js oder /styles.css: HTML als Antwort auf eine Anfrage nach
+      // JavaScript, was der Browser wegen X-Content-Type-Options ohnehin
+      // verwirft. Und war nichts da, loeste respondWith mit undefined auf,
+      // was im Service Worker ein Fehler ist.
+      .catch(() => caches.match(e.request).then((hit) => {
+        if (hit) return hit;
+        if (e.request.mode === 'navigate') {
+          return caches.match('/index.html').then((seite) => seite ?? Response.error());
+        }
+        return Response.error();
+      })),
   );
 });

@@ -80,22 +80,40 @@ check('encode(decode(x)) === x', VALID.every((a) => encodeBase58(decodeBase58(a)
 
 console.log('\n── Zahlungszuordnung ──');
 
-/** Reconstruction of the matching rule from verify/index.ts for an isolated test. */
+/**
+ * Nachbau der Zuordnungsregel aus verify/index.ts.
+ *
+ * Ein Nachbau ist eine zweite Wahrheit, und die kann von der ersten
+ * abweichen, ohne dass es auffaellt. Deshalb steht weiter unten ein Block,
+ * der die echte Datei liest und nachsieht, dass die Bedingungen dort
+ * ueberhaupt stehen. Das Verhalten wird hier geprueft, die Existenz dort.
+ */
+const NACHLAUF_MS = 60 * 60_000;
 function match(payment, challenges, seen) {
   if (seen.has(payment.signature)) return null;
+  // blockTime ist die Zeit AUS DER KETTE, in Sekunden; 60 Sekunden Nachsicht
+  // fuer den Gang zweier verschiedener Uhren.
+  const zahlung = (payment.blockTime ?? Math.floor(Date.now() / 1000)) * 1000 + 60_000;
   return challenges.find((c) =>
     c.status === 'pending' &&
     c.wallet === payment.sender &&
     c.lamports === payment.lamports &&
-    c.expiresAt > Date.now()) ?? null;
+    c.createdAt <= zahlung &&
+    c.expiresAt > Date.now() - NACHLAUF_MS) ?? null;
 }
 
 const OTHER = 'CYRHXzKhGBdrJ9v5XtAyBRopaKVDh6DUoaqZdntvG19Z';
 const future = Date.now() + 600_000;
+const jetzt = Date.now();
 const challenges = [
-  { id: 'a', wallet: WALLET, lamports: 2_042_779, status: 'pending', expiresAt: future },
-  { id: 'b', wallet: OTHER,  lamports: 2_012_846, status: 'pending', expiresAt: future },
-  { id: 'c', wallet: WALLET, lamports: 2_099_111, status: 'pending', expiresAt: Date.now() - 1000 },
+  { id: 'a', wallet: WALLET, lamports: 2_042_779, status: 'pending', expiresAt: future, createdAt: jetzt - 60_000 },
+  { id: 'b', wallet: OTHER,  lamports: 2_012_846, status: 'pending', expiresAt: future, createdAt: jetzt - 60_000 },
+  // Vor zwei Stunden abgelaufen - ausserhalb des Nachlaufs.
+  { id: 'c', wallet: WALLET, lamports: 2_099_111, status: 'pending',
+    expiresAt: jetzt - 2 * 3600_000, createdAt: jetzt - 3 * 3600_000 },
+  // Vor zwanzig Minuten abgelaufen - innerhalb des Nachlaufs.
+  { id: 'd', wallet: WALLET, lamports: 2_055_000, status: 'pending',
+    expiresAt: jetzt - 20 * 60_000, createdAt: jetzt - 45 * 60_000 },
 ];
 const seen = new Set();
 
@@ -111,6 +129,74 @@ check('Abgelaufene Challenge wird nicht bedient',
 seen.add('s5');
 check('Bereits verbuchte Signatur wird ignoriert (kein Replay)',
   match({ signature: 's5', sender: WALLET, lamports: 2_042_779 }, challenges, seen) === null);
+
+// Die Uebernahme, die diese Regel verhindert
+// ---------------------------------------------------------------------------
+// Ohne die Bedingung "die Zahlung muss juenger sein als die Challenge" konnte
+// jeder eine Challenge fuer eine FREMDE Adresse aufmachen und eine alte, noch
+// nicht verbuchte Zahlung dieser Adresse einloesen - Betrag und Absender
+// stehen oeffentlich in jedem Explorer. Fuer Ansems Adresse waere das
+// Verwaltungszugang gewesen.
+const alteZahlung = {
+  signature: 's6', sender: WALLET, lamports: 2_042_779,
+  blockTime: Math.floor((jetzt - 3 * 3600_000) / 1000),   // drei Stunden alt
+};
+check('Eine Zahlung von VOR der Challenge loest sie nicht ein',
+  match(alteZahlung, challenges, seen) === null);
+check('Dieselbe Zahlung nach dem Aufmachen der Challenge loest sie ein',
+  match({ ...alteZahlung, signature: 's7', blockTime: Math.floor(jetzt / 1000) },
+    challenges, seen)?.id === 'a');
+check('Eine Zahlung ohne Kettenzeit gilt als jetzt',
+  match({ signature: 's8', sender: WALLET, lamports: 2_042_779, blockTime: null },
+    challenges, seen)?.id === 'a');
+
+check('Knapp zu spaet bezahlt zaehlt noch (eine Stunde Nachlauf)',
+  match({ signature: 's9', sender: WALLET, lamports: 2_055_000,
+    blockTime: Math.floor((jetzt - 25 * 60_000) / 1000) }, challenges, seen)?.id === 'd');
+check('Zwei Stunden zu spaet nicht mehr',
+  match({ signature: 's10', sender: WALLET, lamports: 2_099_111,
+    blockTime: Math.floor((jetzt - 90 * 60_000) / 1000) }, challenges, seen) === null);
+
+// Und dasselbe an der echten Datei, nicht am Nachbau
+// ---------------------------------------------------------------------------
+const verifyQuelle = fs.readFileSync(
+  new URL('../supabase/functions/verify/index.ts', import.meta.url), 'utf8');
+check('verify vergleicht die Zahlung mit created_at der Challenge',
+  /\.lte\('created_at'/.test(verifyQuelle));
+check('verify liest die Kettenzeit der Zahlung (blockTime)',
+  /blockTime/.test(verifyQuelle));
+// Die Klammer gehoert dazu: im Kommentar darueber STEHT Math.random, und ein
+// Test, der am Wort scheitert statt am Aufruf, misst die Begruendung.
+check('Der Aufschlag kommt aus crypto.getRandomValues',
+  /crypto\.getRandomValues\(wuerfel\)/.test(verifyQuelle) && !/Math\.random\(/.test(verifyQuelle));
+check('Challenges ohne Fingerabdruck sind nicht mehr einloesbar',
+  /if \(!c\.secret_hash\) return null;/.test(verifyQuelle));
+check('mock-pay gilt nur fuer die Testwallet',
+  /c\.wallet !== cfg\.test_wallet/.test(verifyQuelle));
+check('Der Scan-Takt steht in der Datenbank, nicht nur im Speicher',
+  /last_scan_at/.test(verifyQuelle));
+
+const solanaQuelle = fs.readFileSync(
+  new URL('../supabase/functions/_shared/solana.ts', import.meta.url), 'utf8');
+check('Die Zahlung traegt ihre Kettenzeit mit sich',
+  /blockTime: tx\.blockTime/.test(solanaQuelle));
+
+const jwtQuelle = fs.readFileSync(
+  new URL('../supabase/functions/_shared/jwt.ts', import.meta.url), 'utf8');
+check('Ein Token muss aud und provider tragen',
+  /payload\.aud !== 'authenticated'/.test(jwtQuelle)
+  && /provider !== 'solana-payment'/.test(jwtQuelle));
+
+const holdingsQuelle = fs.readFileSync(
+  new URL('../supabase/functions/_shared/holdings.ts', import.meta.url), 'utf8');
+check('Ein Preis von null wird nicht in die Tabelle geschrieben',
+  /if \(!\(price > 0\)\)/.test(holdingsQuelle));
+
+const webhookQuelle = fs.readFileSync(
+  new URL('../supabase/functions/holdings-webhook/index.ts', import.meta.url), 'utf8');
+check('Der Webhook holt den Preis einmal, nicht je Wallet',
+  /await tokenPrice\(cfg\.ansem_mint\)/.test(webhookQuelle)
+  && /refreshWallet\(db, wallet, cfg\.ansem_mint, preis\)/.test(webhookQuelle));
 
 // The nonce surcharge is what makes a stranger's payment useless: an
 // attacker who enters WALLET doesn't know the expected amount.

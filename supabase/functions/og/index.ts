@@ -107,7 +107,7 @@ const CARD_VERSION = 13;
 function page(opts: { id: number; titel: string; beschreibung: string; bild: string }) {
   const ziel = `${PAGE}/#poll-${opts.id}`;
   return `<!doctype html>
-<html long="en">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -159,6 +159,12 @@ Deno.serve(async (req) => {
     // changes the question, the card shouldn't keep showing the old one
     // for days.
     'cache-control': 'public, max-age=60, s-maxage=300',
+    // Die Antwort haengt an der Kennung des Programms: Menschen bekommen
+    // eine Weiterleitung, Crawler die Seite mit den Kartendaten. Ohne diese
+    // Zeile darf ein gemeinsamer Zwischenspeicher die eine Antwort fuer die
+    // andere ausliefern - der Mensch sieht dann den Quelltext der Karte, und
+    // der Crawler bekommt eine Weiterleitung statt der Karte.
+    'vary': 'user-agent',
   };
 
   if (!treffer) {
@@ -169,6 +175,19 @@ Deno.serve(async (req) => {
   }
 
   const id = Number(treffer[1]);
+  // Kennungen jenseits jeder Moeglichkeit gar nicht erst nachschlagen.
+  //
+  // Die Antwort ist oeffentlich zwischengespeichert, und jede Kennung ist ein
+  // eigener Eintrag - /p/1, /p/2, ... /p/99999999 laufen also alle am
+  // Zwischenspeicher vorbei und kosten jeweils drei Abfragen an die Datenbank
+  // plus eine an den Speicher. Diese Zeile macht daraus eine Antwort ohne
+  // jede Abfrage.
+  if (!Number.isSafeInteger(id) || id < 1 || id > 10_000_000) {
+    return new Response(
+      `<!doctype html><meta http-equiv="refresh" content="0; url=${PAGE}/">`,
+      { status: 302, headers: { ...header, location: `${PAGE}/` } },
+    );
+  }
   const ersatz = `${PAGE}/og-karte.png`;
   const ziel = `${PAGE}/#poll-${id}`;
 
@@ -213,6 +232,7 @@ Deno.serve(async (req) => {
         // Cache briefly, but not for long: should the detection ever be
         // wrong, an error shouldn't linger for days.
         'cache-control': 'public, max-age=60',
+        'vary': 'user-agent',
       },
     });
   }

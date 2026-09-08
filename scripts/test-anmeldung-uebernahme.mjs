@@ -146,10 +146,35 @@ check('Fortgesetzt wird nur mit dem eigenen Geheimnis',
 check('Und nur die eigene Wallet und nur solange sie läuft',
   /c\.wallet === wallet/.test(next) && /c\.status === 'pending'/.test(next)
   && /expires_at\)\.getTime\(\) > Date\.now\(\)/.test(next));
-// The line that made the attack possible: a lookup by wallet alone.
-check('Es gibt keine Suche mehr, die allein über die Wallet geht',
-  !/\.eq\('wallet', wallet\)\s*\.eq\('status', 'pending'\)/.test(src),
-  'die alte Wiederverwendung ist weg');
+// Die Zeile, die den Angriff moeglich machte: eine Suche allein ueber die
+// Wallet, deren Ergebnis dem Aufrufer ZURUECKGEGEBEN wurde.
+//
+// Ein blosses Verbot von "wallet + pending" im Quelltext trifft es nicht
+// mehr: seit der Raeumung des aeltesten offenen Fensters (P0001) gibt es so
+// eine Suche wieder, und sie ist richtig. Der Unterschied ist, was danach
+// mit der Zeile passiert. Also wird genau das geprueft - jede Suche dieser
+// Form holt nur die Kennung und schreibt sie auf 'expired'; keine holt eine
+// ganze Zeile, aus der eine Anmeldung werden koennte.
+const walletSuchen = [...src.matchAll(/\.select\((.{1,8}?)\)\s*\.eq\('wallet', wallet\)\s*\.eq\('status', 'pending'\)([\s\S]{0,320})/g)];
+check('Keine Suche allein über die Wallet gibt eine Challenge heraus',
+  walletSuchen.every((m) => m[1] === "'id'" && /update\(\{ status: 'expired' \}\)/.test(m[2])),
+  `${walletSuchen.length} Suche(n), alle nur zum Räumen`);
+// Gegenprobe: die alte Form - eine ganze Zeile ueber die Wallet - gibt es
+// nirgends mehr. Ohne diese Zeile wuerde die Pruefung oben auch bestehen,
+// wenn die Suche gar nicht existierte.
+check('Und die alte Wiederverwendung über die Wallet ist weg',
+  !/\.select\('\*'\)\s*\.eq\('wallet', wallet\)/.test(src));
+
+// Und die Raeumung fasst nur an, was noch LAEUFT.
+//
+// Sie holt die aelteste offene Zeile dieser Wallet und setzt sie auf
+// 'expired', damit die Obergrenze niemanden aussperrt. Ohne die Zeitgrenze
+// traf das auch eine Zeile im Nachlauf - also eine abgelaufene, deren spaet
+// bestaetigte Zahlung noch zugeordnet werden soll. Genau die haette dabei ihr
+// Geld verloren. Eine laufende gibt es immer: die Obergrenze zaehlt nur
+// laufende Fenster, sie kann ohne drei davon gar nicht greifen.
+check('Geräumt wird nur eine Challenge, die noch läuft',
+  walletSuchen.every((m) => /\.gt\('expires_at', new Date\(\)\.toISOString\(\)\)/.test(m[2])));
 
 // Step 4: with just the id, nobody gets at the proof any more.
 lines.get('challenge-des-angreifers').status = 'paid';
@@ -168,13 +193,28 @@ check('Mit dem richtigen schon – sonst prüfte hier nichts',
 check('Eine unbekannte Kennung ergibt dieselbe Absage wie ein falsches Geheimnis',
   (await lauf.challengeWithSecret('gibt-es-nicht-12345', angreiferGeheimnis)) === null);
 
-// Legacy rows: open challenges without a hash are worthless, paid ones are not.
+// Zeilen aus der Zeit vor den Geheimnissen: keine ist einloesbar, auch die
+// bezahlte nicht.
+//
+// Hier stand das Gegenteil: eine BEZAHLTE ohne Fingerabdruck durfte noch
+// durch, weil dort Geld geflossen ist. Das war dieselbe Luecke nochmal - fuer
+// so eine Zeile genuegt die Kennung plus irgendeine Zeichenkette ab 32
+// Zeichen, und die Kennung hatte damals auch der, der das Fenster fuer eine
+// FREMDE Adresse aufgemacht hat. Wer noch so eine Zahlung hat, bekommt sie
+// von Hand gutgeschrieben.
 lines.set('alt-offen', { id: 'alt-offen', wallet: ANSEM, status: 'pending', secret_hash: null });
 lines.set('alt-bezahlt', { id: 'alt-bezahlt', wallet: ANSEM, status: 'paid', secret_hash: null });
 check('Eine offene Challenge aus der Zeit ohne Geheimnis ist wertlos',
   (await lauf.challengeWithSecret('alt-offen', lauf.newSecret())) === null);
-check('Eine bereits BEZAHLTE darf noch eingelöst werden – dort ist Geld geflossen',
-  (await lauf.challengeWithSecret('alt-bezahlt', lauf.newSecret()))?.id === 'alt-bezahlt');
+check('Eine BEZAHLTE ohne Fingerabdruck ebenfalls – auch sie ist nicht einlösbar',
+  (await lauf.challengeWithSecret('alt-bezahlt', lauf.newSecret())) === null);
+// Gegenprobe: es ist wirklich der fehlende Fingerabdruck, der sie sperrt,
+// nicht etwa der Status 'paid'. Sonst haette die Zeile oben mit
+// 'challenge-des-angreifers' (auch 'paid') nicht bestehen koennen.
+const abdruckDa = await lauf.abdruck(g1);
+lines.set('neu-bezahlt', { id: 'neu-bezahlt', wallet: ANSEM, status: 'paid', secret_hash: abdruckDa });
+check('Eine bezahlte MIT Fingerabdruck geht durch – gesperrt ist der fehlende Abdruck',
+  (await lauf.challengeWithSecret('neu-bezahlt', g1))?.id === 'neu-bezahlt');
 
 // ---------------------------------------------------------------------------
 console.log('\nWird die Prüfung auch benutzt?\n');
@@ -309,8 +349,13 @@ check('Und der teuerste bleibt under 0,01 SOL', maxSol < 0.01, `${maxSol.toFixed
 
 // Two constants up top that nobody down below actually uses would be the
 // usual trap. So check that the calculation really uses them.
+// Der Aufschlag kommt aus crypto.getRandomValues, nicht aus Math.random -
+// er IST das Geheimnis des Verfahrens und wird dem Aufrufer als Betrag
+// zurueckgegeben.
 check('createChallenge rechnet mit genau diesen beiden Konstanten',
-  /Math\.floor\(Math\.random\(\) \* NONCE_TIERS\)\)\s*\*\s*NONCE_STEP/.test(src));
+  /\(1 \+ \(wuerfel\[0\] % NONCE_TIERS\)\)\s*\*\s*NONCE_STEP/.test(src));
+check('Und der Würfel kommt aus dem Kryptozufall',
+  /crypto\.getRandomValues\(wuerfel\)/.test(src) && !/Math\.random\(/.test(src));
 check('Und die lamportgenaue Fassung ist weg', !/NONCE_MAX/.test(src));
 
 // Fewer digits only work because the amount no longer needs to be globally

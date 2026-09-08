@@ -36,6 +36,30 @@ export async function refreshWallet(
     ? [await mockAmount(wallet), knownPrice ?? 0.0042]
     : await Promise.all([tokenBalance(wallet, mint), getPrice()]);
 
+  // Ein Preis von null wird NICHT geschrieben.
+  //
+  // tokenPrice() gibt bei einem Ausfall der Preisquelle 0 zurueck. Ohne
+  // diese Abzweigung landete daraufhin usd_value = 0 in der Tabelle, und der
+  // Trigger auf wallets stempelt damit die offenen Stimmen dieser Wallets auf
+  // Gewicht null - die Stimme bleibt stehen und zaehlt nichts mehr. Dazu
+  // faellt jeder Betroffene unter die DM-Schwelle. Beim naechsten Lauf
+  // repariert es sich von selbst, aber in der Zwischenzeit zeigt die Seite
+  // Zahlen, die nie jemand so gemeint hat.
+  //
+  // Der Bestand wird trotzdem festgehalten: die Menge kommt von der Kette und
+  // ist richtig, nur der Preis fehlt. usd_value bleibt, was es war.
+  if (!(price > 0)) {
+    const { error: mengeErr } = await db.from('wallets').upsert({
+      address: wallet,
+      ui_amount: uiAmount,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'address' });
+    if (mengeErr) throw new Error(`wallets update failed: ${mengeErr.message}`);
+    const { data: alt } = await db.from('wallets')
+      .select('usd_value').eq('address', wallet).maybeSingle();
+    return { uiAmount, usdValue: Number(alt?.usd_value ?? 0), price: 0 };
+  }
+
   const usdValue = uiAmount * price;
 
   const { error } = await db.from('wallets').upsert({

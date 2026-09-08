@@ -1159,10 +1159,14 @@ check('Die Taktgrenze greift auch bei gefaelschtem created_at',
 // Otherwise a foreign address could be locked out: 999 possible amounts,
 // three open challenges at once, 25 minutes lifetime - after a good six
 // days every number is taken and the owner can no longer get in.
+// Die zwei Stunden sind kein Zierwert: die Aufraeumung wartet den Nachlauf
+// von einer Stunde ab (20260908030000). Mit genau einer Stunde stand dieser
+// Test auf der Kante und haette bei jeder Aenderung des Nachlaufs anders
+// geantwortet, ohne dass etwas kaputt ist.
 await client.query(`delete from public.challenges`);
 await client.query(
   `insert into public.challenges (wallet, lamports, expires_at, status)
-   values ($1, 2000123, now() - interval '1 hour', 'pending')`, [SHRIMP]);
+   values ($1, 2000123, now() - interval '2 hours', 'pending')`, [SHRIMP]);
 // The second insert carries the SAME amount. It has to go through - and if
 // it doesn't, that is exactly the finding, not a crash: without the
 // cleanup, the unique index would reject it, and then the test should
@@ -1191,6 +1195,38 @@ const abgelaufen = await client.query(
    where wallet = $1 and status = 'expired'`, [SHRIMP]);
 check('Die abgelaufene Zeile steht auf expired, nicht mehr auf pending',
   abgelaufen.rows[0].n === 1, `${abgelaufen.rows[0].n} aufgeraeumt`);
+
+// Und die Gegenrichtung, die wichtigere: eine Zeile IM NACHLAUF darf das
+// Aufraeumen nicht anfassen.
+//
+// Der Fall, um den es geht: jemand sendet, die Bestaetigung haengt, er
+// drueckt neu. Setzte das Aufraeumen dabei seine alte Zeile auf 'expired',
+// findet die spaete Zahlung nichts mehr - die Zuordnung in verify sucht
+// 'pending'. Das Geld waere weg, und von aussen kein Grund zu sehen.
+await client.query(`delete from public.challenges`);
+await client.query(
+  `insert into public.challenges (wallet, lamports, expires_at, status)
+   values ($1, 2000456, now() - interval '10 minutes', 'pending')`, [SHRIMP]);
+await client.query(
+  `insert into public.challenges (wallet, lamports, expires_at, status)
+   values ($1, 2000457, now() + interval '20 minutes', 'pending')`, [SHRIMP]);
+const imNachlauf = await client.query(
+  `select status from public.challenges where wallet = $1 and lamports = 2000456`, [SHRIMP]);
+check('Eine Zeile im Nachlauf bleibt offen, wenn eine neue entsteht',
+  imNachlauf.rows[0].status === 'pending', imNachlauf.rows[0].status);
+// Gegenprobe: dieselbe Zeile, nur zwei Stunden alt, wird sehr wohl geraeumt.
+// Ohne sie waere ein Aufraeumen, das gar nichts mehr tut, oben genauso gruen.
+await client.query(
+  `update public.challenges set expires_at = now() - interval '2 hours'
+    where wallet = $1 and lamports = 2000456`, [SHRIMP]);
+await client.query(
+  `insert into public.challenges (wallet, lamports, expires_at, status)
+   values ($1, 2000458, now() + interval '20 minutes', 'pending')`, [SHRIMP]);
+const nachZweiStunden = await client.query(
+  `select status from public.challenges where wallet = $1 and lamports = 2000456`, [SHRIMP]);
+check('Gegenprobe: nach zwei Stunden wird sie geräumt',
+  nachZweiStunden.rows[0].status === 'expired', nachZweiStunden.rows[0].status);
+await client.query(`delete from public.challenges`);
 
 // 3. Reading requires a wallet claim
 // ---------------------------------------------------------------------------
@@ -1418,6 +1454,165 @@ check('Die ganze Abstimmung samt Stimmen loeschen bleibt erlaubt',
       .rows[0].n === 1);
   await expectFail('Nach dem Wiedereinspielen sperrt der Trigger erneut', ADMIN,
     () => client.query(`update public.polls set question = 'Nochmal?' where id = $1`, [p]));
+}
+
+console.log('\n── Was vor dem Start dazugekommen ist ──');
+{
+  // Betraege koennen nicht negativ sein. Ein negatives Gewicht wuerde von
+  // einem Balken ABZIEHEN - die Zeile davor zeigt, dass die Tabelle vorher
+  // beliebige Zahlen genommen haette.
+  //
+  // Und zwar als BESITZER der Tabelle, nicht als angemeldeter Nutzer. Der
+  // erste Versuch lief ueber asWallet und meldete brav "wird abgewiesen" -
+  // die Meldung war aber "permission denied for table wallets", also das
+  // Schreibrecht und nicht die neue Regel. Gruen, und gemessen hat es
+  // nichts.
+  const verboten = async (label, sql) => {
+    try {
+      await client.query(sql);
+      check(label, false, 'wurde faelschlich angenommen');
+      await client.query(`delete from public.wallets where address = 'negativ-test'`);
+    } catch (err) {
+      check(label, /wallets_betraege_nicht_negativ/.test(err.message),
+        err.message.split('\n')[0].slice(0, 80));
+    }
+  };
+  await verboten('Ein negativer Bestand wird abgewiesen',
+    `insert into public.wallets (address, ui_amount, usd_value, price)
+     values ('negativ-test', -1, 0, 0)`);
+  await verboten('Ein negativer Dollarwert auch',
+    `insert into public.wallets (address, ui_amount, usd_value, price)
+     values ('negativ-test', 0, -5, 0)`);
+  // Gegenprobe: dieselbe Zeile mit erlaubten Zahlen geht durch.
+  await client.query(
+    `insert into public.wallets (address, ui_amount, usd_value, price)
+     values ('negativ-test', 1, 1, 1)`);
+  check('Gegenprobe: mit erlaubten Zahlen nimmt die Tabelle die Zeile',
+    (await client.query(`select count(*)::int n from public.wallets where address = 'negativ-test'`))
+      .rows[0].n === 1);
+  await client.query(`delete from public.wallets where address = 'negativ-test'`);
+
+  // Die Uhr fuer den Ketten-Scan steht in der Datenbank und nicht im
+  // Speicher einer einzelnen Instanz.
+  const spalte = await client.query(
+    `select column_name from information_schema.columns
+      where table_schema='public' and table_name='app_config' and column_name='last_scan_at'`);
+  check('app_config traegt die gemeinsame Scan-Uhr', spalte.rowCount === 1);
+
+  // Zwei gleichzeitige Instanzen: nur eine darf die Uhr weiterstellen.
+  await client.query(`update public.app_config set last_scan_at = now() - interval '10 seconds' where id = 1`);
+  const takt = async () => (await client.query(
+    `update public.app_config set last_scan_at = now()
+      where id = 1 and last_scan_at < now() - interval '5 seconds' returning id`)).rowCount;
+  const ersterLauf = await takt();
+  const zweiterLauf = await takt();
+  check('Der erste Aufruf darf scannen', ersterLauf === 1);
+  check('Der zweite innerhalb der Sperrzeit nicht', zweiterLauf === 0);
+
+  // Der Index, auf dem die Minutenuhr laeuft.
+  const idx = await client.query(
+    `select indexname from pg_indexes where tablename = 'wallets' and indexdef like '%updated_at%'`);
+  check('Es gibt einen Index auf wallets.updated_at', idx.rowCount >= 1);
+
+  // Die Adminpruefung in dms_read steht als Unterausdruck - sonst laeuft sie
+  // je Zeile statt je Abfrage.
+  const regel = await client.query(
+    `select qual from pg_policies where tablename = 'dms' and policyname = 'dms_read'`);
+  check('dms_read rechnet die Adminpruefung einmal aus',
+    /SELECT app\.is_admin\(\)/i.test(regel.rows[0].qual ?? ''), regel.rows[0].qual?.slice(0, 90));
+
+  // Und die Regel sagt weiterhin dasselbe: eigener Faden oder Ansem.
+  const dmA = (await asWallet(ADMIN, () => client.query(
+    `select count(*)::int n from public.dms`))).rows[0].n;
+  const dmW = (await asWallet(WHALE, () => client.query(
+    `select count(*)::int n from public.dms where wallet <> $1`, [WHALE]))).rows[0].n;
+  check('Ansem sieht alle Nachrichten', dmA > 0);
+  check('Ein Halter sieht keine fremde', dmW === 0);
+}
+
+console.log('\n── Das taegliche Aufraeumen ──');
+{
+  // Was hier zaehlt, ist nicht die Menge der geloeschten Zeilen, sondern die
+  // Grenze: alles, was noch eingeloest werden koennte, muss stehen bleiben.
+  // Eine Aufraeumfunktion, die zu viel mitnimmt, nimmt Leuten ihre bezahlte
+  // Anmeldung weg - und das faellt erst auf, wenn sich jemand beschwert.
+  await client.query(`delete from public.challenges`);
+  await client.query(`delete from public.seen_txs`);
+
+  const lege = (id, status, tageAlt, ablaufTage) => client.query(
+    `insert into public.challenges (id, wallet, lamports, status, created_at, expires_at)
+     values ($1, 'AufraeumTest', $2, $3,
+             now() - make_interval(days => $4::int),
+             now() - make_interval(days => $5::int))`,
+    [id, 2_000_000 + Number(String(id).slice(-4).replace(/\D/g, '') || 1), status, tageAlt, ablaufTage]);
+
+  const A = '11111111-0000-0000-0000-000000000001';
+  const B = '11111111-0000-0000-0000-000000000002';
+  const C = '11111111-0000-0000-0000-000000000003';
+  const D = '11111111-0000-0000-0000-000000000004';
+  const E = '11111111-0000-0000-0000-000000000005';
+  await lege(A, 'used', 40, 40);      // alt und verbraucht -> weg
+  await lege(B, 'expired', 40, 40);   // alt und abgelaufen -> weg
+  await lege(C, 'paid', 2, 2);        // bezahlt, aber JUNG -> bleibt
+  // Offen und erst vor einer halben Stunde abgelaufen: der Nachlauf von einer
+  // Stunde in verify/index.ts koennte diese Zahlung noch zuordnen.
+  await client.query(
+    `insert into public.challenges (id, wallet, lamports, status, created_at, expires_at)
+     values ($1, 'AufraeumTest', 2009999, 'pending',
+             now() - interval '1 hour', now() - interval '30 minutes')`, [E]);
+  // D kommt ZULETZT, und das ist keine Kosmetik: jedes Anlegen loest den
+  // Trigger app.raeume_abgelaufene_challenges() aus, und der setzt lange
+  // abgelaufene offene Zeilen derselben Wallet auf 'expired'. Stand D vorher,
+  // war es beim Zaehlen nicht mehr offen, und die Zeile darunter haette den
+  // zweiten Topf nie geprueft.
+  await lege(D, 'pending', 40, 40);   // offen, lange abgelaufen -> weg
+
+  await client.query(
+    `insert into public.seen_txs (signature, slot, sender, lamports, seen_at)
+     values ('sig-alt', 1, 'x', 1, now() - interval '40 days'),
+            ('sig-neu', 2, 'x', 1, now() - interval '2 days')`);
+
+  const bericht = await client.query(`select * from app.aufraeumen(30)`);
+  const uebrig = async (id) => (await client.query(
+    `select count(*)::int n from public.challenges where id = $1`, [id])).rows[0].n;
+
+  check('Eine verbrauchte Challenge von vor 40 Tagen ist weg', (await uebrig(A)) === 0);
+  check('Eine abgelaufene von vor 40 Tagen auch', (await uebrig(B)) === 0);
+  check('Eine BEZAHLTE von vorgestern bleibt stehen', (await uebrig(C)) === 1);
+  check('Eine offene, die vor 40 Tagen ablief, ist weg', (await uebrig(D)) === 0);
+  check('Eine offene, die vor einer halben Stunde ablief, bleibt – der Nachlauf',
+    (await uebrig(E)) === 1);
+
+  const sigs = (await client.query(`select signature from public.seen_txs order by signature`))
+    .rows.map((r) => r.signature);
+  check('Eine Unterschrift von vor 40 Tagen ist weg', !sigs.includes('sig-alt'));
+  check('Eine von vorgestern steht noch da', sigs.includes('sig-neu'), sigs.join(', '));
+
+  // Die Funktion sagt auch, was sie getan hat - sonst laesst sich im Zeitplan
+  // nicht erkennen, ob sie ueberhaupt laeuft.
+  const zeilen = Object.fromEntries(bericht.rows.map((r) => [r.tabelle, Number(r.geloescht)]));
+  check('Sie berichtet über beide Tabellen',
+    zeilen.challenges === 2 && zeilen.challenges_offen === 1 && zeilen.seen_txs === 1,
+    JSON.stringify(zeilen));
+
+  // Gegenprobe: ein zweiter Lauf loescht nichts mehr. Ohne diese Zeile waere
+  // eine Funktion, die einfach alles wegnimmt, oben genauso gruen.
+  const zweimal = await client.query(`select * from app.aufraeumen(30)`);
+  check('Ein zweiter Lauf löscht nichts mehr',
+    zweimal.rows.every((r) => Number(r.geloescht) === 0),
+    JSON.stringify(zweimal.rows));
+  check('Und die jungen Zeilen stehen danach immer noch da',
+    (await uebrig(C)) === 1 && (await uebrig(E)) === 1);
+
+  // Kein anon, kein authenticated.
+  const rechte = await client.query(
+    `select has_function_privilege('anon', 'app.aufraeumen(int)', 'execute') as anon,
+            has_function_privilege('authenticated', 'app.aufraeumen(int)', 'execute') as auth`);
+  check('Aufrufen darf sie niemand von aussen',
+    rechte.rows[0].anon === false && rechte.rows[0].auth === false);
+
+  await client.query(`delete from public.challenges where wallet = 'AufraeumTest'`);
+  await client.query(`delete from public.seen_txs`);
 }
 
 console.log(`\n${failures === 0 ? '✅ Alle Prüfungen bestanden' : `❌ ${failures} Prüfung(en) fehlgeschlagen`}\n`);

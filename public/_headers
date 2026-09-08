@@ -166,6 +166,25 @@
 # the old one for a year.
 # ===========================================================================
 
+# ===========================================================================
+# /check.html - die Messseite braucht zwei Adressen mehr
+#
+# Sie zeigt die oeffentliche Adresse des Geraets an, und das ist nicht
+# Beiwerk: nur so sieht man, ob Handy und Rechner von aussen unter derselben
+# Adresse auftauchen - sonst kann ein gruenes Ergebnis genau das bedeuten und
+# die Schlussfolgerung ist falsch. Die zwei Dienste dafuer stehen nur HIER in
+# connect-src und nicht in der Regel fuer die ganze Seite.
+#
+# Der Rest der Regel ist derselbe wie oben, absichtlich ausgeschrieben:
+# Netlify ersetzt die Kopfzeile fuer diesen Pfad, es ergaenzt sie nicht.
+# ===========================================================================
+
+/check.html
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://wbkfjvpxxlwcivqcmmpo.supabase.co wss://wbkfjvpxxlwcivqcmmpo.supabase.co https://api.ipify.org https://ipapi.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 

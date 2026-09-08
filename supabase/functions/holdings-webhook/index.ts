@@ -27,6 +27,7 @@
 import { serviceClient, loadConfig, json, fail, CORS } from '../_shared/common.ts';
 import { isSolanaAddress } from '../_shared/base58.ts';
 import { refreshWallet } from '../_shared/holdings.ts';
+import { tokenPrice } from '../_shared/solana.ts';
 
 /**
  * Character-by-character comparison in constant time.
@@ -99,15 +100,30 @@ Deno.serve(async (req) => {
       return json({ updated: 0, seen: wallets.length, note: 'no known wallet in payload' });
     }
 
+    // Den Preis EINMAL holen, nicht je Wallet.
+    //
+    // refreshWallet holt ihn sich sonst selbst - bei sechzig Wallets in einem
+    // Aufruf also sechzig Abfragen an dieselbe Preisquelle, hintereinander,
+    // fuer denselben Wert. Genau davor warnt der Parameter in
+    // _shared/holdings.ts, und refresh-holdings macht es richtig; hier fehlte
+    // es. Bei einem groesseren Transfer-Ereignis von Helius reicht das, um
+    // sich bei Jupiter auszusperren.
+    //
+    // Faellt die Preisquelle aus, kommt 0 zurueck; refreshWallet schreibt
+    // dann nur die Menge und laesst den letzten Dollarwert stehen.
+    let preis = 0;
+    try { preis = await tokenPrice(cfg.ansem_mint); }
+    catch (err) { console.warn('[webhook] Preis nicht erreichbar', err); }
+
     let updated = 0;
     for (const wallet of relevant.slice(0, MAX_WALLETS_PER_CALL)) {
-      try { await refreshWallet(db, wallet, cfg.ansem_mint); updated++; }
+      try { await refreshWallet(db, wallet, cfg.ansem_mint, preis); updated++; }
       catch (err) { console.warn('[webhook] ', wallet, err); }
     }
     return json({ updated, seen: wallets.length, known: relevant.length });
   } catch (err) {
     console.error('[holdings-webhook]', err);
-    return fail(err instanceof Error ? err.message : 'Internal error', 500);
+    return fail('Internal error', 500);
   }
 });
 

@@ -334,6 +334,31 @@ check('Der Tastaturfokus bleibt auf dem Knopf, wenn die Liste neu gebaut wird',
     document.activeElement === document.querySelector('.poll-delete')),
   await page.evaluate(() => document.activeElement?.className || 'body'));
 
+// Und dasselbe fuer die Antwortzeilen - das wichtigere Ziel in der Liste.
+//
+// Sie stehen nicht in BUTTON_ROLES, waren also von der Merkregel oben nicht
+// erfasst: wer sich zu einer Antwort getabbt hatte, verlor den Fokus beim
+// naechsten Neuaufbau, und der kommt bei jeder fremden Stimme. Ohne
+// Adminrechte, denn nur dann sind die Zeilen ueberhaupt anwaehlbar.
+await setUp(false);
+check('Die zweite Antwort ist mit der Tastatur erreichbar',
+  await page.evaluate(() =>
+    document.querySelectorAll('.opt')[1]?.getAttribute('tabindex') === '0'));
+await page.evaluate(() => document.querySelectorAll('.opt')[1].focus());
+await page.evaluate(() => window.renderPolls());
+check('Der Fokus bleibt auf DERSELBEN Antwort, wenn die Liste neu gebaut wird',
+  await page.evaluate(() =>
+    document.activeElement === document.querySelectorAll('.opt')[1]),
+  await page.evaluate(() =>
+    document.activeElement?.querySelector('.opt-label')?.textContent?.trim()
+    || document.activeElement?.className || 'body'));
+// Gegenprobe: es ist nicht einfach die erste Zeile, auf der der Fokus
+// landet. Sonst wuerde die Pruefung oben auch bestehen, wenn die Merkregel
+// die Antwort gar nicht wiedererkennt und irgendetwas anfasst.
+check('Und nicht auf der ersten – die Zeile wird wirklich wiedererkannt',
+  await page.evaluate(() =>
+    document.activeElement !== document.querySelectorAll('.opt')[0]));
+
 // --- Image -------------------------------------------------------------------
 await setUp(true);
 await page.click('.poll-delete');

@@ -112,10 +112,17 @@ async function challengeWithSecret(id: unknown, geheimnis: unknown) {
   const { data: c } = await db.from('challenges').select('*').eq('id', id).maybeSingle();
   if (!c) return null;
 
-  // Legacy rows: the migration set open challenges without a fingerprint
-  // to 'expired'. A PAID one without a fingerprint may still be redeemed -
-  // that's money that moved before the secret existed.
-  if (!c.secret_hash) return c.status === 'paid' ? c : null;
+  // Zeilen ohne Fingerabdruck sind nicht einloesbar. Punkt.
+  //
+  // Hier stand: eine BEZAHLTE ohne Fingerabdruck darf noch eingeloest
+  // werden, weil dort Geld geflossen ist, bevor es Geheimnisse gab. Das war
+  // genau das Loch, das die Migration schliessen sollte: fuer solche Zeilen
+  // reicht die Kennung plus irgendeine Zeichenkette ab 32 Zeichen, und die
+  // Kennung hatte damals auch der, der die Challenge fuer eine FREMDE
+  // Adresse aufgemacht hat. Wer noch so eine Zahlung hat, bekommt sie von
+  // Hand gutgeschrieben - das ist ein Fall fuer eine Person, keiner fuer
+  // eine Ausnahme im Code.
+  if (!c.secret_hash) return null;
 
   return gleich(await abdruck(geheimnis), c.secret_hash) ? c : null;
 }
@@ -124,10 +131,22 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return fail('POST only', 405);
 
+  // Erst die Groesse, dann lesen: req.json() zieht sonst einen beliebig
+  // grossen Koerper in den Speicher, bevor ueberhaupt jemand nach der Aktion
+  // gefragt hat. Der groesste ehrliche Aufruf hier sind ein paar hundert
+  // Zeichen.
+  const laenge = Number(req.headers.get('content-length') ?? 0);
+  if (laenge > 4096) return fail('Request too large', 413);
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
+    return fail('Invalid request body');
+  }
+  // 'null' und '"x"' sind gueltiges JSON. Ohne diese Zeile stolpert erst
+  // body.action darueber, und aus einer falschen Anfrage wird ein 500er.
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return fail('Invalid request body');
   }
 
@@ -137,12 +156,16 @@ Deno.serve(async (req) => {
       case 'challenge': return await createChallenge(cfg, body.wallet, body.challengeId, body.secret);
       case 'status':    return await checkStatus(cfg, body.challengeId, body.secret);
       case 'renew':     return await renewSession(cfg, req);
-      case 'mock-pay':  return await mockPay(body.challengeId, body.secret);
+      case 'mock-pay':  return await mockPay(cfg, body.challengeId, body.secret);
       default:          return fail('Unknown action');
     }
   } catch (err) {
+    // Der Text bleibt im Protokoll. Nach aussen geht ein fester Satz: die
+    // Meldungen von Postgres und vom RPC-Anbieter nennen Tabellen, Spalten
+    // und Anbieter, und diese Funktion beantwortet Anfragen ohne jede
+    // Anmeldung.
     console.error('[verify]', err);
-    return fail(err instanceof Error ? err.message : 'Internal error', 500);
+    return fail('Verification is temporarily unavailable', 500);
   }
 });
 
@@ -188,16 +211,60 @@ async function createChallenge(
   const secret_hash = await abdruck(geheimnis);
 
   // The unique index on open amounts rejects collisions - reroll.
+  let geraeumt = false;
   for (let attempt = 0; attempt < 20; attempt++) {
+    // crypto.getRandomValues und nicht Math.random.
+    //
+    // Der Aufschlag IST das Geheimnis dieses Verfahrens - der Kopf dieser
+    // Datei sagt es selbst: "The nonce amount is unknown to the attacker."
+    // Math.random ist in V8 xorshift128+, also vorhersagbar, sobald man ein
+    // paar Ausgaben kennt - und jede Ausgabe wird dem Aufrufer direkt als
+    // Betrag zurueckgegeben. Wer sich ein paar Challenges fuer eine eigene
+    // Adresse aufmacht, liest den Strom mit und rechnet die naechsten
+    // Betraege aus.
+    const wuerfel = new Uint32Array(1);
+    crypto.getRandomValues(wuerfel);
     const lamports = Number(cfg.base_lamports)
-      + (1 + Math.floor(Math.random() * NONCE_TIERS)) * NONCE_STEP;
+      + (1 + (wuerfel[0] % NONCE_TIERS)) * NONCE_STEP;
     const { data, error } = await db.from('challenges')
       .insert({ wallet, lamports, expires_at: expiresAt, secret_hash })
       .select().single();
     if (!error) return challengeResponse(cfg, data, geheimnis);
     // P0001: the per-wallet cap on open challenges from the migration.
     // That's not a collision you can reroll away - it's a hard stop.
-    if (error.code === 'P0001') return fail(error.message, 429);
+    if (error.code === 'P0001') {
+      // Die Obergrenze offener Fenster gilt PRO WALLET, und wer ein Fenster
+      // aufmacht, muss nichts beweisen - Adresse eintippen genuegt. Damit
+      // konnte jeder die drei Plaetze von Ansems Adresse belegen und sie alle
+      // 25 Minuten nachlegen: der echte Ansem bekam dann nur noch 429 und
+      // kam nicht mehr hinein.
+      //
+      // Also wird das aelteste offene Fenster dieser Wallet geraeumt und
+      // einmal neu versucht. Wer den Platz besetzt hielt, verliert ihn; wer
+      // gerade wirklich bezahlt, verliert hoechstens sein aeltestes Fenster -
+      // und dessen Betrag ist ohnehin nicht mehr der, auf den er wartet.
+      if (geraeumt) return fail('Too many open requests - try again shortly', 429);
+      geraeumt = true;
+      // Geraeumt wird nur eine, die NOCH LAEUFT.
+      //
+      // Ohne diese Grenze traf es die aelteste offene ueberhaupt - und das
+      // konnte eine sein, die gerade im Nachlauf steht, also abgelaufen ist
+      // und deren spaet bestaetigte Zahlung noch zugeordnet werden soll.
+      // Genau die haette hier ihr Geld verloren.
+      //
+      // Es gibt immer eine: die Obergrenze, die uns hierher gebracht hat,
+      // zaehlt ausschliesslich laufende Fenster (app.limit_open_challenges:
+      // status = 'pending' and expires_at > now()). Sie kann also gar nicht
+      // greifen, ohne dass drei laufende da sind.
+      const { data: alt } = await db.from('challenges')
+        .select('id').eq('wallet', wallet).eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: true }).limit(1).maybeSingle();
+      if (!alt) return fail('Too many open requests - try again shortly', 429);
+      await db.from('challenges').update({ status: 'expired' })
+        .eq('id', alt.id).eq('status', 'pending');
+      continue;
+    }
     if (error.code !== '23505') throw new Error(error.message);
   }
   return fail('No free verification amount right now - please try again in a moment', 503);
@@ -324,17 +391,53 @@ async function checkStatus(
 const TREASURY_FENSTER = 200;
 
 /**
+ * Wie lange nach Ablauf eine Challenge noch bezahlt werden kann.
+ *
+ * Wer bei ueberlastetem Netz sendet und dessen Bestaetigung erst nach den
+ * 25 Minuten eintrifft, hatte bezahlt und kam trotzdem nicht hinein - die
+ * Unterschrift stand ab dann in seen_txs und war nie wieder zuzuordnen.
+ *
+ * Der Wert steht hier, weil ihn ZWEI Stellen brauchen: die Zuordnung selbst
+ * und die Zeile davor, die ueberhaupt erst nachsieht, ob etwas offen ist.
+ * Beim ersten Anlauf stand er nur in der Zuordnung - die Vorabfrage zaehlte
+ * weiter nur laufende Challenges, fand keine und brach ab, bevor die
+ * Zuordnung ueberhaupt an die Reihe kam. Der Nachlauf war damit wirkungslos,
+ * und im Test sichtbar.
+ */
+const NACHLAUF_MS = 60 * 60_000;
+
+/**
  * Reads the latest treasury transactions and posts matching payments to
  * open challenges. At most every 5 seconds, so parallel polling by many
  * users doesn't blow through the RPC limit.
  */
 async function scanTreasury(treasury: string) {
+  // Zwei Bremsen. Die im Speicher ist die billige: sie kostet nichts und
+  // faengt das Dauerfeuer einer einzelnen Instanz ab.
   if (Date.now() - lastScan < 5_000) return;
   lastScan = Date.now();
 
+  // Die zweite steht in der Datenbank und gilt fuer ALLE Instanzen.
+  //
+  // Supabase startet unter Last mehrere Isolate, und jedes hatte bisher sein
+  // eigenes lastScan - die Fuenf-Sekunden-Regel galt also je Instanz. Genau
+  // dann, wenn viele gleichzeitig anmelden, gab es sie faktisch nicht mehr,
+  // und ein Scan sind bis zu 60 Detailabfragen beim RPC-Anbieter.
+  //
+  // Wer die Uhr weiterstellen darf, scannt; alle anderen bekommen null
+  // Zeilen zurueck. Postgres prueft die Bedingung nach dem Warten auf die
+  // Zeilensperre erneut, also gewinnt genau einer.
+  const { data: takt } = await db.from('app_config')
+    .update({ last_scan_at: new Date().toISOString() })
+    .eq('id', 1)
+    .lt('last_scan_at', new Date(Date.now() - 5_000).toISOString())
+    .select('id').maybeSingle();
+  if (!takt) return;
+
   const { count } = await db.from('challenges')
     .select('id', { count: 'exact', head: true })
-    .eq('status', 'pending').gt('expires_at', new Date().toISOString());
+    .eq('status', 'pending')
+    .gt('expires_at', new Date(Date.now() - NACHLAUF_MS).toISOString());
   if (!count) return; // nothing open -> no RPC call
 
   // The most recently recorded signatures, fetched ONCE and handed to the
@@ -368,14 +471,64 @@ async function scanTreasury(treasury: string) {
     });
     if (insErr) continue;
 
-    const { data: matched } = await db.from('challenges')
+    // Die Zahlung darf nur eine Challenge einloesen, die es VORHER schon
+    // gab.
+    //
+    // Ohne diese Zeile war die Anmeldung zu uebernehmen. Verglichen wurden
+    // nur Absender und Betrag - nicht, ob die Zahlung juenger ist als die
+    // Challenge. Und es liegen immer wieder unverbuchte Zahlungen im
+    // Fenster: wer zweimal sendet, wer nach Ablauf der 25 Minuten bezahlt,
+    // und vor allem jede Zahlung, die eintrifft, waehrend nichts offen ist -
+    // dann bricht der Scan eine Zeile vorher ab (if (!count) return) und
+    // schreibt sie nicht einmal nach seen_txs.
+    //
+    // Zugaenge zur Treasury stehen oeffentlich in jedem Explorer, der Betrag
+    // also auch. Wer eine solche Zahlung sieht, macht eine Challenge fuer
+    // die fremde Adresse auf, bis der Aufschlag passt - 999 Moeglichkeiten -
+    // und bekommt eine Sitzung fuer eine Wallet, die ihm nicht gehoert. Fuer
+    // Ansems Adresse waere das Verwaltungszugang gewesen.
+    //
+    // Die Zeit kommt aus der Kette (blockTime), nicht von unserer Uhr. Fehlt
+    // sie, faellt der Vergleich auf jetzt zurueck: das kann nur bei
+    // Transaktionen passieren, die so alt sind, dass der Knoten die Zeit
+    // vergessen hat, und die kommen fuer eine frische Zahlung nicht vor.
+    // 60 Sekunden Nachsicht in die andere Richtung: die Kettenzeit und die
+    // Uhr der Datenbank sind zwei verschiedene Uhren, und eine Zahlung
+    // Sekunden nach dem Aufmachen der Challenge soll nicht daran scheitern.
+    // Fuer den Angriff aendert das nichts - dort ist die Zahlung Minuten bis
+    // Tage aelter.
+    const zahlung = new Date(
+      ((p.blockTime ?? Math.floor(Date.now() / 1000)) + 60) * 1000).toISOString();
+
+    // Und eine Zahlung, die knapp zu spaet kommt, ist nicht verloren.
+    //
+    // Vorher musste die Challenge noch laufen. Wer bei ueberlastetem Netz
+    // sendet und dessen Bestaetigung nach 25 Minuten eintrifft, hatte
+    // bezahlt und kam trotzdem nicht hinein - die Unterschrift steht ab dann
+    // in seen_txs und ist nie wieder zuzuordnen. Eine Stunde Nachlauf kostet
+    // nichts: der Betrag ist an diese eine Wallet gebunden, und die Zahlung
+    // muss weiterhin juenger sein als die Challenge.
+    //
+    // Weiterhin nur 'pending', nicht auch 'expired': auf offene Betraege
+    // liegt ein eindeutiger Index (uq_challenges_open_amount), auf
+    // abgelaufene nicht. Mit 'expired' koennte diese Aktualisierung zwei
+    // Zeilen treffen, beide bekaemen dieselbe tx_sig, und die ist eindeutig -
+    // die Zuordnung schluege ganz fehl, und die Zahlung waere endgueltig
+    // verloren statt nur spaet. Wessen Fenster wirklich zugegangen ist (das
+    // passiert erst, wenn die Seite nach Ablauf nachfragt), bekommt seine
+    // Zahlung von Hand gutgeschrieben.
+    const nachlauf = new Date(Date.now() - NACHLAUF_MS).toISOString();
+
+    const { data: matched, error: matchErr } = await db.from('challenges')
       .update({ status: 'paid', tx_sig: p.signature })
       .eq('status', 'pending')
       .eq('wallet', p.sender)
       .eq('lamports', p.lamports)
-      .gt('expires_at', new Date().toISOString())
+      .lte('created_at', zahlung)
+      .gt('expires_at', nachlauf)
       .select('id').maybeSingle();
 
+    if (matchErr) console.error('[verify] Zuordnung fehlgeschlagen', matchErr.message);
     if (matched) {
       console.log(`[verify] Zahlung bestätigt: ${p.sender.slice(0, 6)}… ${p.signature.slice(0, 10)}…`);
     }
@@ -437,14 +590,27 @@ async function renewSession(cfg: Awaited<ReturnType<typeof loadConfig>>, req: Re
   });
 }
 
-async function mockPay(id: unknown, geheimnis: unknown) {
+async function mockPay(
+  cfg: Awaited<ReturnType<typeof loadConfig>>, id: unknown, geheimnis: unknown,
+) {
   if (!MOCK) return fail('Not available', 404);
-  // The secret applies here too: MOCK_CHAIN is an environment variable, and
-  // an environment variable ends up set to 1 by accident eventually. If it
-  // does, the shortcut should at least not also work for someone else's
-  // challenges.
+
   const c = await challengeWithSecret(id, geheimnis);
   if (!c) return fail('No open request', 400);
+
+  // Nur fuer die Testwallet, und nur wenn eine eingetragen ist.
+  //
+  // Hier stand, das Geheimnis genuege als Schutz, falls MOCK_CHAIN im
+  // Betrieb versehentlich auf 1 steht. Das stimmt nicht: wer die Challenge
+  // fuer Ansems Adresse selbst aufmacht, hat ihr Geheimnis - es gehoert ihm.
+  // Zwei Aufrufe ohne jede Anmeldung waeren damit Verwaltungszugang gewesen.
+  //
+  // Mit dieser Zeile kann die Abkuerzung nur noch eine Sitzung fuer die
+  // Adresse erzeugen, die ohnehin zum Ausprobieren eingetragen ist - und
+  // ohne Eintrag gar keine.
+  if (!cfg.test_wallet || c.wallet !== cfg.test_wallet) {
+    return fail('Not available', 404);
+  }
   const { data } = await db.from('challenges')
     .update({ status: 'paid', tx_sig: `mock-${crypto.randomUUID()}` })
     .eq('id', c.id).eq('status', 'pending').select().maybeSingle();

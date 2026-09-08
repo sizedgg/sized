@@ -1112,7 +1112,36 @@ function logout() {
   removeKey(TOKEN_KEY);
   unsubscribeAll();
   stopHoldingsTick();
+  clearInterval(fristT);
+  fristT = null;
   state.dmCache.clear();
+
+  // Was der oder die Vorige gesehen hat, bleibt nicht stehen.
+  //
+  // Vorher wurden nur Token, Kanaele und der Zwischenspeicher der Gespraeche
+  // geleert - state.polls, die Faeden, das offene Gespraech und der
+  // gezeichnete Inhalt blieben. Meldet sich auf demselben Geraet eine zweite
+  // Wallet an, zeigt enterApp die Seite, BEVOR die neuen Daten da sind: die
+  // neue Person sieht dann fuer einen Moment die Abstimmungen der vorigen,
+  // samt deren Haken auf der eigenen Antwort, und im DM-Reiter deren
+  // Nachrichten.
+  //
+  // Die Uhr fuer die Fristen gehoert auch dazu: sie lief nach dem Abmelden
+  // weiter, fand alle 30 Sekunden state.polls vor, rief loadPolls und lief
+  // dort in einen Fehler, den ein .catch verschluckt - fuer immer.
+  state.polls = [];
+  state.dmThreads = [];
+  state.dmMessages = [];
+  state.activeThread = null;
+  state.dmMinEntwurf = null;
+  state.zeigeVerborgene = false;
+  for (const id of ['#poll-list', '#thread-items', '#admin-thread', '#dm-thread']) {
+    const kasten = $(id);
+    if (kasten) kasten.innerHTML = '';
+  }
+  const titel = $('#thread-title');
+  if (titel) titel.textContent = 'Select a thread';
+
   state.jwt = null; state.me = null; state.db = null;
   showLogin();
   $('#step-pay').hidden = true;
@@ -1504,6 +1533,18 @@ function renderMe() {
 // ---------------------------------------------------------------------------
 
 const FALLBACK_MS = 3000;
+// Und wie weit er sich bremst, wenn die Verbindung wegbleibt.
+//
+// Vorher lief der Notlauf fuer immer alle drei Sekunden weiter - zwei
+// Abfragen je Runde, also rund vierzig in der Minute, aus JEDEM offenen
+// Fenster. Das ist genau dann der Fall, wenn Realtime ohnehin klemmt: bei
+// einer Stoerung, aufgebrauchtem Kontingent, einem Netz, das WebSockets
+// blockiert. Dann faellt die Seite also mit der Tuer ins Haus.
+//
+// Also verdoppelt sich der Abstand bis zu einer Minute. Die erste Minute
+// bleibt schnell - eine Stoerung von zehn Sekunden merkt so niemand -, und
+// eine, die eine Stunde dauert, kostet danach 60 statt 1200 Abfragen.
+const FALLBACK_MAX_MS = 60_000;
 
 function startFallback(name) {
   // Channels we closed ourselves shouldn't be polled.
@@ -1519,14 +1560,18 @@ function startFallback(name) {
   if (!Object.keys(state.fallback).length) {
     toast('Live updates unavailable - refreshing every few seconds');
   }
-  state.fallback[name] = setInterval(() => {
+  let abstand = FALLBACK_MS;
+  const runde = () => {
     CATCH_UP[name]().catch(() => { /* try again next tick */ });
-  }, FALLBACK_MS);
+    abstand = Math.min(abstand * 2, FALLBACK_MAX_MS);
+    state.fallback[name] = setTimeout(runde, abstand);
+  };
+  state.fallback[name] = setTimeout(runde, abstand);
 }
 
 function stopFallback(name) {
   if (!state.fallback[name]) return;
-  clearInterval(state.fallback[name]);
+  clearTimeout(state.fallback[name]);
   delete state.fallback[name];
 }
 
@@ -1555,7 +1600,16 @@ const logStatus = (name) => (status, err) => {
  */
 function reloadSoon(key, fn, delay = 400) {
   clearTimeout(state.reloadTimers[key]);
-  state.reloadTimers[key] = setTimeout(fn, delay);
+  // Mit .catch: fn ist loadPolls oder dmsNachziehen, und beide werfen ueber
+  // unwrap(), sobald PostgREST einen Fehler meldet. Aus einem Netzhaenger
+  // wurde so eine unbehandelte Zusage - hier, wo niemand mehr zuhoert, weil
+  // der Aufruf aus einem Zeitgeber kommt.
+  state.reloadTimers[key] = setTimeout(() => {
+    try {
+      const r = fn();
+      if (r && typeof r.catch === 'function') r.catch((e) => console.warn(`[${key}]`, e.message));
+    } catch (e) { console.warn(`[${key}]`, e.message); }
+  }, delay);
 }
 
 // ---------------------------------------------------------------------------
@@ -2125,6 +2179,18 @@ const buttonTrait = (el) => {
   if (!el || !el.dataset) return null;
   for (const [klasse, rolle] of Object.entries(BUTTON_ROLES)) {
     if (el.classList.contains(klasse)) return `.${klasse}[data-${rolle.field}="${el.dataset[rolle.field]}"]`;
+  }
+  // Die Antwortzeilen gehoeren auch dazu.
+  //
+  // Sie stehen nicht in BUTTON_ROLES - dort geht es um Knoepfe mit zwei
+  // Zustaenden -, sind aber mit tabindex="0" und role="button" genauso mit
+  // der Tastatur erreichbar. Und sie sind das WICHTIGSTE Ziel in der Liste:
+  // hier wird abgestimmt. Ohne diese Zeile verlor jeder, der sich zu einer
+  // Antwort getabbt hatte, den Fokus beim naechsten Neuaufbau - und der
+  // kommt bei jeder fremden Stimme, im Notlauf alle paar Sekunden. Man
+  // drueckt dann Enter ins Leere.
+  if (el.classList.contains('opt') && el.dataset.poll && el.dataset.option) {
+    return `.opt[data-poll="${el.dataset.poll}"][data-option="${el.dataset.option}"]`;
   }
   return null;
 };
@@ -4873,7 +4939,7 @@ async function openThread(wallet, reveal = false) {
   // demo mode - you'd click an unread conversation, read it, and the list
   // would keep claiming something was still open. That's exactly how this
   // was noticed.
-  markiereGelesen(wallet);
+  markiereGelesen(wallet).catch((e) => console.warn('[dm] gelesen:', e.message));
 
   // In demo mode the conversations don't exist - so there's nothing to
   // load either. A few made-up rows so the history isn't empty and the
@@ -5275,7 +5341,10 @@ $('#dm-form').addEventListener('submit', async (e) => {
   if (state.dmRepliesAvailable && state.dmReplyTo) line.reply_to = state.dmReplyTo;
   const { error } = await state.db.from('dms').insert(line);
   if (error) { toast(error.message, true); input.value = body; }
-  else { clearDmReply(); loadDms(); }
+  // Fehler hier sind nicht schlimm - die Nachricht ist geschrieben, das
+  // Nachladen holt der naechste Stups. Ohne .catch bleibt aber eine
+  // unbehandelte Zusage stehen.
+  else { clearDmReply(); loadDms().catch((e) => console.warn('[dm] Nachladen:', e.message)); }
 });
 
 $('#admin-dm-form').addEventListener('submit', async (e) => {
@@ -5330,7 +5399,7 @@ $('#admin-dm-form').addEventListener('submit', async (e) => {
     // The cached state is now stale.
     state.dmCache.delete(state.activeThread);
     await openThread(state.activeThread);
-    loadDms();
+    loadDms().catch((e) => console.warn('[dm] Nachladen:', e.message));
   }
 });
 

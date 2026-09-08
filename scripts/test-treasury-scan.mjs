@@ -77,8 +77,12 @@ const scanSource = cut(solanaTs, '_shared/solana.ts',
   .replace('(i: any) =>', '(i) =>')
   .replace('const out: TreasuryPayment[] = [];', 'const out = [];');
 
+// Alles zwischen der Fenstergroesse und der Funktion selbst - dort stehen
+// die Konstanten, die der Scan braucht. Vorher wurde nur die eine Zeile mit
+// TREASURY_FENSTER herausgeschnitten; als NACHLAUF_MS dazukam, lief der
+// Ausschnitt in einen ReferenceError statt in eine Aussage.
 const windowSource = cut(verifyTs, 'verify/index.ts',
-  'const TREASURY_FENSTER', '\n');
+  'const TREASURY_FENSTER', 'async function scanTreasury(treasury');
 const scanTreasurySource = windowSource + '\n' + cut(verifyTs, 'verify/index.ts',
   'async function scanTreasury(treasury', '\n/**')
   .replace('async function scanTreasury(treasury: string)', 'async function scanTreasury(treasury)');
@@ -100,12 +104,16 @@ const LATER = () => new Date(Date.now() + 20 * 60e3).toISOString();
  * Builds a world: `anzahl` payments to the treasury, newest first - exactly
  * the order getSignaturesForAddress responds in.
  */
-function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
+function welt({ anzahl, verbucht = 0, offeneChallenges = [], zahlungAlter = {} }) {
   const payments = Array.from({ length: anzahl }, (_, i) => ({
     signature: `sig${String(anzahl - i).padStart(4, '0')}`,
     slot: 1000 + (anzahl - i),
     sender: `wallet${String(anzahl - i).padStart(4, '0')}`,
     lamports: 2_000_000 + (anzahl - i),
+    // Wann die Zahlung auf der Kette stand, in Sekunden. Standard: gerade
+    // eben. Ueber zahlungAlter laesst sich eine einzelne aelter machen -
+    // das ist der Fall, um den es bei der Uebernahme geht.
+    blockTime: Math.floor((Date.now() - (zahlungAlter[`sig${String(anzahl - i).padStart(4, '0')}`] ?? 0)) / 1000),
   }));
 
   const queries = [];                 // every RPC method, in order
@@ -121,7 +129,7 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
       const z = payments.find((x) => x.signature === params[0]);
       if (!z) return null;
       return {
-        slot: z.slot, meta: { err: null, innerInstructions: [] },
+        slot: z.slot, blockTime: z.blockTime, meta: { err: null, innerInstructions: [] },
         transaction: { message: { instructions: [{
           program: 'system',
           parsed: { type: 'transfer', info: {
@@ -143,19 +151,29 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
   const challenges = offeneChallenges.map((c, i) => ({
     id: `ch${i}`, status: 'pending', wallet: c.wallet, lamports: c.lamports,
     expires_at: c.expires_at ?? LATER(), tx_sig: null,
+    // Wann die Challenge aufgemacht wurde. Standard: vor fuenf Minuten - also
+    // vor den Zahlungen, die dieser Aufbau erzeugt.
+    created_at: c.created_at ?? new Date(Date.now() - 5 * 60e3).toISOString(),
   }));
+
+  // Die gemeinsame Uhr fuer den Ketten-Scan. Sie steht in app_config, damit
+  // die Fuenf-Sekunden-Bremse fuer alle Instanzen gilt und nicht je Instanz.
+  const konfig = [{ id: 1, last_scan_at: new Date(Date.now() - 60e3).toISOString() }];
 
   const db = {
     from: (tabelle) => buildChain(tabelle),
   };
 
   function buildChain(tabelle) {
-    const daten = () => (tabelle === 'seen_txs' ? seen : challenges);
+    const daten = () => (tabelle === 'seen_txs' ? seen
+      : tabelle === 'app_config' ? konfig : challenges);
 
     const kette = {
       filter: [],
       _eq(column, wert) { this.filter.push((r) => r[column] === wert); return this; },
       _gt(column, wert) { this.filter.push((r) => r[column] > wert); return this; },
+      _lt(column, wert) { this.filter.push((r) => r[column] < wert); return this; },
+      _lte(column, wert) { this.filter.push((r) => r[column] <= wert); return this; },
       treffer() { return daten().filter((r) => this.filter.every((f) => f(r))); },
     };
 
@@ -165,6 +183,8 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
         s.filter = [];
         s.eq = (a, b) => s._eq(a, b);
         s.gt = (a, b) => s._gt(a, b);
+        s.lt = (a, b) => s._lt(a, b);
+        s.lte = (a, b) => s._lte(a, b);
         s.in = (column, werte) => { s.filter.push((r) => werte.includes(r[column])); return s; };
         s.order = () => s;
         s.limit = (n) => {
@@ -195,6 +215,9 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
         u.filter = [];
         u.eq = (a, b) => u._eq(a, b);
         u.gt = (a, b) => u._gt(a, b);
+        u.lt = (a, b) => u._lt(a, b);
+        u.lte = (a, b) => u._lte(a, b);
+        u.in = (column, werte) => { u.filter.push((r) => werte.includes(r[column])); return u; };
         u.select = () => ({
           maybeSingle: async () => {
             const [treffer] = u.treffer();
@@ -218,15 +241,21 @@ function welt({ anzahl, verbucht = 0, offeneChallenges = [] }) {
       (name === 'now' ? () => Date.now() + versatz : Reflect.get(ziel, name)),
   });
 
-  const lauf = new Function('rpc', 'db', 'console', 'Date', `
+  const instanz = () => new Function('rpc', 'db', 'console', 'Date', `
     let lastScan = 0;
     ${scanSource}
     ${scanTreasurySource}
     return { recentTreasuryPayments, scanTreasury };
   `)(rpc, db, { log() {}, warn() {}, error() {} }, clock);
 
+  const lauf = instanz();
+
   return {
-    ...lauf, queries, seen, challenges, payments,
+    // Eine zweite Instanz an derselben Datenbank - so laeuft Supabase unter
+    // Last. Ihr lastScan im Speicher steht auf 0, die Uhr in app_config
+    // dagegen ist gemeinsam. Genau darum geht es bei der Bremse.
+    zweiteInstanz: instanz,
+    ...lauf, queries, seen, challenges, payments, konfig,
     zeitVor: (ms) => { versatz += ms; },
     details: () => queries.filter((m) => m === 'getTransaction').length,
   };
@@ -362,15 +391,21 @@ console.log('\nDie Sparmassnahmen davor bleiben\n');
 }
 
 {
+  // Zwei Stunden abgelaufen - jenseits des Nachlaufs.
+  //
+  // Hier stand eine Minute, und das war richtig, solange es keinen Nachlauf
+  // gab. Seit eine knapp zu spaet bestaetigte Zahlung noch zaehlt (siehe
+  // oben), prueft diese Stelle das andere Ende: irgendwann ist Schluss.
   const w = welt({
     anzahl: 5, verbucht: 0,
     offeneChallenges: [{
       wallet: 'wallet0005', lamports: 2_000_005,
-      expires_at: new Date(Date.now() - 60e3).toISOString(),
+      created_at: new Date(Date.now() - 4 * 3600e3).toISOString(),
+      expires_at: new Date(Date.now() - 2 * 3600e3).toISOString(),
     }],
   });
   await w.scanTreasury(TREASURY);
-  check('Eine abgelaufene Challenge wird nicht mehr paid',
+  check('Eine lange abgelaufene Challenge wird nicht mehr paid',
     w.challenges[0].status === 'pending');
 }
 
@@ -382,6 +417,123 @@ console.log('\nDie Sparmassnahmen davor bleiben\n');
     /Promise\.all\(/.test(scanSource) && /GLEICHZEITIG/.test(scanSource));
   check('Aber gedeckelt, damit ein Kaltstart nicht in das Zeitlimit läuft',
     /slice\(0, DETAILS_PRO_SCAN\)/.test(scanSource));
+}
+
+// ---------------------------------------------------------------------------
+console.log('\nDie Uebernahme: eine alte Zahlung loest keine neue Challenge ein\n');
+// ---------------------------------------------------------------------------
+//
+// Das war der schwerste Fund der Durchsicht vor dem Start. Verglichen wurden
+// Absender und Betrag - nicht, ob die Zahlung juenger ist als die Challenge.
+// Zugaenge zur Treasury stehen oeffentlich in jedem Explorer: wer dort eine
+// noch unverbuchte Zahlung sieht, macht eine Challenge fuer die FREMDE
+// Adresse auf, trifft mit dem Aufschlag denselben Betrag - und bekommt eine
+// Sitzung fuer eine Wallet, die ihm nicht gehoert.
+//
+// Unverbuchte Zahlungen liegen dort regelmaessig: wer zweimal sendet, wer
+// nach Ablauf bezahlt, und jede Zahlung, die eintrifft, waehrend gar nichts
+// offen ist - dann bricht der Scan vorher ab und schreibt sie nicht einmal
+// nach seen_txs.
+
+{
+  // Die Zahlung ist drei Stunden alt, die Challenge wurde eben aufgemacht.
+  const w = welt({
+    anzahl: 3,
+    zahlungAlter: { sig0003: 3 * 3600e3 },
+    offeneChallenges: [{
+      wallet: 'wallet0003', lamports: 2_000_003,
+      created_at: new Date(Date.now() - 60e3).toISOString(),
+    }],
+  });
+  await w.scanTreasury(TREASURY);
+  check('Eine Zahlung von vor der Challenge loest sie nicht ein',
+    w.challenges[0].status === 'pending', `steht auf ${w.challenges[0].status}`);
+  check('Und sie gilt trotzdem als gesehen, wird also nicht ewig neu geholt',
+    w.seen.some((z) => z.signature === 'sig0003'));
+}
+
+{
+  // Gegenprobe: dieselbe Welt, nur ist die Zahlung juenger als die
+  // Challenge. Ohne diese Probe wuerde die Pruefung darueber auch dann
+  // gruen melden, wenn der Scan gar nichts mehr verbucht.
+  const w = welt({
+    anzahl: 3,
+    offeneChallenges: [{
+      wallet: 'wallet0003', lamports: 2_000_003,
+      created_at: new Date(Date.now() - 10 * 60e3).toISOString(),
+    }],
+  });
+  await w.scanTreasury(TREASURY);
+  check('Gegenprobe: die frische Zahlung loest dieselbe Challenge ein',
+    w.challenges[0].status === 'paid' && w.challenges[0].tx_sig === 'sig0003');
+}
+
+{
+  // Und knapp zu spaet ist nicht verloren: die Challenge ist vor zwanzig
+  // Minuten abgelaufen, die Zahlung kam kurz davor. Eine Stunde Nachlauf.
+  const w = welt({
+    anzahl: 3,
+    offeneChallenges: [{
+      wallet: 'wallet0003', lamports: 2_000_003,
+      created_at: new Date(Date.now() - 45 * 60e3).toISOString(),
+      expires_at: new Date(Date.now() - 20 * 60e3).toISOString(),
+    }],
+  });
+  await w.scanTreasury(TREASURY);
+  check('Eine knapp zu spaet bestaetigte Zahlung zaehlt noch',
+    w.challenges[0].status === 'paid');
+}
+
+{
+  // Zwei Stunden zu spaet dagegen nicht mehr.
+  const w = welt({
+    anzahl: 3,
+    offeneChallenges: [{
+      wallet: 'wallet0003', lamports: 2_000_003,
+      created_at: new Date(Date.now() - 4 * 3600e3).toISOString(),
+      expires_at: new Date(Date.now() - 2 * 3600e3).toISOString(),
+    }],
+  });
+  await w.scanTreasury(TREASURY);
+  check('Zwei Stunden nach Ablauf nicht mehr',
+    w.challenges[0].status === 'pending');
+}
+
+// ---------------------------------------------------------------------------
+console.log('\nDie Bremse gilt fuer alle Instanzen, nicht je Instanz\n');
+// ---------------------------------------------------------------------------
+
+{
+  // Zwei offene Challenges, und nur eine wird bezahlt.
+  //
+  // Mit nur einer stand nach dem ersten Lauf nichts Offenes mehr da, und der
+  // dritte Lauf brach an der Vorabfrage ab statt an der Uhr - die Pruefung
+  // haette die Bremse gemessen, wo gar keine mehr noetig war.
+  const w = welt({
+    anzahl: 5,
+    offeneChallenges: [
+      { wallet: 'wallet0005', lamports: 2_000_005 },
+      { wallet: 'wallet9999', lamports: 2_009_999 },
+    ],
+  });
+  await w.scanTreasury(TREASURY);
+  const nachErstem = w.queries.length;
+  check('Der erste Lauf fragt die Kette', nachErstem > 0);
+
+  // Eine FRISCHE Instanz - ihre Bremse im Speicher steht auf 0, sie wuerde
+  // also sofort wieder zur Kette gehen. Genau das war der Fund: die
+  // Fuenf-Sekunden-Regel galt je Instanz, und Supabase startet unter Last
+  // viele davon.
+  const zweite = w.zweiteInstanz();
+  await zweite.scanTreasury(TREASURY);
+  check('Eine zweite Instanz faellt an der Uhr in der Datenbank aus',
+    w.queries.length === nachErstem, `${w.queries.length - nachErstem} Abfragen zusaetzlich`);
+
+  // Und wenn die gemeinsame Uhr alt genug ist, darf auch sie wieder.
+  w.konfig[0].last_scan_at = new Date(Date.now() - 60e3).toISOString();
+  await w.zweiteInstanz().scanTreasury(TREASURY);
+  check('Ist die gemeinsame Uhr alt genug, wird wieder gefragt',
+    w.queries.length > nachErstem);
 }
 
 // ---------------------------------------------------------------------------
