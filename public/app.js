@@ -2458,6 +2458,26 @@ window.addEventListener('hashchange', () => {
 const cssWert = (name) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+/* When a shared image was taken: "08 SEP 2026 · 15:26 UTC".
+
+   Built by hand rather than through Intl, and that is the unusual choice, so
+   the reasons: the parts have to line up in a monospace column, the month
+   has to be three letters in capitals in every locale (Intl gives "Sept."
+   here and "Sep" there, and in German "Sep" with a full stop), and the whole
+   string has to be identical for everyone who looks at the same picture.
+   Intl formats for the READER; a timestamp burned into an image is not read
+   by the person who made it.
+
+   UTC for the same reason. The file gets posted, and the zone it was made in
+   is nobody else's zone. */
+const MONATE_KURZ = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const zeitstempel = (d = new Date()) => {
+  const zwei = (x) => String(x).padStart(2, '0');
+  return `${zwei(d.getUTCDate())} ${MONATE_KURZ[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+    + ` · ${zwei(d.getUTCHours())}:${zwei(d.getUTCMinutes())} UTC`;
+};
+
 
 /* roundRect only exists from Safari 16.4 onward. Someone with an older
    iPhone should get an image with square-cornered bars, not a broken one. */
@@ -2667,6 +2687,8 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
   // hands over. A compensation number hardcoded here would be a guess, and
   // it would be wrong on half the devices.
   const mono = cssWert('--mono') || 'monospace';
+  // Read once, drawn once, handed to the dialog once - see leinwand.stempel.
+  const stempelText = zeitstempel();
   const color = {
     grund: cssWert('--bg') || '#f5f2ec',
     card: cssWert('--bg-1') || '#fbfaf7',
@@ -3074,6 +3096,23 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
     ctx.fillText(p.closed
       ? 'This vote is closed'
       : `Hold $${state.cfg.symbol} to vote`, margin, H - m - 38);
+
+    // When this picture was taken.
+    //
+    // The numbers on a poll keep moving - a balance changes and every bar
+    // changes with it. An image does not, so an undated image is a claim
+    // about "now" that stays a claim about "now" forever. The date is what
+    // turns it back into a snapshot.
+    //
+    // Bottom RIGHT, opposite the status line rather than under it: the two
+    // sat a few pixels apart in the first draft and read as one wrapped
+    // sentence. Right-aligned they are two facts in two corners.
+    //
+    // UTC and not the local zone: the file gets posted, and whoever reads it
+    // is not in the same zone as whoever made it.
+    ctx.textAlign = 'right';
+    ctx.fillText(stempelText, B - margin, H - m - 38);
+    ctx.textAlign = 'left';
   }
 
   ctx.restore();
@@ -3099,6 +3138,12 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
   // the formula, not what actually happened here. That's exactly how it
   // once stayed green after the page margin had changed. Attaching a few
   // numbers to the canvas costs nothing and keeps the check honest.
+  // The dialog in front of the download prints the same timestamp under the
+  // preview. It reads it from HERE rather than calling Date() again - two
+  // clocks read a second apart give two different answers, and the sentence
+  // next to it says the card and the line belong together.
+  leinwand.stempel = stempelText;
+
   leinwand.geometrie = {
     content,
     ratio: B / H,
@@ -3219,13 +3264,137 @@ async function addMissingCards() {
 }
 
 /**
+ * Hand a blob to the browser as a file.
+ *
+ * Pulled out of ladePollBild because there are now two places that save the
+ * same image: the phone, where the share sheet was declined, and the button
+ * inside the dialog. Two copies of six lines is how they drift.
+ */
+function speichereBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Not immediately: some browsers only read the URL after the click.
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/**
+ * The look at the card before it is saved. Desktop only.
+ *
+ * Why this exists at all: on a phone the image goes through navigator.share,
+ * and the system sheet shows it before it goes anywhere. On the desktop
+ * nothing was shown - a file appeared in Downloads and whether it said what
+ * you wanted it to say you found out afterwards, in Finder.
+ *
+ * What it holds while open is in ZUSTAND rather than in closures, because
+ * the listeners are registered ONCE at startup and not per opening. Adding
+ * them on each open is how a dialog ends up downloading three files after
+ * the third time it is opened.
+ */
+const DIALOG = {
+  blob: null,
+  name: '',
+  pollId: null,
+  ausloeser: null,   // the button that opened it - focus goes back there
+  bildUrl: null,
+};
+
+function teilenDialogZu() {
+  const kasten = $('#bild-dialog');
+  if (!kasten || kasten.hidden) return;
+  kasten.hidden = true;
+  // The <img> keeps the URL alive as long as it points at it, so clear the
+  // src BEFORE revoking - otherwise the browser holds a reference to
+  // something that no longer exists and Chrome logs it as a broken image.
+  const bild = $('#bild-dialog-bild');
+  if (bild) bild.removeAttribute('src');
+  if (DIALOG.bildUrl) URL.revokeObjectURL(DIALOG.bildUrl);
+  DIALOG.bildUrl = null;
+  DIALOG.blob = null;
+  // Back where it came from. Without this the focus lands on <body> and the
+  // next Tab starts again at the top of the page - for anyone navigating by
+  // keyboard the dialog would cost them their place in the list.
+  const zurueck = DIALOG.ausloeser;
+  DIALOG.ausloeser = null;
+  if (zurueck?.isConnected) zurueck.focus();
+}
+
+function teilenDialogAuf({ blob, name, stempel, pollId, ausloeser }) {
+  const kasten = $('#bild-dialog');
+  // No dialog in the document (the test pages build a reduced one): then the
+  // download is what it always was, rather than nothing at all.
+  if (!kasten) { speichereBlob(blob, name); return false; }
+
+  DIALOG.blob = blob;
+  DIALOG.name = name;
+  DIALOG.pollId = pollId;
+  DIALOG.ausloeser = ausloeser ?? null;
+  DIALOG.bildUrl = URL.createObjectURL(blob);
+
+  $('#bild-dialog-bild').src = DIALOG.bildUrl;
+  $('#bild-dialog-stempel').textContent = stempel || '';
+  kasten.hidden = false;
+  $('#bild-dialog-laden')?.focus();
+  return true;
+}
+
+/** Registered once. See the note at DIALOG. */
+function teilenDialogVerdrahten() {
+  const kasten = $('#bild-dialog');
+  if (!kasten) return;
+
+  $('#bild-dialog-zu')?.addEventListener('click', teilenDialogZu);
+
+  // The ground closes, the card does not. Checking the target IS the ground
+  // and not merely containing it: a click that starts on the card and ends
+  // outside it (selecting the timestamp, say) would otherwise close the
+  // dialog mid-drag.
+  kasten.addEventListener('mousedown', (e) => {
+    if (e.target === kasten) teilenDialogZu();
+  });
+
+  $('#bild-dialog-laden')?.addEventListener('click', () => {
+    if (!DIALOG.blob) return;
+    speichereBlob(DIALOG.blob, DIALOG.name);
+    // The check mark belongs on the poll's own button, and only now: opening
+    // a preview is not the same as having saved something.
+    if (DIALOG.pollId != null) buttonOn('poll-image', DIALOG.pollId);
+    teilenDialogZu();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (kasten.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); teilenDialogZu(); return; }
+    if (e.key !== 'Tab') return;
+    // Keep Tab inside. Two controls, so this is a cycle rather than a
+    // general focus trap - and written from the actual element list, so a
+    // third control added later is picked up without touching this.
+    const ziele = [...kasten.querySelectorAll('button')].filter((b) => !b.disabled);
+    if (!ziele.length) return;
+    const erst = ziele[0];
+    const letzt = ziele[ziele.length - 1];
+    if (e.shiftKey && document.activeElement === erst) { e.preventDefault(); letzt.focus(); }
+    else if (!e.shiftKey && document.activeElement === letzt) { e.preventDefault(); erst.focus(); }
+  });
+}
+
+/**
  * Build the image and deliver it.
  *
- * Two paths, and the reason for the second one is iOS: an a[download] to a
- * blob URL sometimes does something there and sometimes does nothing. The
- * system share menu, on the other hand, works reliably there and is
- * actually the better fit for the real purpose anyway - from it the image
- * goes straight to X, with no detour through Photos.
+ * Three paths now, and each has a reason:
+ *
+ *   phone     navigator.share. iOS is why: an a[download] to a blob URL
+ *             sometimes does something there and sometimes does nothing.
+ *             The share menu works reliably and fits the purpose better
+ *             anyway - the image goes straight to X, with no detour
+ *             through Photos.
+ *   desktop   the dialog above. Saving a file the person has not seen is
+ *             the thing that was wrong here.
+ *   neither   the plain download, for a page without the dialog markup.
  */
 async function ladePollBild(id) {
   const p = state.polls.find((x) => x.id === Number(id));
@@ -3246,21 +3415,29 @@ async function ladePollBild(id) {
         return;
       } catch (e) {
         if (e?.name === 'AbortError') return;
-        // Anything else: fall through to the download below.
+        // Anything else: fall through to the dialog below.
       }
     }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // Not immediately: some browsers only read the URL after the click.
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
-
-    buttonOn('poll-image', id);
+    // Everything that is not the system sheet goes through the dialog.
+    //
+    // This started out as "desktop gets the dialog, phone does not", and that
+    // was one distinction too many. The dialog exists because saving a file
+    // nobody has looked at is the thing being fixed - so the question is not
+    // what KIND of device this is, it is whether the person has already seen
+    // the picture. The share sheet shows it; nothing else does. A phone whose
+    // browser cannot share is in exactly the same position as a desktop, and
+    // the first version of this quietly saved the file there without a word.
+    //
+    // No check mark yet either: the dialog holds the blob and its own button
+    // saves it. Opening a preview is not the same as having saved something.
+    const offen = teilenDialogAuf({
+      blob, name, stempel: leinwand.stempel, pollId: Number(id),
+      ausloeser: $(`.poll-image[data-image="${id}"]`),
+    });
+    // Only when there is no dialog in the document at all - the reduced pages
+    // the tests build. Then the download is what it always was.
+    if (!offen) buttonOn('poll-image', id);
   } catch (e) {
     console.error('[poll] image failed:', e);
     toast(e.message || 'Could not build the image', true);
@@ -3277,10 +3454,10 @@ function pollHtml(p) {
   // with.
   const eligibleToVote = !state.me.isAdmin;
 
-  // The leading answer shows in blue and bolder - the same treatment as in
-  // the image the download button generates, and from the same
-  // computation. Only after closing: why, is explained at
-  // leadingShare().
+  // The leading answer takes the blue fill - the same treatment as in the
+  // image the download button generates, and from the same computation. It
+  // used to be drawn bolder as well; that is gone, see .opt.leads in
+  // styles.css. Only after closing: why, is explained at leadingShare().
   const leads = leadingShare(p);
 
   // Voting with the keyboard.
@@ -3730,6 +3907,8 @@ function observeHeaderHeight() {
   melde();
 }
 observeHeaderHeight();
+// Once, at startup - see the note at DIALOG.
+teilenDialogVerdrahten();
 
 /**
  * The duration in the create form: days, hours, minutes.

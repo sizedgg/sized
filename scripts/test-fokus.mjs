@@ -81,9 +81,18 @@ const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8')
   .replace(/<script[\s\S]*?<\/script>/g, '')
   .replace(/ hidden(?=[ >])/g, '');
 
+// One exception to that, and it has to be an exception: #bild-dialog is a
+// MODAL, not a section. Stripped of its hidden attribute it lies across the
+// whole viewport at z-index 55 and swallows every click below it - the four
+// fields further down became unclickable the moment it was added. It is put
+// back out of the way here rather than excluded from the strip, because the
+// strip is a blunt instrument on purpose and should stay one. What the
+// dialog itself does is checked in test-teilen-dialog.mjs.
+const OHNE_DIALOG = '#bild-dialog { display: none !important; }';
+
 const server = http.createServer((_q, res) =>
   res.writeHead(200, { 'content-type': 'text/html' })
-     .end(html.replace('</head>', `<style>${css}</style></head>`)));
+     .end(html.replace('</head>', `<style>${css}${OHNE_DIALOG}</style></head>`)));
 await new Promise((r) => server.listen(0, r));
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';

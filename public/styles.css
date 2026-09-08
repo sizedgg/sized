@@ -221,8 +221,13 @@
   /* Two shadows, and they are not interchangeable: the first belongs to
      things that hover ABOVE the page (the timing list, the tooltip), the
      second to the toast, which is flatter and wider. */
-  --schatten-hoch: 0 8px 20px rgba(60, 52, 36, .12);
-  --schatten-toast: 0 6px 18px rgba(60, 52, 36, .14);
+  /* Die Farbe, mit der diese Seite abdunkelt: warmes Braungrau statt
+     Schwarz, weil ein schwarzer Schleier auf Papier grau statt dunkel
+     wirkt. Ein Wert, drei Verwendungen - die beiden Schatten und der
+     Schleier hinter dem Dialog. */
+  --schatten-rgb: 60, 52, 36;
+  --schatten-hoch: 0 8px 20px rgba(var(--schatten-rgb), .12);
+  --schatten-toast: 0 6px 18px rgba(var(--schatten-rgb), .14);
   /* What sits ON the filled button: the page ground, so the label is a
      cut-out rather than a second colour. Its own name because it is a job,
      not a coincidence - the day the button stops being light-on-dark, this
@@ -2739,9 +2744,66 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 .toast {
   position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
   background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: .6rem 1rem; font-size: .86rem; z-index: 50; box-shadow: var(--schatten-toast);
+  /* 60, nicht 50: der Dialog liegt auf 55, und eine Fehlermeldung, die
+     hinter ihm haengt, ist keine Meldung. */
+  padding: .6rem 1rem; font-size: .86rem; z-index: 60; box-shadow: var(--schatten-toast);
 }
 .toast.err { border-color: var(--warn); color: var(--warn-text); }
+
+/* ---------------- The card, before it is saved ----------------
+   ===========================================================================
+   Desktop only - see teilenDialog() in app.js. On a phone the share sheet
+   already shows the image.
+
+   z-index 55: over everything the page itself puts up - the top bar is 5,
+   the deadline list 20, the tooltip 30, the install prompt 40. The toast was
+   at 50 and has been raised to 60, because an error raised WHILE the dialog
+   is open has to be readable; leaving it underneath would have hidden
+   exactly the messages this dialog can produce. */
+.dialog-grund {
+  position: fixed; inset: 0; z-index: 55;
+  display: grid; place-items: center;
+  padding: 1.5rem;
+  background: rgba(var(--schatten-rgb), .38);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.dialog-karte {
+  width: min(560px, 100%);
+  max-height: 100%; overflow-y: auto;
+  background: var(--bg-1); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--schatten-hoch);
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.dialog-kopf {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .9rem;
+}
+.dialog-titel {
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--dim);
+}
+.dialog-zu {
+  background: none; border: 1px solid var(--line); color: var(--dim);
+  font-family: var(--mono); font-size: .9rem; line-height: 1;
+  padding: .3rem .5rem; cursor: pointer; border-radius: var(--radius);
+}
+.dialog-zu:hover { color: var(--text); background: var(--bg-2); }
+/* The image carries its own border because the card it shows has a pale
+   ground of its own - without it the picture and the dialog run together. */
+.dialog-bild {
+  display: block; width: 100%;
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.dialog-satz {
+  margin: .85rem 0 .25rem; font-size: .9rem; line-height: 1.5; color: var(--dim);
+}
+.dialog-stempel {
+  font-family: var(--mono); font-size: .78rem; color: var(--dimmer);
+  letter-spacing: .04em; margin-bottom: 1rem;
+}
+/* Not full width: the primary button elsewhere on the page fills its column
+   because it is the only thing in it. Here it is one of three controls. */
+.dialog-karte .btn-primary { width: auto; padding: .6rem 1.1rem; }
 
 /* ==========================================================================
    Phone

@@ -572,6 +572,38 @@
        stay silent for a screen reader. aria-live is implicitly "polite": it
        doesn't interrupt, it reports at the next breath. -->
   <div id="toast" class="toast" role="status" hidden></div>
+
+  <!-- The look at the card before it is saved.
+       ========================================================================
+       Desktop only. On a phone the download goes through navigator.share,
+       which opens the system sheet and shows the image there - a dialog in
+       front of that would be two previews of the same picture.
+
+       A plain <div> and not <dialog>: showModal() puts the element in the top
+       layer, where ::backdrop is the only way to dim the page and
+       backdrop-filter behaves differently across browsers. The blur here is
+       the same one the top bar uses, and it should stay the same one.
+
+       aria-modal with role="dialog", labelled by its own heading. The button
+       inside gets focus when it opens and the focus goes back to the poll's
+       download button when it closes - see teilenDialog() in app.js. -->
+  <div id="bild-dialog" class="dialog-grund" role="dialog" aria-modal="true"
+       aria-labelledby="bild-dialog-titel" hidden>
+    <div class="dialog-karte">
+      <div class="dialog-kopf">
+        <span class="dialog-titel" id="bild-dialog-titel">Share this poll</span>
+        <button id="bild-dialog-zu" type="button" class="dialog-zu"
+                aria-label="Close">&times;</button>
+      </div>
+      <!-- Filled in by app.js: the very canvas that would have been saved,
+           not a second rendering of it. -->
+      <img id="bild-dialog-bild" class="dialog-bild" alt="Preview of the poll card">
+      <p class="dialog-satz">This card uses the dated snapshot shown above.
+        Download it to share anywhere.</p>
+      <div id="bild-dialog-stempel" class="dialog-stempel"></div>
+      <button id="bild-dialog-laden" type="button" class="btn btn-primary">Download PNG</button>
+    </div>
+  </div>
 </div>
 
 
