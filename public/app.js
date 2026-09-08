@@ -1162,6 +1162,10 @@ async function enterApp() {
   // demo mode at all, see DEMO_DMS above. The bar only announced that.
   const flagge = $('#preview-flag');
   flagge.hidden = !PREVIEW_ADMIN;
+  // Closing it is a click, not a setting: it goes away for this view and is
+  // back on the next load. See the note at .preview-flag in styles.css for
+  // why it can be closed at all.
+  $('#btn-hide-flag')?.addEventListener('click', () => { flagge.hidden = true; });
   renderMe();
 
   // Pick the tab before loading: otherwise the call at the end would
@@ -2571,7 +2575,7 @@ const SCHILD_ECKE = 0;   /* the CLOSED tag */
  * have to match, or the card points at a file that doesn't exist, and the
  * link gets the fallback card instead.
  */
-const CARD_VERSION = 10;
+const CARD_VERSION = 11;
 
 /** The card image's filename in storage - defined in one place, not three. */
 const cardFile = (id) => `poll-${id}-v${CARD_VERSION}.png`;
@@ -2664,20 +2668,24 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
   // it would be wrong on half the devices.
   const mono = cssWert('--mono') || 'monospace';
   const color = {
-    grund: cssWert('--bg') || '#0a0b0f',
-    card: cssWert('--bg-1') || '#101218',
-    balken: cssWert('--bg-3') || '#1d212d',
-    linie: cssWert('--line') || '#262b39',
-    text: cssWert('--text') || '#e7e9ee',
-    dim: cssWert('--dim') || '#8b93a7',
-    dimmer: cssWert('--dimmer') || '#5d657a',
-    akzent: cssWert('--accent') || '#eceff5',
+    grund: cssWert('--bg') || '#f5f2ec',
+    card: cssWert('--bg-1') || '#fbfaf7',
+    balken: cssWert('--bg-3') || '#e8e4da',
+    linie: cssWert('--line') || '#e0dbd0',
+    text: cssWert('--text') || '#16150f',
+    dim: cssWert('--dim') || '#6b6558',
+    dimmer: cssWert('--dimmer') || '#8b8474',
+    akzent: cssWert('--accent') || '#1f4e7a',
     // --accent-rgb used to be here, back when the fill was translucent
     // white. It's opaque now, and the value wasn't needed anywhere else.
     // The bar fill, measured off X. Why two values instead of one with an
     // opacity: see --fuellung in the stylesheet.
-    fuellung: cssWert('--fuellung') || '#343639',
-    fuellungSpitze: cssWert('--fuellung-spitze') || '#2b5988',
+    fuellung: cssWert('--fuellung') || '#ded8c8',
+    fuellungSpitze: cssWert('--fuellung-spitze') || '#ccdcef',
+    // The mark has its own name since it stopped being the accent. Without
+    // this line the card kept drawing the logo in --accent and the shared
+    // image quietly disagreed with the site it came from.
+    marke: cssWert('--marke') || '#ccdcef',
   };
 
   // Compute before drawing: the height isn't settled until it's clear how
@@ -2837,7 +2845,7 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
   // original sits in a viewBox of 42 by 64 units.
   const logoH = 30;
   const e = logoH / 64;
-  ctx.fillStyle = color.akzent;
+  ctx.fillStyle = color.marke;
   roundedRect(ctx, margin, y + 38 * e, 18 * e, 26 * e, 9 * e);
   ctx.fill();
   roundedRect(ctx, margin + 24 * e, y, 18 * e, 64 * e, 9 * e);
@@ -3002,7 +3010,13 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
     const center = y + optH / 2;
     ctx.textAlign = 'right';
     ctx.font = `700 36px ${mono}`;
-    ctx.fillStyle = spitze ? color.akzent : color.text;
+    // Every amount in the same colour, the leading one included. It used to
+    // take the accent here, and the site did the same until it was taken out
+    // there: the bar underneath already says which answer is winning, and a
+    // second colour on the figure says it once more in a way that competes
+    // with the bar instead of adding to it. The card has to agree with the
+    // page it came from.
+    ctx.fillStyle = color.text;
     ctx.fillText(fullUsd(o.usd), B - margin - 26, center + 13);
     ctx.textAlign = 'left';
 

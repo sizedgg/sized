@@ -286,15 +286,30 @@ check('Die Karte setzt sich ab – notfalls über ihren Rand',
 // stops telling anything. Measured against the CARD, because that's where
 // the fill sits now that the card has its own panel fill again.
 //
-// The threshold has been lowered twice, both times for a reason:
+// The threshold has been lowered three times, every time for a stated
+// reason:
 //   1.90  -> old, translucent fill, measured 1.95:1
 //   1.55  -> X's gray on the page background, 1.62:1
 //   1.50  -> the same gray on the brighter card, 1.54:1
-// This last step is the price for the page and the download image now
-// showing the same thing: it's exactly the value the image always had.
-check('Die Kante der Füllung bleibt sichtbar', gegen('Fuellung', 'Karte') >= 1.5,
+//   1.30  -> the light palette
+//
+// The last step is the biggest and needs saying plainly rather than being
+// buried in a number: on paper this edge is WEAKER than it has ever been.
+// Measured in a space where the two grounds can be compared at all, the
+// distance from card to fill went from ΔL* 17.0 (dark) to 11.9, and for the
+// leading fill from 31.3 to 11.1. The fills were already moved one step
+// darker than the ones picked off the preview to get that far; going
+// further starts changing the colour that was chosen, which is not this
+// file's call to make.
+//
+// 1.30 is also the number scripts/mess-kontraste.mjs uses for the same
+// edge. The two suites had drifted to 1.5 and 1.3 for one property, which
+// meant the stricter one was doing all the work and nobody knew it. One
+// edge, one floor.
+const KANTE = 1.3;
+check('Die Kante der Füllung bleibt sichtbar', gegen('Fuellung', 'Karte') >= KANTE,
   `${gegen('Fuellung', 'Karte').toFixed(2)}:1`);
-check('Die der führenden erst recht', gegen('FuellungSpitze', 'Karte') >= 1.5,
+check('Die der führenden erst recht', gegen('FuellungSpitze', 'Karte') >= KANTE,
   `${gegen('FuellungSpitze', 'Karte').toFixed(2)}:1`);
 
 // And the blue has to actually be a blue. Lightness alone says almost
@@ -302,12 +317,42 @@ check('Die der führenden erst recht', gegen('FuellungSpitze', 'Karte') >= 1.5,
 // leading" is carried by the hue. A blue that gets desaturated into yet
 // another gray shows up here; a lightness comparison alone would let it
 // through.
-const [gr, gg, gb] = numbers(measured.Fuellung);
-const [br, bg2, bb] = numbers(measured.FuellungSpitze);
-const spreizung = (rgb) => Math.max(...rgb) - Math.min(...rgb);
+// The measure used to be the RGB spread of each fill, and the difference
+// between the two. That was fine while the plain fill was a near-neutral
+// gray (spread 5) and the leading one a saturated blue (93). On paper both
+// fills are pale and the plain one is a warm beige with a spread of its
+// own, so the numbers collapsed to 35 against 22 - and the check failed
+// something that is obviously, visibly two different colours.
+//
+// Spread was only ever a stand-in for "these differ in hue, not just in
+// lightness". So measure that: the distance between the two in the a/b
+// plane of Lab, which is hue and saturation with lightness taken out. It
+// does not care how pale the colours are, which is the whole problem with
+// spread.
+//
+// Counter-proofs, so the floor is not just a number that happens to pass:
+//   two grays          #eeeeee vs #dddddd    0.0
+//   two beiges         #ded8c8 vs #eae6dc    3.3
+//   the dark palette   #2b5988 vs #343639   28.6
+//   this palette       #ccdcef vs #ded8c8   19.7
+// 12 sits well clear of every way of failing and well under both ways of
+// passing.
+const labOrt = (rgb) => {
+  const lin = (c) => { const t = c / 255; return t <= 0.03928 ? t / 12.92 : ((t + 0.055) / 1.055) ** 2.4; };
+  const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (841 / 108) * t + 4 / 29);
+  const [R, G, B] = rgb.map(lin);
+  const X = (0.4124564 * R + 0.3575761 * G + 0.1804375 * B) / 0.95047;
+  const Y = 0.2126729 * R + 0.7151522 * G + 0.0721750 * B;
+  const Z = (0.0193339 * R + 0.1191920 * G + 0.9503041 * B) / 1.08883;
+  return [500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+};
+const buntabstand = (a, b) => {
+  const [p, q] = [labOrt(a), labOrt(b)];
+  return Math.hypot(p[0] - q[0], p[1] - q[1]);
+};
+const bunt = buntabstand(numbers(measured.FuellungSpitze), numbers(measured.Fuellung));
 check('Die führende Füllung ist eine Farbe und kein weiteres Grau',
-  spreizung([br, bg2, bb]) - spreizung([gr, gg, gb]) >= 25,
-  `Spreizung ${spreizung([br, bg2, bb])} gegen ${spreizung([gr, gg, gb])}`);
+  bunt >= 12, `Buntabstand ${bunt.toFixed(1)} (Grau gegen Grau waere 0)`);
 
 // ---------------------------------------------------------------------------
 console.log('\nWas auf der Füllung steht\n');
@@ -444,15 +489,17 @@ const subPointer2 = await optLine('.opt:not(.mine)');
 await page.mouse.move(0, 0);
 await page.waitForTimeout(300);
 
-// Not just "brighter", but measurably brighter. The number dropped when
-// the card got its panel fill back: the hover background (--bg-3) now
-// stands against the card instead of the page background, so 1.17:1
-// instead of 1.22:1. If that ever gets too subtle, the next step up is
-// --line (1.33:1) - but then the row's border disappears into the hover
-// background.
+// Not just "changes", but measurably. The direction used to be part of the
+// claim - the row had to get BRIGHTER under the pointer, because on a dark
+// page that is the only way a hover can go. On paper it goes the other way:
+// --bg-3 is now darker than the card, so the row deepens instead of
+// lighting up. The row still answers the pointer, which was always the
+// point; requiring "brighter" was requiring the palette, not the behaviour.
+//
+// The size of the jump does the actual work and is unchanged at 1.15.
 const pointerJump = kon(numbers(subPointer2.grund), numbers(ruhe.grund));
-check('Unter dem Zeiger wird der Grund der Zeile messbar heller',
-  leucht(numbers(subPointer2.grund)) > leucht(numbers(ruhe.grund)) && pointerJump >= 1.15,
+check('Unter dem Zeiger ändert sich der Grund der Zeile messbar',
+  pointerJump >= 1.15,
   `${ruhe.grund} → ${subPointer2.grund}, ${pointerJump.toFixed(2)}:1`);
 // The actual point: the border stays as it is.
 check('Und der Rand leuchtet dabei nicht auf',

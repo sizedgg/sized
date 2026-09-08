@@ -351,30 +351,86 @@ check('Knopf ist danach wieder bedienbar', fehltMeldung.wiederFrei);
 // brush still paint blue.
 console.log('\nDas Blau kommt erst zum Schluss\n');
 
-const blauImBild = (poll) => page.evaluate(async (p) => {
+// What counts as "the winner's blue" used to be "noticeably more blue than
+// red", and that worked for exactly as long as the leading fill was the only
+// blue thing in the palette. On paper it no longer is: the accent is a dark
+// blue and the mark is a pale one, so the old rule found 346 blue pixels on
+// an open card and called them a declaration - they were the logo.
+//
+// A proxy that stops standing for the thing it was a proxy for is worse than
+// no check, because it still reports a number. So this now matches the fill
+// ITSELF, read from the same stylesheet the card draws from: whatever
+// --fuellung-spitze happens to be, this finds that colour and nothing else.
+// Antialiased edges are why it is a distance and not an equality.
+// Two things had to change here, and both were the instrument being wrong
+// rather than the card.
+//
+// 1. "Noticeably more blue than red" worked for exactly as long as the
+//    leading fill was the only blue in the palette. On paper it is not: the
+//    accent is a dark blue, the mark a pale one. The old rule found 346 blue
+//    pixels on an open card and called them a declaration - they were the
+//    logo. So this matches the fill ITSELF, read from the same stylesheet the
+//    card draws from. Antialiasing is why it is a distance, not an equality.
+//
+// 2. Matching the fill exactly is not enough either, because the mark now
+//    carries that very value (--marke references --fuellung-spitze - that was
+//    the decision, see styles.css). The colour is therefore on every card,
+//    open or closed, up in the header. The claim was never about the header:
+//    it is that the WINNER'S BAR is not painted before the poll closes. So
+//    the header comes out of the frame.
+//
+// Measured, so the boundary is not a guess: on an open card the matching
+// pixels sit at y 80..109, which is the logo and nothing else. On a closed
+// one they run 80..496 - logo plus bars. 168 (a fifth of the 838px card)
+// sits clear of the first and well above the second.
+const KOPFBAND = 0.2;
+
+const blauImBild = (poll) => page.evaluate(async ({ p, anteil }) => {
+  const roh = getComputedStyle(document.documentElement)
+    .getPropertyValue('--fuellung-spitze').trim();
+  const soll = roh.startsWith('#')
+    ? [1, 3, 5].map((i) => parseInt(roh.slice(i, i + 2), 16))
+    : roh.match(/\d+/g).slice(0, 3).map(Number);
   const c = await window.drawPoll(p, { fuerKarte: true });
   const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-  // Blue here means: noticeably more blue than red. The page's grays all
-  // sit close together, --fuellung-spitze (#2b5988) doesn't.
-  let n = 0;
-  for (let i = 0; i < d.length; i += 4) if (d[i + 2] - d[i] > 30) n++;
-  return n;
-}, poll);
+  const treffer = (von, bis) => {
+    let n = 0;
+    for (let y = von; y < bis; y++) {
+      for (let x = 0; x < c.width; x++) {
+        const i = (y * c.width + x) * 4;
+        if (Math.abs(d[i] - soll[0]) <= 6
+          && Math.abs(d[i + 1] - soll[1]) <= 6
+          && Math.abs(d[i + 2] - soll[2]) <= 6) n++;
+      }
+    }
+    return n;
+  };
+  const grenze = Math.round(c.height * anteil);
+  return { balken: treffer(grenze, c.height), kopf: treffer(0, grenze) };
+}, { p: poll, anteil: KOPFBAND });
 
 const offenBlau = await blauImBild(CASES.normal);
 const zuBlau = await blauImBild(CASES.shut);
-check('Eine laufende Abstimmung hat kein Blau auf der Karte',
-  offenBlau === 0, `${offenBlau} blaue Punkte`);
+check('Eine laufende Abstimmung hat kein Blau auf den Balken',
+  offenBlau.balken === 0, `${offenBlau.balken} blaue Punkte unter dem Kopf`);
 // The counter-check belongs here too: without it, the check above would
 // also stay green if the blue stopped being drawn at all.
 check('Eine geschlossene sehr wohl – und zwar flächig',
-  zuBlau > 10000, `${zuBlau} blaue Punkte`);
+  zuBlau.balken > 10000, `${zuBlau.balken} blaue Punkte`);
 
 // And the same thing one level deeper: it hinges on closing, not on this
 // particular poll happening to have different numbers.
 const gedreht = await blauImBild({ ...CASES.normal, closed: true });
 check('Dieselbe Abstimmung, nur shut, bekommt ihr Blau',
-  gedreht > 10000, `${gedreht} blaue Punkte`);
+  gedreht.balken > 10000, `${gedreht.balken} blaue Punkte`);
+
+// The cut itself needs a check, otherwise it is just a number that makes the
+// test pass. Above the line the colour has to BE there on an open card - that
+// is the mark, drawn in the winner's colour on purpose. If this ever goes to
+// zero, either the mark stopped following --marke or the band slipped, and in
+// both cases the check above would be green for the wrong reason.
+check('Über dem Schnitt liegt sie auch bei laufender Abstimmung – das ist die Marke',
+  offenBlau.kopf > 100, `${offenBlau.kopf} Punkte im Kopf`);
 
 // The calculation lives in ONE place, because the list and the card would
 // otherwise drift apart: a shared image would then show a winner the page

@@ -1,12 +1,17 @@
 :root {
-  --bg: #0a0b0f;
-  --bg-1: #101218;
-  --bg-2: #161923;
-  --bg-3: #1d212d;
-  --line: #262b39;
-  --text: #e7e9ee;
-  --dim: #8b93a7;
-  --dimmer: #5d657a;
+  --bg: #f5f2ec;
+  --bg-1: #fbfaf7;
+  --bg-2: #efece4;
+  --bg-3: #e8e4da;
+  /* One step darker than the value taken off the preview. At #e0dbd0 the
+     border sat at 1.24:1 against the page - just under the 1.25 the tab
+     test asks for, and the card leans on that border rather than on a fill
+     of its own (the card is only 1.07:1 against the page). A border that
+     faint means the card has no edge at all. This is 1.31:1. */
+  --line: #dbd5c8;
+  --text: #16150f;
+  --dim: #6b6558;
+  --dimmer: #8b8474;
   /* Bone white instead of Solana green. The reason is not taste: the name
      colors are blue, violet, rose and sand, and a saturated accent always
      comes too close to one of them - steel blue was even the exact color
@@ -16,14 +21,14 @@
 
      So every color here has exactly one job: neutral is action, gold
      is Ansem, red is a problem, the four muted tones are people. */
-  --accent: #eceff5;
+  --accent: #1f4e7a;
   /* The same tone again, as a plain number triple. Reason: rgba() cannot
      take a color variable, only channels. Without this, every translucent
      spot would have to spell out the color value - and that is exactly how
      it was: "20, 241, 149" sat hardcoded in six places, and recoloring the
      page would have missed all of them. Change --accent, and this changes
      with it. */
-  --accent-rgb: 236, 239, 245;
+  --accent-rgb: 31, 78, 122;
   /* The same color, muted - for filled areas rather than strokes: the
      "Send"/"Start poll" button and your own bubble in a DM. Full bone white
      was too harsh there, not because of the hue but because of the area.
@@ -44,7 +49,7 @@
 
      9.2:1 for the dark text on it - well above the 4.5:1 a control needs
      to count as readable. */
-  --accent-fill: #aab2c2;
+  --accent-fill: #24598c;
   /* Amounts. A tone of its own, because none of the existing ones fit:
      --dim (6.4:1) was too quiet - the amount is the core of this page and
      it was ending up the palest thing on the line. --text (16.2:1) is too
@@ -57,7 +62,7 @@
      under white. It would have been tempting to reuse --accent-fill, which
      sits close by; but that tone belongs to filled areas. Recolor the
      button, and the amounts should not change color by accident. */
-  --worth: #b9c0d0;
+  --worth: #2b2a22;
   /* The border of the field you're currently typing into.
 
      The value shares its number with --dim, but is deliberately its own
@@ -81,7 +86,7 @@
      6.4:1 sits well under the button and well over the 3:1 at which a
      border reliably reads as a state indicator. Resting state sits at
      1.4:1 - the jump stays large either way. */
-  --fokus: #8b93a7;
+  --fokus: #6b6558;
 
   /* --anteil used to live here, the color of the small line under the
      amount: first a vote count, later a percentage. Both are gone again,
@@ -120,99 +125,77 @@
      old translucent fill. That is the price of "exactly like X", and it's
      paid on purpose: X itself lands at 1.73:1, and the rest is missing
      only because our background is #0a0b0f and not pure black. */
-  --fuellung: #343639;
-  --fuellung-spitze: #2b5988;
+  /* Both values moved one step darker than the ones picked off the preview,
+     and the reason is measured rather than felt. On the dark palette the
+     edge where a fill ended sat at ΔL* 17.0 (plain) and 31.3 (leading)
+     against the card. The first light draft landed at 6.9 and 7.2 - the
+     bars were still there, but the point where one stopped had become hard
+     to find, and a poll IS that point. These two sit at 11.9 and 11.1, and
+     keep the order the draft had right: the leading bar stays the more
+     distinct of the two, because it separates by hue as well as by
+     brightness (ΔE 16.9 against the card, versus 13.8). */
+  --fuellung: #ded8c8;
+  --fuellung-spitze: #ccdcef;
+  /* The brand mark. Deliberately a reference and not a copy: the mark IS the
+     winning bar's colour, and two identical values in two places stop being
+     identical the first time one of them is touched. See .brand-mark. */
+  --marke: var(--fuellung-spitze);
 
   /* The message bubbles in the DMs - their own small set of colors.
      ------------------------------------------------------------------------
      They sit together here instead of scattered among the rules because
-     they're a group: measured off a screenshot of X, meant to stay together
-     or go together.
+     they're a group: change one and the other two have to be looked at.
 
-       own bubble     #4b9aea   text on top  #ffffff
-       incoming       #212327   text on top  #e7e9ea
-       quote          #212327   text on top  #72757a
+     The own bubble used to be a reference to --fuellung-spitze, and the
+     note under it explained at length why the bubble should carry the
+     leading bar's blue. That reference did not survive the move to paper,
+     and it is worth writing down why, because the reference itself was not
+     the mistake - the mistake would have been keeping it.
 
-     Why have a color at all, when the rest of the page has none: the
-     palette as a whole sits within 1.4:1 (--bg against --line). Nobody
-     reads two grays that close together as intentional - the two bubbles
-     ended up either too similar or one too dark in every gray version
-     tried. A color does not need that brightness gap: blue against gray is
-     5.3:1, four times what the grays give you.
+     On the dark palette the leading bar was #2b5988, a deep blue, and near
+     white on it measured 7.27:1. Filling a bubble with it was free. On
+     paper the leading bar has to be PALE, because it is a surface with a
+     line of text lying on top of it - #cfdff1. The reference still
+     resolved, so nothing broke loudly; it just quietly turned the own
+     bubble into near-white text on near-white, 1.20:1. Unreadable, and
+     unreadable in the one place a person reads most.
 
-     WHICH blue has changed once. X's DM blue, #4b9aea, used to sit here,
-     along with the note: white on it is 2.95:1, that's how X ships it, and
-     15px text needs 4.5:1 - the tightest spot on the whole page.
+     So the bubble now takes --accent-fill, the same filled blue as the
+     primary button. That is not a second copy of a value either - the note
+     at --accent-fill says that tone belongs to filled areas, and a bubble
+     is a filled area. What it costs, measured against the old set:
 
-     Since the poll bars started carrying X's colors, the page had two
-     blues (2.46:1 apart). The bubble now takes the bar's blue, by
-     reference rather than as a second copy of the same value - change
-     --fuellung-spitze and both change, and that was the point of doing it
-     this way.
+       own bubble against the incoming one   2.21 -> 5.74:1
+       near white on the own bubble          1.20 -> 6.98:1
+       the timestamp in it (white at .78)    1.18 -> 5.16:1
 
-     It's a TRADE, and it was understood as one when decided:
-
-       white on the bubble    2.95 -> 7.27:1   the tight spot is gone
-       timestamp on it        2.24 -> 4.66:1   was tighter still, and rises with it
-       bubbles against each other  5.44 -> 2.21:1   that's the price
-
-     So the bubbles barely separate by brightness anymore, almost entirely
-     by hue instead - in exchange, no text sits under the guideline anymore.
-     If you read the paragraph above ("blue against gray is 5.3:1"): that
-     argument is weaker now, not wrong. 2.21:1 is still clearly more than
-     two neighboring grays in the palette give you (1.05 to 1.14:1).
-
-     And the background here is #0a0b0f rather than X's pure black, so the
-     blue sits a touch less harsh.
-
-     Of the five measured values, only TWO are still custom. The other
-     three were new grays next to a palette that already has four - and
-     worked out, they sat close enough to existing ones that they said
-     nothing new:
-
-       X gray   #212327  against --bg-3   1.02:1   -> --bg-3
-       X text   #e7e9ea  against --text   1.00:1   -> --text
-
-     The quote text is where the math doesn't work out: X uses #72757a,
-     which sits between --dim (1.50:1 away) and --dimmer (1.26:1). --dimmer
-     is closer, but that would land at 2.76:1 on the bubble, below
-     comfortable reading. So --dim: brighter than X's, in exchange for no
-     fifth gray. The quote bubble is recognizable as a quote by its size
-     and position anyway, not brightness alone.
-
-     White, meanwhile, stays white - but the reason for it isn't the same
-     one anymore. On the old blue it was self-defense: --text landed at
-     2.43 there instead of 2.95:1, the one spot on the page where the
-     palette's near-white wasn't enough. On the darker blue it's enough
-     (5.99:1), so white is no longer a requirement, it's a choice. It
-     stayed because that's how X sets it, and because the gap to the
-     incoming bubble is smaller now anyway since the switch - the brighter
-     text now carries part of that load. If you want to get rid of the
-     page's only pure 255-255-255, go to --text here; it costs contrast,
-     not readability. */
-  --dm-eigen: var(--fuellung-spitze);
-  --dm-eigen-text: #ffffff;
+     Both went up, so this is not a trade this time. The reason there is no
+     price is that the constraint changed underneath: on a dark page the
+     bubble and the bar wanted the same blue, on a light one they want
+     opposite ends of it, because only one of them has text lying on it. */
+  --dm-eigen: var(--accent-fill);
+  --dm-eigen-text: #fbfaf7;
   --dm-fremd: var(--bg-3);
   --dm-fremd-text: var(--text);
   --dm-zitat-text: var(--dim);
-  --accent-2: #9945ff;
-  --accent-2-rgb: 153, 69, 255;
+  --accent-2: #1f4e7a;
+  --accent-2-rgb: 31, 78, 122;
   /* The dot next to the amount when a conversation is unread.
      X's DM blue, already measured above at --dm-eigen and out of a job
      since the bubble switched to --fuellung-spitze. It is brighter and
      more saturated than anything else blue on the page, and that's the
      point: 6.34:1 on the list background, while --fuellung-spitze would
      land at 2.57:1 there - practically invisible as a 6px dot. */
-  --ungelesen: #4b9aea;
-  --warn: #ff6b6b;
+  --ungelesen: #8a5a12;
+  --warn: #a83228;
   /* The text on a red border - one step lighter than the border itself, so
      the message stays readable without the box turning into a wall of red. */
-  --warn-text: #ffc9c9;
-  --gold: #ffcc4d;
+  --warn-text: #7a1a15;
+  --gold: #8a5a12;
   /* The same tone again as channels, for the same reason as --accent-rgb:
      the preview banner lays the gold over the page at 12% and draws its
      border at 45%, and rgba() cannot take a colour variable. */
-  --gold-rgb: 255, 204, 77;
+  --gold-rgb: 138, 90, 18;
 
   /* Surfaces that are not a flat --bg-N
      ------------------------------------------------------------------------
@@ -228,18 +211,18 @@
      tones below. Everything that carries a colour has a name here now, so
      that changing the page's colour is a change to this block and nothing
      else. */
-  --karte-grund: rgba(16, 18, 24, .82);
-  --topbar-grund: rgba(10, 11, 15, .85);
+  --karte-grund: rgba(251, 250, 247, .88);
+  --topbar-grund: rgba(245, 242, 236, .90);
   /* A lift, not a colour: whatever this sits on gets one step brighter. */
-  --auflage: rgba(255, 255, 255, .08);
+  --auflage: rgba(22, 21, 15, .07);
   /* The border of the row you just copied. Brief, clearly stronger than
      --line, but it must not glow - see .pay-row.is-copied. */
-  --betont-rand: rgba(255, 255, 255, .45);
+  --betont-rand: rgba(31, 78, 122, .55);
   /* Two shadows, and they are not interchangeable: the first belongs to
      things that hover ABOVE the page (the timing list, the tooltip), the
      second to the toast, which is flatter and wider. */
-  --schatten-hoch: 0 12px 28px rgba(0, 0, 0, .55);
-  --schatten-toast: 0 8px 30px rgba(0, 0, 0, .5);
+  --schatten-hoch: 0 8px 20px rgba(60, 52, 36, .12);
+  --schatten-toast: 0 6px 18px rgba(60, 52, 36, .14);
   /* What sits ON the filled button: the page ground, so the label is a
      cut-out rather than a second colour. Its own name because it is a job,
      not a coincidence - the day the button stops being light-on-dark, this
@@ -251,18 +234,18 @@
      See .h.t0 further down for what they are and why there are four. The
      VALUES live here because they belong to the palette; the rules down
      there only hand them out. */
-  --name-0: #8ab2dc;   /* blue   */
-  --name-1: #ad96dc;   /* violet */
-  --name-2: #dc94ad;   /* rose   */
-  --name-3: #dcc088;   /* sand   */
+  --name-0: #8a5a12;   /* amber  */
+  --name-1: #5b3fa0;   /* violet */
+  --name-2: #a01f4a;   /* rose   */
+  --name-3: #1f6b3f;   /* green  */
   /* The tint on an unread row: --name-0 at 11.5%. Not a fifth background,
      a wash - the row keeps its shape and only says "there is something
      here". */
-  --ungelesen-fuellung: rgba(138, 178, 220, .115);
+  --ungelesen-fuellung: rgba(138, 90, 18, .09);
   /* The timestamp inside your own bubble: the bubble's text colour, turned
      down. Its own entry because on a lighter bubble it would have to be
      turned down the other way. */
-  --dm-eigen-zeit: rgba(255, 255, 255, .72);
+  --dm-eigen-zeit: rgba(255, 255, 255, .78);
   /* The text column in the inbox - every preview reaches this far, and
      stops there too. See .thread-prev. */
   --vorschau: 20ch;
@@ -704,9 +687,26 @@ code { font-family: var(--mono); }
    without maintaining two sizes.
    fill="currentColor" in the SVG means: the color comes from here, and a
    change to the accent color reaches the glyph along with it. */
+/* The mark carries the colour of the winning answer.
+   ---------------------------------------------------------------------------
+   Not the accent, and not a value of its own: literally --fuellung-spitze, so
+   the two can never drift apart. That was the decision - the logo is the
+   colour of a poll that has been won.
+
+   Measured, and stated here because it is unusual: #ccdcef against the page
+   ground is 1.25:1. As a BAR that value is right, because it is a surface
+   with text on top and has to stay pale. As a mark it is a shape with nothing
+   on top, and at 1.25:1 the shape is barely there. That is the intent, not an
+   oversight - do not "fix" it by darkening it, and if it ever has to be
+   darkened, change --marke here rather than the bar.
+
+   It read 1.12:1 when this was decided; the bar has since gone one step
+   darker for reasons of its own (see --fuellung-spitze) and dragged the mark
+   with it, which is exactly what the reference is for. Still nowhere near
+   the 3:1 a shape needs, so nothing about the decision has changed. */
 .brand-mark {
   display: block; height: 1.05em; flex: none;
-  color: var(--accent);
+  color: var(--marke);
 }
 /* Fix the height, let the width follow: the glyph is portrait (42 to 64),
    and a square box would frame it at the sides instead of letting it
@@ -2251,7 +2251,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
   font-family: var(--mono); text-align: right; line-height: calc(1rem * 1.5);
 }
 .opt-num .held { display: block; color: var(--text); font-size: .95rem; font-weight: 650; }
-.opt.leads .opt-num .held { color: var(--accent); }
+/* The leading amount keeps the colour every other amount has.
+   ---------------------------------------------------------------------------
+   It used to take the accent. That said the same thing twice: the bar under
+   it is already the signal, and a coloured figure beside a coloured bar
+   competes with it instead of adding to it. The row is the winner because it
+   is filled, not because its number is a different colour. */
 .closed-tag { font-size: .68rem; background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius-klein); padding: 0 .3rem; }
 
 /* The time remaining in a poll's header.

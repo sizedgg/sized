@@ -14,12 +14,12 @@
      it the browser fetches the file a second time. -->
 <link rel="preload" href="/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='29 16 42 64' fill='%23eceff5'><rect x='29' y='54' width='18' height='26' rx='9'/><rect x='53' y='16' width='18' height='64' rx='9'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='29 16 42 64' fill='%231f4e7a'><rect x='29' y='54' width='18' height='26' rx='9'/><rect x='53' y='16' width='18' height='64' rx='9'/></svg>">
 
 <!-- Home screen -->
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
-<meta name="theme-color" content="#0a0b0f">
+<meta name="theme-color" content="#f5f2ec">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -563,7 +563,9 @@
 
   <!-- Only with ?preview=admin on your own machine. See PREVIEW_ADMIN. -->
   <div id="preview-flag" class="preview-flag" hidden>
-    Preview only &mdash; not signed in as Ansem. Anything you try to save will be refused.
+    <span>Preview only &mdash; not signed in as Ansem. Anything you try to save will be refused.</span>
+    <button id="btn-hide-flag" type="button" class="flag-zu" aria-label="Hinweis ausblenden"
+            title="Ausblenden">&times;</button>
   </div>
 
   <!-- role="status" - otherwise messages about errors and rate limits would

@@ -70,7 +70,7 @@ const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
  * only once, so a new number is the only way to make existing polls redraw
  * their card.
  */
-const CARD_VERSION = 10;
+const CARD_VERSION = 11;
 
 /**
  * The page for the crawler.
@@ -137,7 +137,7 @@ function page(opts: { id: number; titel: string; beschreibung: string; bild: str
 <noscript><meta http-equiv="refresh" content="0; url=${esc(ziel)}"></noscript>
 <script>location.replace(${JSON.stringify(ziel)});</script>
 <style>
-  body { margin:0; background:#0a0b0f; color:#5d657a; font:15px/1.5 system-ui, sans-serif;
+  body { margin:0; background:#f5f2ec; color:#8b8474; font:15px/1.5 system-ui, sans-serif;
          display:grid; place-items:center; height:100vh; }
 </style>
 </head>
