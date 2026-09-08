@@ -140,7 +140,7 @@ if (!/3 conversations hidden/.test(verborgenText)) {
 // Das eine Gespraech, das in der Saat von Hand geschrieben ist: vier
 // Nachrichten, ein Hin und Her, und es ergibt aufgeklappt einen Sinn. Die
 // 500 gewuerfelten sind fuer die Liste gemacht, nicht zum Aufklappen.
-const LANG = 'Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs';
+const LANG = '6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR';
 await page.click(`.thread[data-wallet="${LANG}"]`);
 await page.waitForSelector('.dm-row', { timeout: 20_000 });
 await page.waitForTimeout(900);
@@ -196,7 +196,11 @@ const { kaesten, gassen } = await page.evaluate(() => {
   const liste = rect(document.querySelector('.thread-list'));
   const fenster = rect(document.querySelector('.thread-view'));
   const verlauf = rect(document.querySelector('#admin-thread'));
-  const ersteBlase = rect(document.querySelector('#admin-thread .dm-row'));
+  // Das OBERSTE Element des Verlaufs, nicht die erste Nachricht: darueber
+  // steht noch das Datumsschildchen ("Sep 5"), und wer nur die Blasen misst,
+  // haelt den Platz fuer frei, auf dem es steht - im Bild lag das
+  // Wasserzeichen dann darauf.
+  const ersteBlase = rect(document.querySelector('#admin-thread > *'));
 
   return {
     kaesten: {
@@ -250,7 +254,7 @@ for (let i = 0; i < eintraege.length; i++) {
 // Die Linie zum Betrag laeuft waagerecht durch das Fenster. Wenn dort keine
 // Luft ueber der ersten Blase ist, faehrt sie mitten durch eine Nachricht -
 // lieber hier stehenbleiben als das im fertigen Bild sehen.
-if (!(gassen.blaseOben - gassen.verlaufOben > 90)) {
+if (!(gassen.blaseOben - gassen.verlaufOben > 130)) {
   throw new Error(`Ueber der ersten Blase sind nur ${Math.round(gassen.blaseOben - gassen.verlaufOben)} px frei`);
 }
 

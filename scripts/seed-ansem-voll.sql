@@ -66,7 +66,7 @@ begin
     -- die beide Betraege setzen, waeren eine zu viel.
     wert := 0;
     insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen)
-    values (adr, wert * 1000, wert, 0.001,
+    values (adr, wert * 1000, wert, 0.012,
             now() - (i || ' minutes')::interval,
             now() - (i || ' hours')::interval);
   end loop;
@@ -82,33 +82,35 @@ update public.wallets set address = '7xK' || substr(address, 4)
 -- --- die Bestaende ----------------------------------------------------------
 --
 -- Nach Rang statt gewuerfelt: eine Kurve mit BODEN. Der groesste Halter hat
--- 800.000 Dollar, der fuenfhundertste genau 80.000, und dazwischen faellt
+-- 600.000 Dollar, der fuenfhundertste genau 120.000, und dazwischen faellt
 -- es schnell und laeuft dann flach aus.
 --
---     1.   800.000        6.   228.000       18.   134.000
---     2.   466.000        8.   194.000       50.   101.000
---     3.   356.000       10.   171.000      100.    91.000
---     4.   295.000       14.   147.000      500.    80.000
+--     1.   600.000        5.   237.000       18.   155.000
+--     2.   376.000        8.   201.000       50.   133.000
+--     3.   304.000       10.   179.000      100.    127.000
+--     4.   262.000       14.   163.000      500.    120.000
 --
 -- Zwei Anforderungen stecken darin, und die zweite ist der Grund fuer den
 -- Boden:
 --
---   Jede sichtbare Zeile eine andere Zahl. Vorher stand zwanzigmal
---   untereinander "$10K" - eine Liste, die "sortiert nach Bestand"
---   behauptet und dabei eine Zahl wiederholt, belegt das Gegenteil.
+--   Jede sichtbare Zeile eine andere Zahl. Eine Liste, die "sortiert nach
+--   Bestand" behauptet und dabei eine Zahl wiederholt, belegt das
+--   Gegenteil - und genau so sah sie aus, als die Kurve flach auslief.
 --
---   Der kleinste haelt 80.000. Ohne Boden liefe die Kurve gegen null, und
+--   Der kleinste haelt 120.000. Ohne Boden liefe die Kurve gegen null, und
 --   die untere Haelfte der Liste stuende bei ein paar hundert Dollar.
---
--- Warum nicht einfach 80.000 bis 160.000: dann liegen die Zeilen ab der
--- zehnten so dicht, dass sie wieder auf dieselbe gerundete Zahl fallen -
--- $88K, $87K, $87K. Die Spanne muss gross sein, damit gerundet noch etwas
--- uebrig bleibt.
 update public.wallets w
-   set usd_value = round((80000 + 720000
+   set usd_value = round((120000 + 480000
          * (power(g.r, -0.9) - power(500, -0.9)) / (1 - power(500, -0.9)))::numeric, 2),
-       ui_amount = round((80000 + 720000
-         * (power(g.r, -0.9) - power(500, -0.9)) / (1 - power(500, -0.9)))::numeric * 1000, 2)
+       -- Token = Dollar / Preis, und der Preis ist der des Mocks (0.012).
+       --
+       -- Vorher stand hier mal 1000 - eine andere Umrechnung als die, mit
+       -- der sich der eine anmeldbare Halter beim Login neu berechnet. Der
+       -- Posteingang sortiert nach TOKEN, nicht nach Dollar, und deshalb
+       -- stand dieser Halter mit 252.000 Dollar unter Leuten mit 120.000:
+       -- seine Zahl war in einer anderen Waehrung.
+       ui_amount = round((120000 + 480000
+         * (power(g.r, -0.9) - power(500, -0.9)) / (1 - power(500, -0.9)))::numeric / 0.012, 2)
   from (select address, row_number() over (order by md5(address)) as r
           from public.wallets
          where address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw') g
@@ -333,60 +335,54 @@ join (values
   ('Change the ticker?', 'No opinion', 4)
 ) as o(frage, label, idx) on o.frage = p.question;
 
--- Votes: one per wallet in each running poll, a third of them in the closed
--- one. Two things shape the bars, and both are deliberate: the CHOICE is
--- skewed toward the upper answers (a uniform pick would give four bars of
--- the same length and say nothing), and the WEIGHT is the balance, so the
--- same lopsided distribution as the inbox column drives the widths.
+-- Die Stimmen.
 --
--- One option per poll, not two. The first attempt took the two
--- lowest-hashing options across all polls, which happily picked both from
--- the same poll - and votes carries a unique key on (poll_id, wallet),
--- exactly as it should.
+-- Wer abstimmt, entscheidet ein Hash (siehe die Beteiligung unten). WAS
+-- jemand waehlt, entschied frueher ebenfalls ein Hash - und das ging schief,
+-- seit nur noch gut ein Dutzend Wallets je Frage abstimmen: bei sechzehn
+-- Stimmen mit sehr verschiedenen Gewichten kam ein Ergebnis heraus, das
+-- keine Ordnung hatte. Eine Antwort stand bei 0 Dollar, die zweite und die
+-- dritte lagen ueber Kreuz, und der Balken darunter war laenger als der
+-- darueber. Ein echtes Ergebnis darf so aussehen; ein Bild, das erklaeren
+-- soll, was ein Balken misst, nicht.
+--
+-- Deshalb wird jetzt AUSGETEILT statt gewuerfelt: die Abstimmenden werden
+-- nach Bestand sortiert, und wer mehr haelt, landet weiter oben in der Liste
+-- der Antworten. Der Exponent verteilt sie ungleich auf die Antworten - die
+-- erste bekommt die Haelfte, die letzte ein Achtel.
+--
+-- Beides zusammen, mehr Stimmen UND schwerere, muss sein: die Bestaende
+-- liegen dicht beieinander (120.000 bis 600.000, die meisten unter 200.000),
+-- also entscheidet vor allem die Zahl der Stimmen ueber die Laenge eines
+-- Balkens. Mit nur schwereren Stimmen auf der ersten Antwort kam die
+-- Rangfolge genau verkehrt herum heraus.
+--
+-- Das Ergebnis ist eine Rangfolge, die von oben nach unten faellt. Erfunden
+-- ist sie so oder so; sie ist jetzt nur lesbar erfunden.
 insert into public.votes (poll_id, option_id, wallet, weight_tokens, weight_usd, created_at)
-select p.id, o.id, w.address, w.ui_amount, w.usd_value, now() - interval '1 hour'
-from public.wallets w
-cross join public.polls p
+select p.id, o.id, v.address, v.ui_amount, v.usd_value,
+       case when p.closed then now() - interval '4 days' else now() - interval '1 hour' end
+from public.polls p
+join lateral (
+  select w.address, w.ui_amount, w.usd_value,
+         row_number() over (order by w.usd_value desc) as r,
+         count(*) over () as n
+    from public.wallets w
+   where w.address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw'
+     and case when p.closed
+              then ('x' || substr(md5(w.address || 'zu-teil'), 1, 4))::bit(16)::int % 1000 < 17
+              else ('x' || substr(md5(w.address || 'teil'), 1, 4))::bit(16)::int % 1000 < 22
+         end
+) v on true
 join lateral (
   select o.id from public.poll_options o
-  where o.poll_id = p.id
-    and o.idx = 1 + floor(
-      power((('x' || substr(md5(w.address || p.id::text), 1, 6))::bit(24)::int % 1000) / 1000.0, 1.8)
-      * (select count(*) from public.poll_options x where x.poll_id = p.id)
-    )::int
-  limit 1
-) o on true
-where p.question <> 'Change the ticker?'
-  and w.address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw'
-  -- Nicht alle stimmen ab. 62 Prozent ist eine Beteiligung, die man einer
-  -- Community abnimmt - und sie ist die einzige Stellschraube zwischen den
-  -- Bestaenden und der Laenge der Balken.
-  --
-  -- Die Balken sind mit den Bestaenden mitgewachsen: die 500 Halter haben
-  -- zusammen rund 50 Millionen, also stehen auf einem Balken jetzt
-  -- Millionen statt Hunderttausende. Das ist die Rechnung, nicht das Bild:
-  -- ein Balken IST die Summe der Bestaende derer, die dafuer gestimmt
-  -- haben. Wer beides klein haben will - grosse Halter und kleine Balken -
-  -- muss die Beteiligung auf eine Handvoll Wallets druecken, und dann
-  -- stimmt die Zahl im Bild zwar, die Geschichte dahinter aber nicht mehr.
-  and ('x' || substr(md5(w.address || 'teil'), 1, 2))::bit(8)::int % 100 < 62;
-
-insert into public.votes (poll_id, option_id, wallet, weight_tokens, weight_usd, created_at)
-select p.id, o.id, w.address, w.ui_amount, w.usd_value, now() - interval '4 days'
-from public.wallets w
-cross join public.polls p
-join lateral (
-  select o.id from public.poll_options o
-  where o.poll_id = p.id
-    and o.idx = 1 + floor(
-      power((('x' || substr(md5(w.address || 'zu'), 1, 6))::bit(24)::int % 1000) / 1000.0, 2.4)
-      * (select count(*) from public.poll_options x where x.poll_id = p.id)
-    )::int
-  limit 1
-) o on true
-where p.question = 'Change the ticker?'
-  and w.address <> 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw'
-  and ('x' || substr(md5(w.address), 1, 2))::bit(8)::int % 3 = 0;
+   where o.poll_id = p.id
+     and o.idx = 1 + least(
+       (select count(*) from public.poll_options x where x.poll_id = p.id) - 1,
+       floor((select count(*) from public.poll_options x where x.poll_id = p.id)
+             * power((v.r - 1)::numeric / v.n, case when p.closed then 1.7 else 2.0 end))::int)
+   limit 1
+) o on true;
 
 alter table public.poll_options enable trigger all;
 alter table public.polls enable trigger all;
@@ -406,29 +402,56 @@ from public.votes v group by v.poll_id, v.option_id;
 -- der Zahl der Antworten je Frage -, und wer eine davon anfasst, soll sie
 -- hier sehen und nicht erst im fertigen Bild.
 --
--- Abgebrochen wird nur bei etwas, das gar nicht sein kann: ein Balken, auf
--- dem mehr steht, als alle Halter zusammen besitzen. Eine runde Grenze
--- ("nicht ueber eine Million") stand hier vorher und war eine Meinung ueber
--- das Bild, keine Aussage ueber die Daten - beim naechsten Dreh an der
--- Kurve haette sie die Saat angehalten, ohne dass etwas falsch war.
+-- Die Vorgabe, schwarz auf weiss: keine Abstimmung ueber zwei Millionen
+-- Dollar Volumen. Sie haengt an drei Zahlen an drei verschiedenen Stellen -
+-- der Bestandskurve, der Beteiligung und der Zahl der Antworten je Frage -,
+-- und wer eine davon anfasst, soll es hier merken und nicht im fertigen
+-- Bild.
 do $$
 declare
-  groesster numeric;
-  alle numeric;
+  groesste numeric;
+  frage text;
+  leer int;
+  verdreht int;
 begin
-  select max(usd) into groesster from public.poll_totals;
-  select sum(usd_value) into alle from public.wallets;
-  raise notice 'Laengster Balken: % Dollar, alle Bestaende zusammen: %',
-    round(groesster), round(alle);
-  if groesster > alle then
-    raise exception 'Ein Balken traegt % Dollar, alle Halter zusammen haben % - '
-      'das kann nur ein Rechenfehler sein.', round(groesster), round(alle);
+  -- Keine Antwort ohne Stimme, und die oberste ist die laengste. Beides ist
+  -- eine Aussage ueber die SAAT und nicht ueber die Seite: eine echte
+  -- Abstimmung darf eine leere Antwort haben und einen Sieger in der Mitte.
+  -- Ein Bild, das erklaeren soll, was ein Balken misst, sollte es nicht.
+  select count(*) into leer
+    from public.poll_options o
+    left join public.poll_totals t on t.option_id = o.id
+   where coalesce(t.votes, 0) = 0;
+  if leer > 0 then
+    raise exception '% Antwort(en) ohne eine einzige Stimme - die Verteilung '
+      'der Stimmen trifft nicht mehr jede Antwort.', leer;
+  end if;
+
+  select count(*) into verdreht from (
+    select t.poll_id from public.poll_totals t
+     join public.poll_options o on o.id = t.option_id
+    group by t.poll_id
+    having max(t.usd) <> max(t.usd) filter (where o.idx = 1)
+  ) x;
+  if verdreht > 0 then
+    raise exception 'In % Abstimmung(en) ist nicht die erste Antwort die '
+      'groesste - im Bild steht dann ein laengerer Balken unter einem '
+      'kuerzeren.', verdreht;
+  end if;
+
+  select sum(usd), max(p.question) into groesste, frage
+    from public.poll_totals t join public.polls p on p.id = t.poll_id
+   group by t.poll_id order by sum(usd) desc limit 1;
+  raise notice 'Groesstes Volumen: % Dollar (%)', round(groesste), frage;
+  if groesste > 2000000 then
+    raise exception 'Die Abstimmung "%" kommt auf % Dollar - ueber den zwei '
+      'Millionen, die vorgegeben sind. Beteiligung senken.', frage, round(groesste);
   end if;
 end $$;
 
 -- ---------------------------------------------------------------------------
 -- Ein Halter, mit dem man sich tatsaechlich anmelden kann
--- ---------------------------------------------------------------------------
+-- --- der eine Halter, den es wirklich gibt ---------------------------------
 --
 -- Die 500 Adressen oben sind erfunden. Sie stehen in der Datenbank und sehen
 -- in der Liste richtig aus, aber verify() weist sie ab: isSolanaAddress
@@ -437,56 +460,57 @@ end $$;
 -- fuer eine Anmeldung nicht. Wer die Seite AUS DER SICHT eines Halters sehen
 -- will, kommt mit keiner von ihnen hinein.
 --
--- Diese Adresse ist echtes base58 mit 32 Bytes und steht fest, damit sie
--- nicht bei jedem Lauf wechselt: sha256('sized-artikel-halter-12').
+-- Diese hier ist echtes base58 mit 32 Bytes und steht fest, damit sie nicht
+-- bei jedem Lauf wechselt: sha256('sized-artikel-halter-14').
 --
--- Die 12 ist nicht willkuerlich. Der lokale Stapel erfindet den Bestand einer
--- Wallet aus sha256 der Adresse (mockAmount in scripts/dev-stack.mjs) und
--- ueberschreibt beim Anmelden, was hier eingetragen ist. Die erste gueltige
--- Adresse landete auf 540 Dollar - unter min_dm_usd, also mit gesperrter
--- Antwortzeile und "Hold at least $1,000" darunter. Gesucht wurde deshalb
--- eine, die in der Stufe landet, die zur neuen Obergrenze passt:
--- 2.409.958 Token, rund 10.100 Dollar - also am oberen Ende der Halter,
--- aber nicht ausserhalb ihrer Groessenordnung. Die Zahlen hier stimmen mit dem ueberein, was der Stapel gleich
--- daraus macht - sonst zeigte die Liste einen anderen Betrag als der Kopf.
+-- Die 14 ist gesucht und nicht gewaehlt. Der lokale Stapel erfindet den
+-- Bestand einer Wallet aus sha256 der ADRESSE (mockAmount in
+-- scripts/dev-stack.mjs) und ueberschreibt beim Anmelden, was hier steht -
+-- die Zahlen hier muessen also mit dem uebereinstimmen, was er gleich daraus
+-- macht, sonst zeigt die Liste einen anderen Betrag als die Kopfzeile.
+-- Gesucht wurde eine Adresse in der obersten Stufe (21 Mio. Token): mal dem
+-- Mock-Preis von 0.012 sind das 252.089 Dollar, und damit steht dieser
+-- Halter mitten in der Liste statt unter allen anderen.
 insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen, priced_at)
-values ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', 2409958.0, 10122.0, 0.0042, now(), now() - interval '73 days', now())
+values ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', 21007410, 252088.92, 0.012, now(), now() - interval '73 days', now())
 on conflict (address) do update
   set ui_amount = excluded.ui_amount, usd_value = excluded.usd_value, price = excluded.price;
 
+-- Sein Gespraech mit Ansem, von Hand geschrieben.
+--
+-- Es steht in ZWEI Bildern: in Ansems Posteingang als das geoeffnete
+-- Gespraech, und in der Nutzeransicht als der ganze Verlauf. Beide Bilder
+-- zeigen also dieselben sechs Nachrichten von zwei Seiten - das war vorher
+-- nicht so, dort standen zwei verschiedene Gespraeche nebeneinander, und wer
+-- die Bilder nacheinander liest, stolpert darueber.
+--
+-- Die 500 gewuerfelten Gespraeche taugen dafuer nicht: sie sind fuer die
+-- LISTE gemacht, eine Zeile, sechzehn Zeichen. Aufgeklappt stehen dort vier
+-- Saetze untereinander, die nichts miteinander zu tun haben.
+--
+-- Und es erklaert nebenbei, worum sich die ganze Seite dreht: das Gewicht
+-- folgt dem Bestand, bis die Abstimmung schliesst.
 alter table public.dms disable trigger all;
 insert into public.dms (wallet, from_admin, body, snap_tokens, snap_usd, read_by_admin, created_at)
 values
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
-   'gm — been holding since the first week. is the unlock linear or cliff based?',
-   2409958.0, 10122.0, true, now() - interval '6 days'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', true,
-   'linear, starts at the end of the month. nothing unlocks before that.',
-   0, 0, true, now() - interval '6 days' + interval '4 hours'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
-   'appreciate it. that was the one thing the docs never said clearly',
-   2409958.0, 10122.0, true, now() - interval '6 days' + interval '5 hours'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
-   'will you cover the new listing on stream?',
-   2409958.0, 10122.0, true, now() - interval '4 days'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', true,
-   'probably friday. put it in the poll if you want it sooner.',
-   0, 0, true, now() - interval '4 days' + interval '90 minutes'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
-   'done, added it. thanks',
-   2409958.0, 10122.0, true, now() - interval '4 days' + interval '2 hours'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
-   'one more — are the weekly numbers the same snapshot the cards use?',
-   2409958.0, 10122.0, true, now() - interval '2 days'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', true,
-   'same one. the card prints the timestamp, so you can tell which snapshot it was.',
-   0, 0, true, now() - interval '2 days' + interval '40 minutes'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
-   'perfect, that answers it',
-   2409958.0, 10122.0, true, now() - interval '2 days' + interval '55 minutes'),
-  ('37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa', false,
-   'voted on the ticker one. keeping it.',
-   2409958.0, 10122.0, false, now() - interval '5 hours');
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'voted on the chain poll. how long does it stay open?',
+   21007410, 252088.92, true, now() - interval '3 days'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   'closes tonight. the header counts it down.',
+   0, 0, true, now() - interval '3 days' + interval '90 minutes'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'if I sell half my bag after voting, does my vote shrink or stay?',
+   21007410, 252088.92, true, now() - interval '2 days'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   'it shrinks. the number follows the balance until the poll closes.',
+   0, 0, true, now() - interval '2 days' + interval '2 hours'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', false,
+   'makes sense. that is why the closed ones freeze then',
+   21007410, 252088.92, true, now() - interval '28 hours'),
+  ('6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR', true,
+   'exactly. after that nothing moves.',
+   0, 0, true, now() - interval '27 hours');
 alter table public.dms enable trigger all;
 
 
@@ -503,50 +527,6 @@ alter table public.dms enable trigger all;
 --
 -- Bei 1.000 bleiben rund die Haelfte der 500 Wallets uebrig. Das reicht fuer
 -- eine volle Liste und stimmt mit dem ueberein, was daneben steht.
-
--- --- das eine Gespraech, das im Artikelbild offen steht -------------------
---
--- Die 500 gewuerfelten Gespraeche sind fuer die LISTE gemacht: eine Zeile,
--- sechzehn Zeichen, mehr sieht man von ihnen nie. Aufgeklappt taugen sie
--- nicht - dort stehen vier Saetze untereinander, die nichts miteinander zu
--- tun haben, und das faellt sofort auf.
---
--- Also eines von Hand: vier Nachrichten, ein Hin und Her, und es erklaert
--- nebenbei genau das, worum sich die Seite dreht - das Gewicht folgt dem
--- Bestand, bis die Abstimmung schliesst.
---
--- Der Bestand wird nicht gesetzt, sondern gerechnet: knapp unter den
--- neuntgroessten. Damit steht das Gespraech mitten in der sichtbaren Liste
--- statt ganz oben - eine feste Zahl waere nach jeder Aenderung an der
--- Verteilung wieder woanders.
-insert into public.wallets (address, ui_amount, usd_value, price, updated_at, first_seen, priced_at)
-select 'Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', t.ui_amount - 1, (t.ui_amount - 1) / 1000.0, 0.001,
-       now(), now() - interval '61 days', now()
-  from (select ui_amount from public.wallets order by ui_amount desc offset 8 limit 1) t
-on conflict (address) do update
-  set ui_amount = excluded.ui_amount, usd_value = excluded.usd_value, price = excluded.price;
-
-alter table public.dms disable trigger all;
-insert into public.dms (wallet, from_admin, body, snap_tokens, snap_usd, read_by_admin, created_at)
-select v.wallet, v.from_admin, v.body, v.snap_tokens, v.snap_usd, v.gelesen, v.wann
-  from public.wallets w
-  cross join lateral (values
-    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs'::text, false,
-     'if I sell half my bag after voting, does my vote shrink or stay?',
-     w.ui_amount, w.usd_value, true, now() - interval '2 days'),
-    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', true,
-     'it shrinks. the number follows the balance until the poll closes.',
-     0::numeric, 0::numeric, true, now() - interval '2 days' + interval '2 hours'),
-    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', false,
-     'makes sense. that is why the closed ones freeze then',
-     w.ui_amount, w.usd_value, true, now() - interval '28 hours'),
-    ('Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs', true,
-     'exactly. after that nothing moves.',
-     0::numeric, 0::numeric, true, now() - interval '27 hours')
-  ) as v(wallet, from_admin, body, snap_tokens, snap_usd, gelesen, wann)
- where w.address = 'Dw3oiLHQ9Ho79eMV1CFpNXsNFt9Z7BgidLwrsH25qwUs';
-alter table public.dms enable trigger all;
-
 
 commit;
 

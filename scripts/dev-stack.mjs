@@ -33,7 +33,15 @@ const db = new pg.Pool({ connectionString: PGURL });
 // Mock chain
 // ---------------------------------------------------------------------------
 
-const MOCK_PRICE = 0.0042;
+// Der Preis, mit dem der Mock rechnet.
+//
+// 0.0042 stand hier, und damit lag die groesste Stufe (21 Mio. Token) bei
+// 88.200 Dollar. Das war der einzige Wert, den eine ANGEMELDETE Wallet
+// haben konnte - und seit die Saat ihre Halter zwischen 120.000 und 600.000
+// verteilt, stand der Halter in den Artikelbildern damit unter allen
+// anderen. Mit 0.012 landet dieselbe Stufe bei rund 252.000 und damit
+// mitten in der Liste.
+const MOCK_PRICE = 0.012;
 function mockAmount(wallet) {
   const h = crypto.createHash('sha256').update(wallet).digest();
   const tiers = [0, 1_200, 15_000, 48_000, 120_000, 310_000, 900_000, 2_400_000, 7_500_000, 21_000_000];

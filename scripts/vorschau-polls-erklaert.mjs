@@ -37,7 +37,7 @@ const BASE = 'http://localhost:4000';
 
 // Der Halter aus der Saat - die einzige erfundene Adresse, mit der man sich
 // anmelden KANN: die 500 anderen bestehen die base58-Pruefung nicht.
-const HALTER = '37FriauJcTmAWeuVQVEqVHZydvVbPsS1ooSbNpd9nwWa';
+const HALTER = '6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR';
 const HIDE = '#btn-mock-pay,#toast,#preview-flag{display:none!important}';
 const SKALA = 2;
 

@@ -101,7 +101,10 @@ def main(planpfad):
             foto, plan['wasserzeichen'], ImageFont.truetype(MONO, WASSER * s),
             w['x'] * s, w['y'] * s)
 
-    rand = RAND * s
+    # Der Rand ist die Spalte fuer die Saetze. Ein Bild ohne Beschriftung -
+    # eines, das nur das Wasserzeichen bekommt - braucht ihn nicht und sagt
+    # das mit rand: 0.
+    rand = plan.get('rand', RAND) * s
     breite = foto.width + 2 * rand
     blatt = Image.new('RGBA', (breite, foto.height), GRUND)
     blatt.paste(foto, (rand, 0))
@@ -111,12 +114,12 @@ def main(planpfad):
     zeilenhoehe = int(SCHRIFT * s * 1.45)
     textbreite = rand - 2 * AUSSEN * s - 2 * POLSTER * s
 
-    gasse_links = int(rand + g['links'] * s)
-    gasse_spalt = int(rand + g['spalt'] * s)
+    gasse_links = int(rand + g.get('links', 0) * s)
+    gasse_spalt = int(rand + g.get('spalt', 0) * s)
     # Die rechte Gasse gibt es nur, wo rechts ueberhaupt Platz ist - im
     # Posteingang laeuft die eine rechte Linie durch die Luecke zwischen
     # Liste und Fenster, in den Abstimmungen neben der Karte.
-    gasse_rechts = int(rand + g.get('rechts', g['spalt']) * s)
+    gasse_rechts = int(rand + g.get('rechts', g.get('spalt', 0)) * s)
     strich = int(STRICH * s)
 
     # Erst rechnen, dann zeichnen: die Satzkaesten der linken Spalte werden
@@ -134,7 +137,7 @@ def main(planpfad):
         hoehe = len(zeilen) * zeilenhoehe + 2 * POLSTER * s
         mitte_kasten = (kasten[1] + kasten[3]) / 2
 
-        oben = (g['frei'] * s if e['route'] == 'spalt' else mitte_kasten) - hoehe / 2
+        oben = (g['frei'] * s if e['route'] == 'spalt' else mitte_kasten) - hoehe / 2  # noqa: E501
         # Gestapelt wird je Seite: zwei Saetze uebereinander sind unlesbar,
         # und das faellt sonst erst im fertigen Bild auf.
         if e['route'] != 'spalt':

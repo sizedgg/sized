@@ -1,27 +1,33 @@
 /**
  * Die vier Bilder fuer den Artikel.
  *
- * Aufgenommen, nicht gebaut: die Seite laeuft gegen den echten Stapel, das
- * Blatt kommt aus public/styles.css, und ueber die Bilder wird nichts
- * gelegt ausser dem Ausblenden der Entwicklungs-Schalter.
- *
- *   1  Anmeldung
- *   2  Ansems Posteingang, voll
- *   3  Ein Gespraech aus der Sicht eines Halters
+ *   1  Anmeldung          schmal beschnitten, nur die Karte
+ *   2  Ansems Posteingang, voll, mit einem geoeffneten Gespraech
+ *   3  Dasselbe Gespraech aus der Sicht des Halters
  *   4  Die Abstimmungen
  *
- * Bild 3 ist der Grund, warum dieses Skript zweimal anmeldet. Die anderen
- * drei zeigen Ansems Seite; die dritte muss aus einer anderen Wallet kommen,
- * sonst waere es wieder die Verwaltungsansicht mit der Liste links - und
- * genau die sieht ein Halter nie. Wer nur Ansems Sitzung benutzt und die
- * Liste wegschneidet, bekommt ein Bild, das aussieht wie die Nutzersicht und
- * keine ist.
- *
  *   psql "$PGURL" -f scripts/seed-ansem-voll.sql     (einmal)
+ *   node --experimental-strip-types scripts/dev-stack.mjs &
  *   node scripts/vorschau-artikel.mjs
+ *
+ * Aufgenommen, nicht gebaut: die Seite laeuft gegen den echten Stapel, das
+ * Blatt kommt aus public/styles.css, und ueber die Bilder wird nichts gelegt
+ * ausser dem Ausblenden der Entwicklungs-Schalter und dem Wasserzeichen.
+ *
+ * Bild 2 und 3 zeigen DASSELBE Gespraech von zwei Seiten - das ist der Grund,
+ * warum dieses Skript zweimal anmeldet. Vorher standen dort zwei
+ * verschiedene: in Ansems Posteingang das eine, in der Nutzeransicht ein
+ * anderes, und wer die Bilder nacheinander liest, stolpert darueber. Das
+ * Gespraech steht von Hand in der Saat (sechs Nachrichten, ein Hin und Her);
+ * die 500 gewuerfelten sind fuer die LISTE gemacht und ergeben aufgeklappt
+ * keinen Sinn.
+ *
+ * Drei der vier Bilder tragen DEMO DATA. Die Anmeldung nicht: dort steht
+ * nichts Erfundenes, nur ein leeres Feld und ein Knopf.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
@@ -29,17 +35,12 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const OUT = path.join(root, 'preview', 'artikel');
 fs.mkdirSync(OUT, { recursive: true });
 const BASE = 'http://localhost:4000';
+const SKALA = 2;
 
 const ANSEM = 'EJswhvmzNccfpMXAhBgPNkFiFTV6rrYEygtzPjfDfxBw';
-// Ein Halter mit einem echten Hin und Her. Ein Gespraech, in dem nur eine
-// Seite geschrieben hat, zeigt die eigene Blase nicht, und die ist die
-// groesste farbige Flaeche der Seite.
-//
-// Diese Adresse kommt aus der Saat und ist die einzige, mit der man sich
-// anmelden KANN: die 500 anderen sind erfunden und werden von verify()
-// abgewiesen - isSolanaAddress verlangt base58, das zu genau 32 Bytes
-// dekodiert. Fuer die Liste im Posteingang reicht das, dort stehen nur drei
-// Zeichen; fuer eine Anmeldung nicht.
+// Der eine Halter, mit dem man sich anmelden kann - siehe die Begruendung in
+// scripts/seed-ansem-voll.sql. Sein Gespraech ist das, was in Bild 2 offen
+// steht und Bild 3 ganz fuellt.
 const HALTER = '6KyCMM97hXDFsGEfKoxgWtP1FEn3L9uoxAFMkpcmvoUR';
 
 const HIDE = '#btn-mock-pay,#toast,#preview-flag{display:none!important}';
@@ -50,8 +51,25 @@ const browser = await chromium.launch({
   args: ['--hide-scrollbars'],
 });
 
+/** Legt DEMO DATA in ein gemessenes leeres Feld des fertigen Fotos. */
+function stempeln(datei, wasser) {
+  const plan = path.join(OUT, '.plan-artikel.json');
+  fs.writeFileSync(plan, JSON.stringify({
+    foto: datei,
+    ziel: datei,
+    skala: SKALA,
+    rand: 0,                    // kein Rand: hier stehen keine Saetze
+    wasserzeichen: 'DEMO DATA',
+    kaesten: {},
+    gassen: { wasser },
+    beschriftung: [],
+  }));
+  execFileSync('python3', [path.join(root, 'scripts', 'beschriften.py'), plan], { stdio: 'pipe' });
+  fs.rmSync(plan, { force: true });
+}
+
 /** Meldet eine Wallet an und gibt ihr Token zurueck. */
-async function tokenFuer(wallet) {
+async function anmelden(wallet) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   await page.goto(BASE, { waitUntil: 'networkidle' });
@@ -78,9 +96,9 @@ async function tokenFuer(wallet) {
   return { jwt, istAdmin };
 }
 
-async function angemeldet(jwt, hoehe = 900) {
+async function angemeldet(jwt, hoehe = 820, breite = 1280) {
   const ctx = await browser.newContext({
-    viewport: { width: 1280, height: hoehe }, deviceScaleFactor: 2,
+    viewport: { width: breite, height: hoehe }, deviceScaleFactor: SKALA,
   });
   const page = await ctx.newPage();
   await page.addInitScript((t) => { try { localStorage.setItem('ansem_jwt', t); } catch { /* egal */ } }, jwt);
@@ -92,14 +110,13 @@ async function angemeldet(jwt, hoehe = 900) {
   return { ctx, page };
 }
 
-const ansem = await tokenFuer(ANSEM);
-const halter = await tokenFuer(HALTER);
+const ansem = await anmelden(ANSEM);
+const halter = await anmelden(HALTER);
 
-// Der Punkt des ganzen Skripts, deshalb wird er geprueft und nicht
-// angenommen: die zweite Sitzung darf KEINE Verwaltungssitzung sein. Der
+// Der Punkt der zwei Anmeldungen, deshalb geprueft und nicht angenommen: der
 // lokale Stapel liest app_config einmal beim Start - steht dort eine alte
-// Wallet, kommt fuer beide is_admin false oder true zurueck, und die Bilder
-// zeigen zweimal dasselbe, ohne dass man es sieht.
+// Wallet, kommt fuer beide dasselbe zurueck, und die Bilder zeigen zweimal
+// dieselbe Ansicht, ohne dass man es sieht.
 console.log(`\n  Ansem  is_admin=${ansem.istAdmin}`);
 console.log(`  Halter is_admin=${halter.istAdmin}`);
 if (ansem.istAdmin !== true || halter.istAdmin !== false) {
@@ -108,82 +125,146 @@ if (ansem.istAdmin !== true || halter.istAdmin !== false) {
 }
 
 // --- 1. Die Anmeldung -------------------------------------------------------
+//
+// Beschnitten auf die Karte, mit etwas Luft nach oben und unten. Ein volles
+// Fenster waere zu drei Vierteln leeres Blatt - im Artikel steht das Bild
+// zwischen Absaetzen und nicht als Bildschirmfoto einer Sitzung.
 {
   const ctx = await browser.newContext({
-    viewport: { width: 1280, height: 820 }, deviceScaleFactor: 2,
+    viewport: { width: 1280, height: 900 }, deviceScaleFactor: SKALA,
   });
   const page = await ctx.newPage();
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.addStyleTag({ content: HIDE });
+  await page.waitForSelector('#login:not([hidden])', { timeout: 20_000 });
   await page.waitForTimeout(600);
-  await page.screenshot({ path: path.join(OUT, '1-anmeldung.png') });
+  const karte = await page.evaluate(() => {
+    // '#login .login-card' und nicht '.login-card': die Vorstartseite
+    // (#soon) benutzt dieselbe Klasse, steht frueher im Dokument und ist
+    // verborgen - der erste Treffer war also ein Kasten mit 0 mal 0, und
+    // das Bild war 136 Punkte gross.
+    const r = document.querySelector('#login .login-card').getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height };
+  });
+  if (karte.w < 200 || karte.h < 120) throw new Error(`Die Anmeldekarte misst ${karte.w}x${karte.h}`);
+  const LUFT = 34;
+  await page.screenshot({
+    path: path.join(OUT, '1-anmeldung.png'),
+    clip: {
+      x: Math.max(0, karte.x - LUFT), y: Math.max(0, karte.y - LUFT),
+      width: karte.w + 2 * LUFT, height: karte.h + 2 * LUFT,
+    },
+  });
   await ctx.close();
-  console.log('  1  Anmeldung');
+  console.log(`  1  Anmeldung  ${Math.round(karte.w)}x${Math.round(karte.h)} plus ${LUFT} Punkte Luft`);
 }
 
-// --- 2. Ansems Posteingang --------------------------------------------------
+// --- 2. Ansems Posteingang, mit dem Gespraech des Halters offen -------------
 {
-  const { ctx, page } = await angemeldet(ansem.jwt, 900);
+  const { ctx, page } = await angemeldet(ansem.jwt);
   await page.click('.tab[data-tab="dms"]');
   await page.waitForSelector('.thread', { timeout: 25_000 });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(700);
   const n = await page.evaluate(() => document.querySelectorAll('.thread').length);
 
-  // Mit geoeffnetem Gespraech. Ohne Auswahl steht rechts "Select a thread"
-  // und zwei Drittel des Bildes sind leeres Papier - fuer einen Artikel ist
-  // das die Haelfte der Ansicht, die weggelassen wird.
-  //
-  // Und zwar das LAENGSTE, nicht das erstbeste mit einer Antwort darin. Der
-  // erste Versuch nahm das erste Gespraech, in dem Ansem geantwortet hatte;
-  // das hatte zwei Nachrichten, und der rechte Bereich war wieder fast leer.
-  // Diese Wallet ist der oberste Eintrag mit einem echten Hin und Her: sechs
-  // Nachrichten, davon eine von Ansem, und mit 1,9 Mio. der reichste - also
-  // ganz oben in der nach Bestand sortierten Liste, ohne dass gescrollt
-  // werden muss.
-  const LANG = 'xKGwnf2uA3U1W5JZQjryzqCM8PcoSFaZpFg5YTpRkTQP';
-  await page.click(`.thread[data-wallet="${LANG}"]`);
+  await page.click(`.thread[data-wallet="${HALTER}"]`);
   await page.waitForSelector('.dm-row', { timeout: 25_000 });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(800);
   const offen = await page.evaluate(() => ({
     zeilen: document.querySelectorAll('.dm-row').length,
     eigene: document.querySelectorAll('.dm-row.mine').length,
+    sichtbar: (() => {
+      const z = document.querySelector('.thread.is-active');
+      if (!z) return false;
+      const r = z.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= window.innerHeight;
+    })(),
   }));
   if (!offen.eigene) throw new Error('Im geoeffneten Gespraech steht keine Antwort von Ansem');
   if (offen.zeilen < 4) throw new Error(`Nur ${offen.zeilen} Nachrichten - zu leer fuer das Bild`);
-  await page.screenshot({ path: path.join(OUT, '2-posteingang.png') });
+  // Die geoeffnete Zeile muss auch IM BILD sein. Ohne diese Pruefung koennte
+  // rechts ein Gespraech stehen, dessen Zeile links unterhalb des Randes
+  // liegt - und das Bild zeigt eine Auswahl, die es scheinbar nicht gibt.
+  if (!offen.sichtbar) throw new Error('Die geoeffnete Zeile liegt ausserhalb des Bildes');
+
+  const datei = path.join(OUT, '2-posteingang.png');
+  await page.screenshot({ path: datei });
+  const wasser = await page.evaluate(() => {
+    const verlauf = document.querySelector('#admin-thread').getBoundingClientRect();
+    const blase = document.querySelector('#admin-thread > *').getBoundingClientRect();
+    const fenster = document.querySelector('.thread-view').getBoundingClientRect();
+    return { x: fenster.x + fenster.width / 2, y: (verlauf.y + blase.y) / 2, frei: blase.y - verlauf.y };
+  });
+  if (wasser.frei < 130) throw new Error(`Ueber dem Verlauf sind nur ${Math.round(wasser.frei)} px frei - das Wasserzeichen wuerde darauf liegen`);
+  stempeln(datei, wasser);
   await ctx.close();
-  console.log(`  2  Posteingang mit ${n} Gespraechen, offen: ${offen.zeilen} Nachrichten`);
+  console.log(`  2  Posteingang, ${n} Gespraeche, offen: ${offen.zeilen} Nachrichten`);
 }
 
-// --- 3. Ein Gespraech, wie ein Halter es sieht ------------------------------
+// --- 3. Dasselbe Gespraech, wie der Halter es sieht -------------------------
 {
-  const { ctx, page } = await angemeldet(halter.jwt, 900);
+  const { ctx, page } = await angemeldet(halter.jwt);
   await page.click('.tab[data-tab="dms"]');
   await page.waitForSelector('.dm-row', { timeout: 25_000 });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(800);
   const zahlen = await page.evaluate(() => ({
     zeilen: document.querySelectorAll('.dm-row').length,
     eigene: document.querySelectorAll('.dm-row.mine').length,
     liste: document.querySelectorAll('.thread').length,
+    kopf: document.querySelector('#me-holdings')?.textContent?.trim() ?? '',
   }));
-  // Ohne diese beiden Zeilen waere ein Bild ohne eigene Blase - oder mit
+  // Ohne diese drei Zeilen waere ein Bild ohne eigene Blase - oder mit
   // Ansems Posteingang darin - genauso durchgegangen.
   if (!zahlen.eigene) throw new Error('Keine eigene Nachricht im Bild');
   if (zahlen.liste) throw new Error('Die Verwaltungsliste ist sichtbar - das ist nicht die Nutzersicht');
-  await page.screenshot({ path: path.join(OUT, '3-dm-halter.png') });
+  if (!/\d/.test(zahlen.kopf)) throw new Error(`Oben steht kein Bestand: "${zahlen.kopf}"`);
+
+  const datei = path.join(OUT, '3-dm-halter.png');
+  await page.screenshot({ path: datei });
+  const wasser = await page.evaluate(() => {
+    const verlauf = document.querySelector('#dm-thread').getBoundingClientRect();
+    const blase = document.querySelector('#dm-thread > *').getBoundingClientRect();
+    return { x: verlauf.x + verlauf.width / 2, y: (verlauf.y + blase.y) / 2, frei: blase.y - verlauf.y };
+  });
+  if (wasser.frei < 130) throw new Error(`Ueber dem Verlauf sind nur ${Math.round(wasser.frei)} px frei - das Wasserzeichen wuerde darauf liegen`);
+  stempeln(datei, wasser);
   await ctx.close();
-  console.log(`  3  Gespraech, ${zahlen.zeilen} Nachrichten, davon ${zahlen.eigene} eigene`);
+  console.log(`  3  Gespraech, ${zahlen.zeilen} Nachrichten, davon ${zahlen.eigene} eigene, Kopf ${zahlen.kopf}`);
 }
 
 // --- 4. Die Abstimmungen ----------------------------------------------------
 {
-  const { ctx, page } = await angemeldet(halter.jwt, 980);
+  const { ctx, page } = await angemeldet(halter.jwt, 820, 1280);
   await page.waitForSelector('.poll', { timeout: 25_000 });
-  await page.waitForTimeout(800);
-  const n = await page.evaluate(() => document.querySelectorAll('.poll').length);
-  await page.screenshot({ path: path.join(OUT, '4-polls.png') });
+  await page.waitForTimeout(700);
+  const lage = await page.evaluate(() => {
+    const polls = [...document.querySelectorAll('.poll')];
+    const letzte = polls.at(-1).getBoundingClientRect();
+    return {
+      anzahl: polls.length,
+      fragen: polls.map((p) => p.querySelector('h4').textContent.trim()),
+      summen: polls.map((p) => p.querySelector('.poll-meta span').textContent.trim()),
+      zu: polls.map((p) => Boolean(p.querySelector('.closed-tag'))),
+      frist: polls[0].querySelector('.frist-rest')?.textContent?.trim() ?? null,
+      unten: letzte.bottom,
+      hoehe: window.innerHeight,
+      mitte: letzte.x + letzte.width / 2,
+    };
+  });
+  if (lage.anzahl !== 2) throw new Error(`${lage.anzahl} Abstimmungen statt zwei`);
+  if (!/chain/i.test(lage.fragen[0])) throw new Error(`Oben steht: ${lage.fragen[0]}`);
+  if (!/\dh/.test(lage.frist ?? '')) throw new Error(`Die Frist sagt: ${lage.frist}`);
+  if (lage.zu[0] || !lage.zu[1]) throw new Error('Nicht genau die untere ist geschlossen');
+  if (lage.hoehe - lage.unten < 60) {
+    throw new Error(`Unter der letzten Karte sind nur ${Math.round(lage.hoehe - lage.unten)} px frei`);
+  }
+
+  const datei = path.join(OUT, '4-polls.png');
+  await page.screenshot({ path: datei });
+  stempeln(datei, { x: lage.mitte, y: (lage.unten + lage.hoehe) / 2 });
   await ctx.close();
-  console.log(`  4  ${n} Abstimmungen`);
+  console.log(`  4  ${lage.fragen[0]} (${lage.frist}) - ${lage.summen[0]}`);
+  console.log(`     ${lage.fragen[1]} - ${lage.summen[1]}`);
 }
 
 await browser.close();
