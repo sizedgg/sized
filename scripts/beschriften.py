@@ -97,9 +97,38 @@ def main(planpfad):
         # obersten Blase, in den Abstimmungen das Blatt unter der letzten
         # Karte. Hier waere jede Zahl eine geratene.
         w = plan['gassen']['wasser']
-        foto = wasserzeichen(
-            foto, plan['wasserzeichen'], ImageFont.truetype(MONO, WASSER * s),
-            w['x'] * s, w['y'] * s)
+        # Die Groesse darf der Aufrufer setzen. Auf einem Bildschirmfoto
+        # steht das Zeichen in einem leeren Fenster und kann gross sein; auf
+        # der Abstimmungskarte ist jeder Zentimeter belegt, dort muss es
+        # klein bleiben.
+        schrift_w = ImageFont.truetype(MONO, int(w.get('groesse', WASSER) * s))
+        if w.get('pruefen'):
+            # Nachsehen, ob dort ueberhaupt Platz ist.
+            #
+            # Auf einem Bildschirmfoto darf das Zeichen ueber einer Blase
+            # liegen; auf der Abstimmungskarte ist jede Zeile belegt, und
+            # eine Zahl aus Papier und Wasserzeichen ist unlesbar. Die
+            # Stelle steht als Anteil der Bildhoehe im Aufrufer - also
+            # geraten, nicht gemessen -, und diese Pruefung ist der
+            # Ausgleich dafuer: aendert sich die Karte, faellt es hier auf
+            # und nicht im fertigen Bild.
+            probe = ImageDraw.Draw(foto)
+            kasten = probe.textbbox((w['x'] * s, w['y'] * s), plan['wasserzeichen'],
+                                    font=schrift_w, anchor='mm')
+            luft = int(schrift_w.size * 0.35)
+            feld = foto.crop((kasten[0] - luft, kasten[1] - luft,
+                              kasten[2] + luft, kasten[3] + luft)).convert('RGB')
+            farben = feld.getcolors(feld.width * feld.height) or []
+            haeufigste = max(farben)[1] if farben else None
+            gleich = sum(n for n, f in farben
+                         if all(abs(a - b) <= 4 for a, b in zip(f, haeufigste)))
+            anteil = gleich / (feld.width * feld.height)
+            if anteil < 0.98:
+                sys.exit(f'  An der Stelle fuer das Wasserzeichen steht schon etwas '
+                         f'({anteil * 100:.0f} % der Flaeche sind leer, noetig sind 98). '
+                         f'Die Stelle im Aufrufer verschieben.')
+        foto = wasserzeichen(foto, plan['wasserzeichen'], schrift_w,
+                             w['x'] * s, w['y'] * s)
 
     # Der Rand ist die Spalte fuer die Saetze. Ein Bild ohne Beschriftung -
     # eines, das nur das Wasserzeichen bekommt - braucht ihn nicht und sagt
