@@ -189,13 +189,18 @@ if (ansem.istAdmin !== true || halter.istAdmin !== false) {
 
   const datei = path.join(OUT, '2-posteingang.png');
   await page.screenshot({ path: datei });
+  // Genau in die Mitte des rechten Kastens - nicht in die Luecke ueber der
+  // ersten Nachricht.
+  //
+  // Die Luecke war der vorsichtige Platz: dort liegt das Wasserzeichen auf
+  // nichts. Sie ist aber auch verschieden gross, je nachdem wie viel im
+  // Gespraech steht, und wandert damit von Bild zu Bild. Die Mitte des
+  // Fensters steht immer an derselben Stelle, und ein Wasserzeichen, das
+  // ueber einer Blase liegt, ist genau das, was ein Wasserzeichen tun soll.
   const wasser = await page.evaluate(() => {
-    const verlauf = document.querySelector('#admin-thread').getBoundingClientRect();
-    const blase = document.querySelector('#admin-thread > *').getBoundingClientRect();
-    const fenster = document.querySelector('.thread-view').getBoundingClientRect();
-    return { x: fenster.x + fenster.width / 2, y: (verlauf.y + blase.y) / 2, frei: blase.y - verlauf.y };
+    const f = document.querySelector('.thread-view').getBoundingClientRect();
+    return { x: f.x + f.width / 2, y: f.y + f.height / 2 };
   });
-  if (wasser.frei < 130) throw new Error(`Ueber dem Verlauf sind nur ${Math.round(wasser.frei)} px frei - das Wasserzeichen wuerde darauf liegen`);
   stempeln(datei, wasser);
   await ctx.close();
   console.log(`  2  Posteingang, ${n} Gespraeche, offen: ${offen.zeilen} Nachrichten`);

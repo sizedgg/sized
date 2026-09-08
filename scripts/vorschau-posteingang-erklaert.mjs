@@ -222,11 +222,10 @@ const { kaesten, gassen } = await page.evaluate(() => {
       // Wohin das Wasserzeichen kommt: waagerecht in die Mitte des
       // Gespraechsfensters, senkrecht in die Luecke zwischen der roten
       // Linie (die auf der Hoehe von frei laeuft) und der obersten Blase.
-      wasser: {
-        x: fenster.x + fenster.w / 2,
-        y: ((verlauf.y + (ersteBlase ? ersteBlase.y : verlauf.y + 200)) / 2
-            + (ersteBlase ? ersteBlase.y : verlauf.y + 200)) / 2,
-      },
+      // Genau in die Mitte des rechten Kastens. Die Luecke ueber der ersten
+      // Nachricht war der vorsichtige Platz, aber sie ist verschieden gross
+      // und wandert damit von Bild zu Bild; die Mitte des Fensters nicht.
+      wasser: { x: fenster.x + fenster.w / 2, y: fenster.y + fenster.h / 2 },
       blaseOben: ersteBlase ? ersteBlase.y : null,
       verlaufOben: verlauf.y,
     },
