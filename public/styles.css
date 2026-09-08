@@ -2200,16 +2200,26 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
    math on every run. */
 .me .handle.admin-name,
 .opt-label { position: relative; }
-/* The winning answer stands out bolder - same as on X. No second border:
-   here that already means "this is how you voted", and meaning two
-   things with the same mark is worse than not showing one of them at
-   all.
-   The bold weight hasn't been the only signal since the blue was added,
-   but it stays - it's the one that comes through even without color.
-   It hangs off the same class, so it only shows up after closing too.
-   That's deliberate: an ongoing poll shouldn't have a frontrunner at all,
-   not even a quiet one. */
-.opt.leads .opt-label { font-weight: 650; }
+/* The winning answer changes COLOUR and nothing else.
+   ---------------------------------------------------------------------------
+   There used to be a rule here setting .opt.leads .opt-label to 650, so the
+   winning line was drawn bolder as well - the same thing X does. It is gone
+   on purpose, and the amount beside it never had it either: a row that wins
+   should not also start setting its own type.
+
+   Worth writing down, because the old note argued the other way and the
+   argument was not silly: the bold was the signal "that comes through even
+   without colour". Losing it does not leave colour alone, though - the bar
+   LENGTH marks the winner too, and it is the longest one by definition, and
+   the largest amount is printed at the end of that row. Both survive any
+   colour vision. Where colour does carry more weight now is a near-tie, when
+   two bars are nearly the same length; there the amounts are what settle it,
+   and they are text.
+
+   What the class still does: the fill (see .opt.leads .opt-fill). And it is
+   only ever set on a CLOSED poll - see leadingShare() in app.js, which
+   returns null while a poll is running. That is deliberate: an ongoing poll
+   should have no frontrunner at all, not even a quiet one. */
 
 /* The amount sits on the right, and nothing else.
    A vote count sat here, then a percentage, one after the other. The

@@ -419,10 +419,13 @@ const markierung = await page.evaluate(() => {
     id: k.id,
     zu: Boolean(k.querySelector('.closed-tag')),
     markiert: k.querySelectorAll('.opt.leads').length,
-    // The second styling depends on the same class too: the bolder
-    // answer. Measured rather than inferred from the markup.
+    // Measured, not inferred from the markup: every label's weight, and
+    // every row's fill. Winning may change the second and must not touch
+    // the first.
     fett: [...k.querySelectorAll('.opt-label')]
       .map((e) => Number(getComputedStyle(e).fontWeight)),
+    fuellungen: [...k.querySelectorAll('.opt .opt-fill')]
+      .map((e) => getComputedStyle(e).backgroundColor),
   }));
 });
 for (const k of markierung) {
@@ -435,14 +438,24 @@ check('Vorprobe: die Liste enthält eine laufende und eine geschlossene',
   Boolean(laufend && beendet));
 check('Die laufende hat keine markierte Antwort',
   laufend.markiert === 0, `${laufend.markiert} markiert`);
-check('Und auch keine fettere – die hängt an derselben Klasse',
+check('Und auch sonst keine Auszeichnung',
   new Set(laufend.fett).size === 1, laufend.fett.join('/'));
 // Without this counter-check, everything above would still be green even
 // if the marking were never applied at all anymore.
 check('Die geschlossene hat genau eine',
   beendet.markiert === 1, `${beendet.markiert} markiert`);
-check('Und die steht dort fetter als ihre Nachbarin',
-  Math.max(...beendet.fett) > Math.min(...beendet.fett), beendet.fett.join('/'));
+
+// Winning changes the colour and NOTHING else.
+//
+// The bolder winning line is gone - it used to be set to 650 here, the same
+// thing X does. Two claims are needed to pin that down, because either one
+// alone is satisfied by something broken: "all weights equal" is also true
+// of a poll whose marking never got applied, and "the fills differ" is also
+// true of a poll that additionally sets its own type.
+check('Die Gewinnerzeile steht in derselben Schrift wie die anderen',
+  new Set(beendet.fett).size === 1, beendet.fett.join('/'));
+check('Und unterscheidet sich allein durch die Farbe ihres Balkens',
+  new Set(beendet.fuellungen).size === 2, beendet.fuellungen.join(' / '));
 
 // ---------------------------------------------------------------------------
 console.log('\nZeiger und eigene Stimme\n');

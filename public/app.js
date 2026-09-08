@@ -2553,7 +2553,7 @@ const BILD_SKALA = 2;
    If a font line in drawPoll ever asks for a weight that is not in here, the
    card is drawn in the fallback for that one line and nothing says so -
    scripts/test-schrift.mjs compares the two lists for exactly that reason. */
-const KARTEN_SCHNITTE = ['400', '500', '600', '650', '700'];
+const KARTEN_SCHNITTE = ['400', '500', '600', '700'];
 const BILD_ECKE = 0;
 const BALKEN_ECKE = 0;   /* an answer bar */
 const SCHILD_ECKE = 0;   /* the CLOSED tag */
@@ -2575,7 +2575,7 @@ const SCHILD_ECKE = 0;   /* the CLOSED tag */
  * have to match, or the card points at a file that doesn't exist, and the
  * link gets the fallback card instead.
  */
-const CARD_VERSION = 12;
+const CARD_VERSION = 13;
 
 /** The card image's filename in storage - defined in one place, not three. */
 const cardFile = (id) => `poll-${id}-v${CARD_VERSION}.png`;
@@ -2937,8 +2937,14 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
   // next to it, and the row starts looking like the number is the main
   // point.
   let optSize = 27;
+  // Measured at the weight the labels are actually drawn in. It used to be
+  // 650 because the winning row was the heaviest and therefore the widest
+  // case; every row is 500 now. In a monospace the advance width does not
+  // depend on the weight at all, so this changes no number today - but it
+  // does if --mono ever falls through to a proportional default, which has
+  // happened here before.
   const passtAlles = (groesse) => {
-    ctx.font = `650 ${groesse}px ${mono}`;
+    ctx.font = `500 ${groesse}px ${mono}`;
     return show.every((o) => ctx.measureText(o.label).width <= textWidth);
   };
   while (optSize > 21 && !passtAlles(optSize)) optSize -= 1;
@@ -3023,7 +3029,12 @@ async function drawPoll(p, { fuerKarte = false } = {}) {
     // The answer text itself. Deliberately WITHOUT your own checkmark: the
     // image goes out into the world, and how the sender voted doesn't
     // belong in it.
-    ctx.font = `${spitze ? '650' : '500'} ${optSize}px ${mono}`;
+    // One weight for every answer, the winning one included. The site
+    // dropped the bolder winning line (see .opt.leads in styles.css) and the
+    // card has to agree with the page it came from - a shared image that
+    // sets the winner in a heavier cut than the site does is the same class
+    // of drift as the logo colour was.
+    ctx.font = `500 ${optSize}px ${mono}`;
     ctx.fillStyle = color.text;
     const caption = truncate(ctx, o.label, textWidth);
     if (caption !== o.label) answersTruncated++;
