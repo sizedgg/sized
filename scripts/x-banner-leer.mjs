@@ -36,8 +36,36 @@ const GRUND = farbe('bg');
 
 // Die Zeichen. Das zweite traegt eine Variantenauswahl (U+FE0F) hinter sich -
 // ohne sie zeichnen manche Systeme das Mahjong-Zeichen als schwarze
-// Schriftglyphe statt als farbiges Bild. Sie bleibt deshalb stehen.
+// Schriftglyphe statt als farbiges Bild.
 const ZEICHEN = '🐂🀄️';
+
+// In welchem Satz.
+// ---------------------------------------------------------------------------
+// In einem PNG ist der Stil eingebrannt: wer das Bild ansieht, sieht den
+// Satz, der hier gezeichnet wurde, und nicht die Emoji seines Geraets.
+//
+//   twemoji  der Satz, den X selbst zeichnet. Fuer ein Bild, das auf X
+//            landet, ist das der einzige, bei dem die Zeichen im Banner
+//            genauso aussehen wie dieselben Zeichen im Text daneben.
+//            CC-BY, aus @twemoji/svg.
+//   noto     was auf diesem Rechner installiert ist.
+//
+// Apples Satz ist bewusst nicht dabei: die Schrift gehoert Apple und liegt
+// nur auf Apple-Geraeten. Sie hier einzubauen hiesse, sie mitzuliefern.
+const SATZ = process.env.EMOJI_SATZ || 'twemoji';
+
+/** Ein Twemoji-Bild als data:-URI, aus dem npm-Paket gelesen. */
+const twemojiSvg = (zeichen) => {
+  // Die Variantenauswahl gehoert nicht in den Dateinamen.
+  const punkte = [...zeichen]
+    .map((z) => z.codePointAt(0))
+    .filter((c) => c !== 0xfe0f)
+    .map((c) => c.toString(16))
+    .join('-');
+  const datei = path.join(root, 'node_modules', '@twemoji', 'svg', punkte + '.svg');
+  if (!fs.existsSync(datei)) throw new Error(`Twemoji fehlt fuer ${zeichen} (${punkte}.svg)`);
+  return 'data:image/svg+xml;base64,' + fs.readFileSync(datei).toString('base64');
+};
 
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch({
@@ -57,7 +85,7 @@ await page.setContent(`<!doctype html><meta charset="utf-8"><style>
      Schriftglyphe kommen. line-height 1, sonst sitzt die Zeile durch die
      Vorgabe der Schrift ein Stueck ueber der Mitte statt in ihr. */
   .zeichen {
-    font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+    font-family: 'Noto Color Emoji', sans-serif;
     font-size: 180px; line-height: 1; letter-spacing: .06em;
     /* Die Laufweite haengt auch HINTER dem letzten Zeichen. Der Kasten ist
        damit breiter als die Tinte darin, und ein mittiger Kasten heisst
@@ -65,10 +93,18 @@ await page.setContent(`<!doctype html><meta charset="utf-8"><style>
        links. Der negative Rand nimmt genau den einen Abstand wieder weg. */
     margin-right: -.06em;
   }
-</style><div class="zeichen">${ZEICHEN}</div>`);
+  /* Als Bilder gibt es das Problem nicht - der Abstand steht ZWISCHEN
+     ihnen und nicht dahinter. */
+  .bilder { display: flex; align-items: center; gap: 44px; }
+  .bilder img { display: block; height: 180px; width: auto; }
+</style>${SATZ === 'twemoji'
+    ? `<div class="bilder">${[...'🐂', '🀄️'].length && ''}`
+      + `<img src="${twemojiSvg('🐂')}" alt=""><img src="${twemojiSvg('🀄️')}" alt=""></div>`
+    : `<div class="zeichen">${ZEICHEN}</div>`}`);
 await page.evaluate(() => document.fonts.ready);
 await page.waitForTimeout(400);
-const datei = path.join(OUT, 'sized-x-banner-leer.png');
+const datei = path.join(OUT, SATZ === 'twemoji'
+  ? 'sized-x-banner-leer.png' : 'sized-x-banner-leer-noto.png');
 await page.screenshot({ path: datei });
 await ctx.close();
 
@@ -110,7 +146,8 @@ const lies = async (d) => {
 };
 
 const m = await lies(datei);
-console.log(`\n  ${m.breite} x ${m.hoehe}  (${(m.breite / m.hoehe).toFixed(2)} : 1)`);
+console.log(`\n  Satz: ${SATZ}`);
+console.log(`  ${m.breite} x ${m.hoehe}  (${(m.breite / m.hoehe).toFixed(2)} : 1)`);
 console.log(`  Grund rgb(${m.grund.join(', ')})  aus --bg ${GRUND}`);
 
 const proben = [];
