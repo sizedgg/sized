@@ -230,6 +230,91 @@ const duration = Number(/const KOPIERT_MS = (\d+);/.exec(
 check('Der Umriss wird nach kurzer Zeit wieder normal',
   duration >= 500 && duration <= 1600, `${duration} ms`);
 
+// ---------------------------------------------------------------------------
+// Eine Kante, nicht zwei
+// ---------------------------------------------------------------------------
+// Reported: some things in the login card sit further in than others - the
+// waiting line and "Start over" against everything above them.
+//
+// The cause was invisible: a ghost button has no visible edge, so its padding
+// is invisible too, and the label sat one padding plus one transparent border
+// further right than every line above it. 11.5 px. Nothing looked broken, it
+// looked as if one line had been indented by accident.
+//
+// What is measured here is the LEFT EDGE OF THE TEXT, not of the box. Those
+// are two different things, and only the first one is what an eye follows
+// down a column. Measuring boxes would have called the old state correct: the
+// button's box was where it belonged, its label was not.
+//
+// Both widths, because the card's padding differs between them and a fix that
+// only works at one width is not a fix.
+console.log('\nEine Kante im Login-Fenster\n');
+
+// The page that is already open gets resized, rather than a fresh one opened.
+// A second page had the login card at 0 px wide - not laid out at all - while
+// the text edges still reported numbers, so all four checks passed on a card
+// that was not on screen. The width check below is what caught it, and it
+// stays in for that reason.
+//
+// The mock button only exists in the dev stack. Left visible it would start
+// the row and push "Start over" to the right - the check would then be
+// measuring the preview instead of the page.
+await page.evaluate(() => { document.querySelector('#btn-mock-pay').hidden = true; });
+
+for (const breite of [520, 390]) {
+  const seite = page;
+  await seite.setViewportSize({ width: breite, height: 900 });
+  await seite.waitForTimeout(200);
+
+  const kanten = await seite.evaluate(() => {
+    const textLinks = (el) => {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      return Math.round(r.getBoundingClientRect().left * 10) / 10;
+    };
+    const q = (s) => document.querySelector(s);
+    return {
+      absatz: textLinks(q('#step-pay .lede')),
+      warten: textLinks(q('#pay-status')),
+      abbruch: textLinks(q('#btn-cancel')),
+      // The copy rows are SUPPOSED to be indented - they are boxes with a
+      // visible border, and their padding is doing visible work. Included so
+      // that a future "fix" which pulls them onto the column too gets caught.
+      kasten: Math.round(q('.pay-row').getBoundingClientRect().left * 10) / 10,
+      kastenText: textLinks(q('.pay-label')),
+      // Reported alongside, and not as decoration: the edges come out at the
+      // same number at both widths, and a figure that does not move when the
+      // window does is exactly how a check that measures nothing looks. So
+      // something that DOES move is reported next to it. Here the edges are
+      // genuinely the same - the padding does not change - and the card gets
+      // narrower, which is what this line shows.
+      //
+      // '#login .login-card', not '.login-card': the markup has three of
+      // them, and the first two belong to the install prompt and are hidden.
+      // querySelector took the first, reported a width of 0, and the sanity
+      // check I had added to catch a broken measurement was itself broken.
+      karte: Math.round(q('#login .login-card').getBoundingClientRect().width),
+      fenster: window.innerWidth,
+    };
+  });
+
+  check(`${breite} px: Fenster und Karte sind wirklich so breit`,
+    kanten.fenster === breite && kanten.karte > 200 && kanten.karte <= breite,
+    `Fenster ${kanten.fenster} px, Karte ${kanten.karte} px`);
+  check(`${breite} px: die Wartezeile steht auf der Spalte`,
+    Math.abs(kanten.warten - kanten.absatz) < 0.5,
+    `${kanten.warten} gegen ${kanten.absatz}`);
+  check(`${breite} px: "Start over" steht auf der Spalte`,
+    Math.abs(kanten.abbruch - kanten.absatz) < 0.5,
+    `${kanten.abbruch} gegen ${kanten.absatz}`);
+  check(`${breite} px: der Kasten steht mit seinem Rand auf der Spalte`,
+    Math.abs(kanten.kasten - kanten.absatz) < 0.5,
+    `${kanten.kasten} gegen ${kanten.absatz}`);
+  check(`${breite} px: seine Beschriftung darf eingerueckt sein`,
+    kanten.kastenText > kanten.absatz + 6,
+    `${kanten.kastenText} gegen ${kanten.absatz}`);
+}
+
 await browser.close();
 server.close();
 

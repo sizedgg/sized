@@ -293,6 +293,11 @@
      the profile picture, the 6px unread dot, the preview banner. Round them
      down with everything else and you get a square dot, which does not read
      as a quieter dot, it reads as a bug. */
+  /* The horizontal padding of a ghost button. It has a name because a rule
+     further down pulls such a button back by exactly this amount, and two
+     copies of the same number would drift apart the first time one of them
+     is touched. */
+  --knopf-luft: .7rem;
   --radius: 0;
   --radius-klein: 0;
   --radius-innen: 0;
@@ -563,7 +568,33 @@ code { font-family: var(--mono); }
 .btn-primary { background: var(--accent-fill); color: var(--knopf-text); font-weight: 650; }
 .btn-primary:hover { filter: none; }
 .btn-outline { background: transparent; border-color: var(--line); color: var(--text); }
-.btn-ghost { background: transparent; color: var(--dim); border-color: transparent; padding: .45rem .7rem; }
+.btn-ghost { background: transparent; color: var(--dim); border-color: transparent; padding: .45rem var(--knopf-luft); }
+/* A ghost button standing alone in a column gets pulled back by its own
+   padding.
+   ---------------------------------------------------------------------------
+   A ghost button has no visible edge, so its padding is invisible too - and
+   invisible padding is what made "Start over" sit 10.5 px to the right of
+   every line above it in the login card. Measured: the paragraph, the two
+   copy rows and the waiting line all start at the card's inner edge, the
+   button's LABEL started one padding further in. Nothing looked broken, it
+   just looked as if someone had indented one line by accident.
+
+   The pull-back moves the box, not the label: the label lands on the column,
+   while the button keeps its full size and its 44 px tap target. The hover
+   background moves out with it, which is right - the surface belongs to the
+   whole target, not to the letters.
+
+   Deliberately NOT .btn-ghost in general: in a row of buttons the padding is
+   doing its job, the buttons sit next to each other and nothing has to line
+   up with a text column. Only where such a button IS the column.
+
+   The + 1px is the transparent border every .btn carries (see .btn above).
+   Invisible, but it takes up space like any other - without it the label
+   landed one pixel right of the column, which measured as 332 against 331.
+   Not visible to the eye; visible to the check in scripts/test-anmeldung.mjs
+   that compares the two edges, and that check is right to be strict: it can
+   only stay meaningful if "lines up" means the same number. */
+.step > .btn-ghost { margin-inline-start: calc((var(--knopf-luft) + 1px) * -1); }
 .btn-ghost:hover { color: var(--text); background: var(--bg-2); }
 .icon-btn {
   background: transparent; border: 1px solid var(--line); color: var(--dim);
