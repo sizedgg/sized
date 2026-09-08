@@ -277,6 +277,11 @@ const plan = {
   foto,
   ziel: path.join(OUT, '5-posteingang-erklaert.png'),
   skala: SKALA,
+  // Quer ueber das Foto, damit niemand die Liste fuer echte Halter und
+  // echte Nachrichten haelt. Sie ist erfunden, jede Zeile davon - siehe
+  // scripts/seed-ansem-voll.sql - und ein Bild dieser Art wandert weiter,
+  // ohne den Satz mitzunehmen, der danebenstand.
+  wasserzeichen: 'DEMO DATA',
   kaesten,
   gassen,
   beschriftung: BESCHRIFTUNG,

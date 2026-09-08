@@ -39,6 +39,8 @@ POLSTER = 9                      # Luft zwischen Text und seinem Rahmen
 STRICH = 2
 SCHRIFT = 15
 ABSTAND = 18                     # Mindestluft zwischen zwei Satzkaesten
+WASSER = 42                      # Schriftgroesse des Wasserzeichens
+WASSER_DECKUNG = 34              # 0 bis 255 - lesbar, aber nicht im Weg
 
 MONO = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
 
@@ -57,6 +59,39 @@ def umbrechen(text, schrift, breite):
     return zeilen
 
 
+def wasserzeichen(bild, text, schrift):
+    """Legt DEMO DATA schraeg ueber das Bildschirmfoto.
+
+    Nur ueber das Foto, nicht ueber den Rand: die Saetze am Rand erklaeren
+    die Oberflaeche und muessen sauber lesbar bleiben. Das Wasserzeichen
+    gehoert auf das, was es kennzeichnet - die erfundenen Daten.
+
+    Schraeg und gekachelt, weil beides denselben Zweck hat: waagerecht in
+    der Mitte laesst es sich in zwei Minuten wegschneiden oder
+    ueberdecken, und darum geht es bei einem Wasserzeichen gerade nicht.
+    """
+    # Ueber die Diagonale zeichnen und dann drehen - sonst bleiben nach der
+    # Drehung die Ecken leer.
+    d = int((bild.width ** 2 + bild.height ** 2) ** 0.5)
+    schicht = Image.new('RGBA', (d, d), (0, 0, 0, 0))
+    stift = ImageDraw.Draw(schicht)
+    breite = stift.textlength(text, font=schrift)
+    schritt_x = int(breite + schrift.size * 4.5)
+    schritt_y = int(schrift.size * 6.0)
+    for zeile, y in enumerate(range(0, d, schritt_y)):
+        # Jede zweite Reihe versetzt: ein sauberes Gitter liest sich als
+        # Muster, versetzt als Wasserzeichen.
+        versatz = 0 if zeile % 2 == 0 else schritt_x // 2
+        for x in range(-schritt_x, d, schritt_x):
+            stift.text((x + versatz, y), text, font=schrift,
+                       fill=(*ROT[:3], WASSER_DECKUNG))
+    schicht = schicht.rotate(30, resample=Image.BICUBIC)
+    links = (schicht.width - bild.width) // 2
+    oben = (schicht.height - bild.height) // 2
+    return Image.alpha_composite(
+        bild, schicht.crop((links, oben, links + bild.width, oben + bild.height)))
+
+
 def ganz(kasten):
     """Auf ganze Bildpunkte - sonst sind die Linien verschieden stark."""
     return [int(round(v)) for v in kasten]
@@ -67,6 +102,10 @@ def main(planpfad):
     s = plan['skala']
     g = plan['gassen']
     foto = Image.open(plan['foto']).convert('RGBA')
+
+    if plan.get('wasserzeichen'):
+        foto = wasserzeichen(foto, plan['wasserzeichen'],
+                             ImageFont.truetype(MONO, WASSER * s))
 
     rand = RAND * s
     breite = foto.width + 2 * rand
