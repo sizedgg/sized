@@ -146,6 +146,57 @@ def main(planpfad):
         satzkasten = ganz([x0, oben, x0 + rand - 2 * AUSSEN * s, oben + hoehe])
         gesetzt.append((e, kasten, satzkasten, zeilen))
 
+    # Erst alle Linien rechnen, dann pruefen, dann zeichnen.
+    #
+    # Zwei Linien, die sich kreuzen, sehen im fertigen Bild aus wie ein
+    # Verteilerkasten: an der Kreuzung weiss niemand mehr, welcher Satz zu
+    # welchem Kasten gehoert. Genau das ist passiert - die Linie zur Frist
+    # lief quer durch die Karte und schnitt die vom Betrag. Aufgefallen ist
+    # es einem Menschen im fertigen Bild, nicht hier; das ist der Grund fuer
+    # diesen Block.
+    def strecken(e, kasten, satzkasten):
+        links = e["seite"] == "links"
+        mitte_satz = int((satzkasten[1] + satzkasten[3]) / 2)
+        eintritt = int(kasten[1] + (kasten[3] - kasten[1]) * e.get("eintritt", 0.5))
+        # Die Linie beginnt AUF der Kante des Satzkastens und endet auf der
+        # Kante des Elementkastens - beide Enden beruehren.
+        ab = satzkasten[2] if links else satzkasten[0]
+        if e["route"] == "korridor":
+            # Waagerecht zur Gasse neben der Liste, dort senkrecht auf die
+            # Hoehe des Kastens, dann hinein.
+            return [(ab, mitte_satz), (gasse_links, mitte_satz),
+                    (gasse_links, eintritt), (kasten[0], eintritt)]
+        if e["route"] == "rechts":
+            # Dasselbe auf der anderen Seite, in der Gasse neben der Karte.
+            return [(kasten[2], eintritt), (gasse_rechts, eintritt),
+                    (gasse_rechts, mitte_satz), (ab, mitte_satz)]
+        if e["route"] == "spalt":
+            # Durch die Luecke zwischen Liste und Fenster.
+            return [(kasten[2], eintritt), (gasse_spalt, eintritt),
+                    (gasse_spalt, mitte_satz), (ab, mitte_satz)]
+        return [(kasten[2], eintritt), (ab, mitte_satz)]
+
+    # Zwei Strecken, beide waagerecht oder senkrecht - etwas anderes
+    # zeichnet dieses Skript nicht.
+    def schneidet(a, b):
+        def spanne(x, y, i):
+            return (min(x[i], y[i]), max(x[i], y[i]))
+        ax, ay = spanne(*a, 0), spanne(*a, 1)
+        bx, by = spanne(*b, 0), spanne(*b, 1)
+        return (ax[0] <= bx[1] and bx[0] <= ax[1]
+                and ay[0] <= by[1] and by[0] <= ay[1])
+
+    linien = [(e["schluessel"], strecken(e, kasten, satzkasten))
+              for e, kasten, satzkasten, _ in gesetzt]
+    for i, (na, pa) in enumerate(linien):
+        for nb, pb in linien[i + 1:]:
+            for a in zip(pa, pa[1:]):
+                for b in zip(pb, pb[1:]):
+                    if schneidet(a, b):
+                        sys.exit(f'  Die Linien zu "{na}" und "{nb}" kreuzen sich. '
+                                 f'Eine der beiden anders fuehren, oder die zwei '
+                                 f'Kaesten zu einem zusammenfassen.')
+
     for e, kasten, satzkasten, zeilen in gesetzt:
         d.rectangle(kasten, outline=ROT, width=strich)
         d.rectangle(satzkasten, outline=ROT, width=strich)
@@ -169,30 +220,7 @@ def main(planpfad):
             d.text((satzkasten[0] + POLSTER * s, start + i * zeilenhoehe),
                    zeile, font=schrift, fill=ROT)
 
-        links = e['seite'] == 'links'
-        mitte_satz = int((satzkasten[1] + satzkasten[3]) / 2)
-        eintritt = kasten[1] + (kasten[3] - kasten[1]) * e.get('eintritt', 0.5)
-        eintritt = int(eintritt)
-        # Die Linie beginnt AUF der Kante des Satzkastens und endet auf der
-        # Kante des Elementkastens - beide Enden beruehren.
-        ab = satzkasten[2] if links else satzkasten[0]
-
-        if e['route'] == 'korridor':
-            punkte = [(ab, mitte_satz), (gasse_links, mitte_satz),
-                      (gasse_links, eintritt), (kasten[0], eintritt)]
-        elif e['route'] == 'rechts':
-            # Wie 'korridor', nur auf der anderen Seite: aus dem Kasten
-            # heraus in die Gasse neben der Karte, dort senkrecht auf die
-            # Hoehe des Satzes, dann hinaus.
-            punkte = [(kasten[2], eintritt), (gasse_rechts, eintritt),
-                      (gasse_rechts, mitte_satz), (ab, mitte_satz)]
-        elif e['route'] == 'spalt':
-            punkte = [(kasten[2], eintritt), (gasse_spalt, eintritt),
-                      (gasse_spalt, mitte_satz), (ab, mitte_satz)]
-        else:
-            punkte = [(kasten[2], eintritt), (ab, mitte_satz)]
-
-        d.line(punkte, fill=ROT, width=strich, joint='curve')
+        d.line(strecken(e, kasten, satzkasten), fill=ROT, width=strich, joint='curve')
 
     ziel = pathlib.Path(plan['ziel'])
     blatt.convert('RGB').save(ziel)

@@ -159,7 +159,14 @@ const { kaesten, gassen } = await page.evaluate(() => {
     kaesten: {
       frage: textRect(oben.querySelector('h4')),
       werkzeuge: rect(oben.querySelector('.poll-tools')),
-      frist: rect(oben.querySelector('.frist-rest')),
+      // Summe und Frist zusammen in einem Kasten, nicht einzeln.
+      //
+      // Einzeln standen sie nebeneinander in derselben Zeile: zwei Kaesten
+      // mit acht Punkten Luft dazwischen, und die Linie zur Frist musste
+      // quer durch die Karte nach rechts - dort kreuzte sie die Linie, die
+      // vom Betrag kommt. Zusammengefasst gibt es beide Probleme nicht
+      // mehr, und der Satz daneben sagt ohnehin beides.
+      meta: textRect(oben.querySelector('.poll-meta')),
       betrag: rect(fuehrend?.querySelector('.opt-num .held')),
       eigene: rect(meine?.querySelector('.opt-label')),
       zu: rect(unten.querySelector('.closed-tag')),
@@ -207,12 +214,12 @@ await browser.close();
 const BESCHRIFTUNG = [
   { schluessel: 'frage', seite: 'links', route: 'korridor',
     text: 'Only Ansem posts a poll. Everyone holding $ANSEM can vote on it.' },
+  { schluessel: 'meta', seite: 'links', route: 'korridor',
+    text: 'Everything the wallets that voted hold, and how much longer this one stays open.' },
   { schluessel: 'eigene', seite: 'links', route: 'korridor',
     text: 'Your vote. Pick another answer and it moves over; sell, and it shrinks with your balance.' },
   { schluessel: 'werkzeuge', seite: 'rechts', route: 'rechts',
     text: 'Copy the link, or download the poll as a dated image.' },
-  { schluessel: 'frist', seite: 'rechts', route: 'rechts',
-    text: 'How long it stays open. When it closes, the result freezes.' },
   { schluessel: 'betrag', seite: 'rechts', route: 'rechts',
     text: 'Not one vote per wallet: the bar is what those wallets hold.' },
   { schluessel: 'zu', seite: 'rechts', route: 'rechts',
